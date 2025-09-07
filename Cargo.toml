@@ -1,6 +1,6 @@
 [package]
 name = "worgen-rs"
-version = "0.1.1"
+version = "0.1.2"
 authors = ["Nocthir <nocthir@proton.me>"]
 edition = "2024"
 license = "MIT OR Apache-2.0"
@@ -18,7 +18,12 @@ opt-level = 3
 [dependencies]
 anyhow = "1.0.*"
 bevy = { version = "0.16.*", features = [ "bevy_gltf" ] }
-wow-adt = "0.3.*"
-wow-m2 = "0.3.*"
-wow-mpq = "0.3.*"
-wow-wmo = "0.3.*"
+#wow-adt = "0.3.*"
+#wow-m2 = "0.3.*"
+#wow-mpq = "0.3.*"
+#wow-wmo = "0.3.*"
+
+wow-adt = { path = "../warcraft-rs/file-formats/world-data/wow-adt" }
+wow-m2 = { path = "../warcraft-rs/file-formats/graphics/wow-m2" }
+wow-mpq = { path = "../warcraft-rs/file-formats/archives/wow-mpq" }
+wow-wmo = { path = "../warcraft-rs/file-formats/graphics/wow-wmo" }

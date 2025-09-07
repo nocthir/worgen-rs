@@ -4,17 +4,12 @@
 
 use bevy::prelude::*;
 
-pub fn setup_camera(mut commands: Commands, asset_server: Res<AssetServer>) {
-    // Load the box
-    let red_box = GltfAssetLabel::Scene(0).from_asset("box/box.gltf");
-    let red_box_asset = asset_server.load(red_box);
-    commands.spawn(SceneRoot(red_box_asset));
-
+pub fn setup_camera(mut commands: Commands) {
     // Light
     commands.spawn((
-        PointLight {
+        DirectionalLight {
             shadows_enabled: true,
-            ..default()
+            ..Default::default()
         },
         Transform::from_xyz(4.0, 8.0, 4.0),
     ));
@@ -22,6 +17,6 @@ pub fn setup_camera(mut commands: Commands, asset_server: Res<AssetServer>) {
     // Camera
     commands.spawn((
         Camera3d::default(),
-        Transform::from_xyz(-2.5, 4.5, 9.0).looking_at(Vec3::ZERO, Vec3::Y),
+        Transform::from_xyz(104.5, 104.5, 6.0).looking_at(Vec3::ZERO, Vec3::Z),
     ));
 }
