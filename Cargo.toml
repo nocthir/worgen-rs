@@ -1,0 +1,10 @@
+[package]
+name = "worgen-rs"
+version = "0.1.0"
+authors = ["Nocthir <nocthir@proton.me>"]
+edition = "2024"
+license = "MIT OR Apache-2.0"
+description = "An interactive 3D application for exploring immersive virtual environments."
+repository = "https://github.com/nocthir/worgen-rs"
+
+[dependencies]
