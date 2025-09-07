@@ -1,6 +1,6 @@
 [package]
 name = "worgen-rs"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Nocthir <nocthir@proton.me>"]
 edition = "2024"
 license = "MIT OR Apache-2.0"
@@ -16,4 +16,9 @@ opt-level = 1
 opt-level = 3
 
 [dependencies]
+anyhow = "1.0.*"
 bevy = "0.16.*"
+wow-adt = "0.3.*"
+wow-m2 = "0.3.*"
+wow-mpq = "0.3.*"
+wow-wmo = "0.3.*"
