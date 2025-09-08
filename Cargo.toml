@@ -18,6 +18,7 @@ opt-level = 3
 [dependencies]
 anyhow = "1.0.*"
 bevy = { version = "0.16.*", features = [ "bevy_gltf" ] }
+bevy_egui = "0.36.*"
 #wow-adt = "0.3.*"
 #wow-m2 = "0.3.*"
 #wow-mpq = "0.3.*"
