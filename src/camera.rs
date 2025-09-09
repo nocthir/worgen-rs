@@ -6,6 +6,7 @@ use std::f32::consts::{FRAC_PI_2, PI, TAU};
 
 use bevy::input::mouse::{MouseMotion, MouseScrollUnit, MouseWheel};
 use bevy::prelude::*;
+use bevy_egui::EguiContexts;
 
 /// Bundle to spawn our custom camera easily
 /// https://bevy-cheatbook.github.io/cookbook/pan-orbit-camera.html
@@ -117,8 +118,20 @@ fn pan_orbit_camera(
     kbd: Res<ButtonInput<KeyCode>>,
     mut evr_motion: EventReader<MouseMotion>,
     mut evr_scroll: EventReader<MouseWheel>,
+    mut egui_ctxs: EguiContexts,
     mut q_camera: Query<(&PanOrbitSettings, &mut PanOrbitState, &mut Transform)>,
 ) {
+    // If the pointer is over an egui area (or egui wants the pointer), ignore camera input.
+    if egui_ctxs
+        .ctx_mut()
+        .is_ok_and(|ctx| ctx.is_pointer_over_area() || ctx.wants_pointer_input())
+    {
+        // Advance readers so we don't "catch up" once the cursor leaves the UI.
+        evr_motion.clear();
+        evr_scroll.clear();
+        return;
+    }
+
     // First, accumulate the total amount of
     // mouse motion and scroll, from all pending events:
     let mut total_motion: Vec2 = evr_motion.read().map(|ev| ev.delta).sum();
