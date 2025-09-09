@@ -72,7 +72,10 @@ fn load_m2(
     if let Some(event) = event_reader.read().next() {
         match create_mesh_from_selected_model(event) {
             Ok(loaded_mesh) => {
-                if let Some(mesh) = loaded_mesh {
+                if loaded_mesh.is_empty() {
+                    error!("No meshes loaded for model: {}", event.model_path.display());
+                }
+                for mesh in loaded_mesh {
                     query.into_iter().for_each(|entity| {
                         commands.entity(entity).despawn();
                     });
@@ -83,8 +86,6 @@ fn load_m2(
                         mesh,
                         &event.model_path,
                     );
-                } else {
-                    error!("Failed to read model: {}", event.model_path.display());
                 }
             }
             Err(err) => {
@@ -99,7 +100,7 @@ fn load_m2(
     Ok(())
 }
 
-fn create_mesh_from_selected_model(model_info: &ModelSelected) -> Result<Option<Mesh>> {
+fn create_mesh_from_selected_model(model_info: &ModelSelected) -> Result<Vec<Mesh>> {
     let mpq_path = &model_info.archive_path;
     info!("Reading MPQ: {}", mpq_path.display());
     let mut archive = mpq::Archive::open(mpq_path)?;
@@ -211,46 +212,77 @@ fn read_m2<P: AsRef<Path>>(path: P, archive: &mut mpq::Archive) -> Result<m2::M2
 fn create_mesh_from_path_archive<P: AsRef<Path>>(
     path: P,
     archive: &mut mpq::Archive,
-) -> Result<Option<Mesh>> {
+) -> Result<Vec<Mesh>> {
     let file = archive.read_file(path.as_ref().to_str().unwrap())?;
     let mut reader = io::Cursor::new(&file);
+    let mut ret = Vec::default();
+
     if let Ok(m2) = m2::M2Model::parse(&mut reader)
         && !m2.vertices.is_empty()
     {
         info!("{}: {:?}", path.as_ref().display(), m2.header.version());
-        return Ok(Some(create_mesh(m2, &file)?));
+        for skin_index in 0..m2.embedded_skin_count().unwrap().min(1) {
+            if let Ok(mesh) = create_mesh(&m2, &file, 0) {
+                ret.push(mesh);
+            } else {
+                return Err(format!(
+                    "Failed to create mesh for skin index {} in model {} from archive {}",
+                    skin_index,
+                    path.as_ref().display(),
+                    archive.path().display(),
+                )
+                .into());
+            }
+        }
     }
-    Ok(None)
+
+    Ok(ret)
 }
 
-fn create_mesh(m2: m2::M2Model, m2_data: &[u8]) -> Result<Mesh> {
-    let skin = m2.parse_embedded_skin(m2_data, 0)?;
+fn create_mesh(m2: &m2::M2Model, m2_data: &[u8], skin_index: u32) -> Result<Mesh> {
+    info!("Loading skin {skin_index}");
+    let skin = m2.parse_embedded_skin(m2_data, skin_index as _)?;
     // These are used to index into the global vertices array.
     let indices = skin.get_resolved_indices();
+    info!("skin indices: {}", indices.len());
+    info!("skin triangles: {}", skin.triangles().len());
+    info!("global vertices: {}", m2.vertices.len());
 
     // Local vertex attributes.
     let positions: Vec<_> = indices
         .iter()
         .copied()
-        .map(|i| {
-            let v = &m2.vertices[i as usize];
-            [v.position.x, v.position.y, v.position.z]
+        .filter_map(|i| {
+            if i < m2.vertices.len() as u16 {
+                let v = &m2.vertices[i as usize];
+                Some([v.position.x, v.position.y, v.position.z])
+            } else {
+                None
+            }
         })
         .collect();
     let normals: Vec<_> = indices
         .iter()
         .copied()
-        .map(|i| {
-            let v = &m2.vertices[i as usize];
-            normalize_vec3([v.normal.x, v.normal.y, v.normal.z])
+        .filter_map(|i| {
+            if i < m2.vertices.len() as u16 {
+                let v = &m2.vertices[i as usize];
+                Some(normalize_vec3([v.normal.x, v.normal.y, v.normal.z]))
+            } else {
+                None
+            }
         })
         .collect();
     let tex_coords_0: Vec<_> = indices
         .iter()
         .copied()
-        .map(|i| {
-            let v = &m2.vertices[i as usize];
-            [v.tex_coords.x, v.tex_coords.y]
+        .filter_map(|i| {
+            if i < m2.vertices.len() as u16 {
+                let v = &m2.vertices[i as usize];
+                Some([v.tex_coords.x, v.tex_coords.y])
+            } else {
+                None
+            }
         })
         .collect();
 
@@ -333,15 +365,16 @@ mod test {
     fn main_menu() -> Result {
         let settings = settings::load_settings()?;
         let selected_model = ModelSelected::from(&settings.default_model);
-        create_mesh_from_selected_model(&selected_model)?.unwrap();
+        create_mesh_from_selected_model(&selected_model)?;
         Ok(())
     }
 
     #[test]
     fn dwarf() -> Result {
+        env_logger::init();
         let model = settings::load_settings()?;
         let selected_model = ModelSelected::from(&model.test_model);
-        create_mesh_from_selected_model(&selected_model)?.unwrap();
+        create_mesh_from_selected_model(&selected_model)?;
         Ok(())
     }
 }

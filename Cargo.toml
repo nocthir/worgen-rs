@@ -30,3 +30,6 @@ wow-adt = { path = "../warcraft-rs/file-formats/world-data/wow-adt" }
 wow-m2 = { path = "../warcraft-rs/file-formats/graphics/wow-m2" }
 wow-mpq = { path = "../warcraft-rs/file-formats/archives/wow-mpq" }
 wow-wmo = { path = "../warcraft-rs/file-formats/graphics/wow-wmo" }
+
+[dev-dependencies]
+env_logger = "*"
