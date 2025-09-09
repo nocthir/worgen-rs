@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: MIT or Apache-2.0
 
 use std::{
-    io,
+    f32, io,
     path::{Path, PathBuf},
 };
 
@@ -312,7 +312,9 @@ fn add_mesh<P: AsRef<Path>>(
     info!("Loaded model from {}", file.as_ref().display());
     let mesh_handle = meshes.add(mesh);
 
-    let transform = Transform::from_xyz(0.0, 0.0, 0.0);
+    let mut transform = Transform::from_xyz(0.0, 0.0, 0.0);
+    transform.rotate_local_x(-f32::consts::FRAC_PI_2);
+    transform.rotate_local_z(-f32::consts::FRAC_PI_2);
 
     commands.spawn((
         CurrentModel,

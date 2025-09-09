@@ -19,6 +19,6 @@ fn main() {
         .add_plugins(settings::SettingsPlugin)
         .add_plugins(ui::UiPlugin)
         .add_plugins(worgen::WorgenPlugin)
-        .add_systems(Startup, camera::setup_camera)
+        .add_plugins(camera::PanOrbitCameraPlugin)
         .run();
 }
