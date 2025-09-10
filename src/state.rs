@@ -8,5 +8,6 @@ use bevy::prelude::*;
 pub enum GameState {
     #[default]
     Startup,
+    Loading,
     Main,
 }

@@ -17,7 +17,7 @@ opt-level = 3
 
 [dependencies]
 anyhow = "1.0.*"
-bevy = { version = "0.16.*", features = [ "bevy_gltf" ] }
+bevy = { version = "0.16.*", features = [ "bevy_gltf", "bevy_state" ] }
 bevy_egui = "0.36.*"
 serde = "1.0.*"
 serde_json = "1.0.*"

@@ -13,6 +13,7 @@ use bevy::{
     asset::RenderAssetUsages,
     prelude::*,
     render::mesh::{Indices, PrimitiveTopology},
+    tasks,
 };
 
 use wow_adt as adt;
@@ -20,19 +21,28 @@ use wow_m2 as m2;
 use wow_mpq as mpq;
 use wow_wmo as wmo;
 
-use crate::ui::ModelSelected;
+use crate::{state::GameState, ui::ModelSelected};
 
 pub struct WorgenPlugin;
 
 impl Plugin for WorgenPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, (start_info, load_mpqs).chain())
+        app.add_systems(Startup, start_info)
+            .add_systems(Update, load_mpqs.run_if(resource_exists::<LoadArchivesTask>))
             .add_systems(Update, load_selected_model);
     }
 }
 
-fn start_info() {
+#[derive(Resource)]
+struct LoadArchivesTask {
+    task: tasks::Task<Result<DataInfo>>,
+}
+
+fn start_info(mut commands: Commands) {
     info!("Hello, Worgen!");
+
+    let task = tasks::IoTaskPool::get().spawn(load_mpqs_impl());
+    commands.insert_resource(LoadArchivesTask { task });
 }
 
 #[derive(Component)]
@@ -138,14 +148,29 @@ fn create_mesh_from_selected_model(model_info: &ModelSelected) -> Result<Vec<Mes
     create_mesh_from_path_archive(model_path, &mut archive)
 }
 
-fn load_mpqs(mut exit: EventWriter<AppExit>, commands: Commands) {
-    if let Err(err) = load_mpqs_impl(commands) {
-        error!("Error loading MPQs: {err}");
-        exit.write(AppExit::error());
+fn load_mpqs(
+    mut exit: EventWriter<AppExit>,
+    mut commands: Commands,
+    mut task: ResMut<LoadArchivesTask>,
+    mut next: ResMut<NextState<GameState>>,
+) {
+    if let Some(result) = tasks::block_on(tasks::poll_once(&mut task.task)) {
+        match result {
+            Err(err) => {
+                error!("Error loading MPQs: {err}");
+                exit.write(AppExit::error());
+            }
+            Ok(data_info) => {
+                commands.insert_resource(data_info);
+                // Once MPQs are loaded, transition from Loading to Main state
+                next.set(GameState::Main);
+            }
+        }
+        commands.remove_resource::<LoadArchivesTask>();
     }
 }
 
-fn load_mpqs_impl(mut commands: Commands) -> Result<()> {
+async fn load_mpqs_impl() -> Result<DataInfo> {
     let mut data_info = DataInfo::default();
 
     let game_path = PathBuf::from(std::env::var("GAME_PATH").unwrap_or_else(|_| ".".to_string()));
@@ -163,9 +188,7 @@ fn load_mpqs_impl(mut commands: Commands) -> Result<()> {
         }
     }
 
-    commands.insert_resource(data_info);
-
-    Ok(())
+    Ok(data_info)
 }
 
 fn read_m2s(archive: &mut mpq::Archive) -> Result<Vec<ModelInfo>> {
@@ -480,7 +503,6 @@ fn read_wmo_group<P: AsRef<Path>>(
     group_index: usize,
 ) -> Result<wmo::WmoGroup> {
     let group_filename = get_wmo_group_filename(&wmo_path, group_index);
-    info!("Loading WMO group from {}", group_filename);
     let file = archive
         .read_file(&group_filename)
         .map_err(|e| format!("Failed to read WMO group file {}: {}", group_filename, e))?;

@@ -32,8 +32,7 @@ impl Plugin for SettingsPlugin {
 
 fn load_resource(mut commands: Commands, mut next: ResMut<NextState<GameState>>) -> Result {
     commands.insert_resource(load_settings()?);
-    next.set(GameState::Main);
-
+    next.set(GameState::Loading);
     Ok(())
 }
 
