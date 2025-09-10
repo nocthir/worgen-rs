@@ -21,14 +21,17 @@ use wow_m2 as m2;
 use wow_mpq as mpq;
 use wow_wmo as wmo;
 
-use crate::{state::GameState, ui::ModelSelected};
+use crate::{material::CustomMaterial, state::GameState, ui::ModelSelected};
 
 pub struct WorgenPlugin;
 
 impl Plugin for WorgenPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Startup, start_info)
-            .add_systems(Update, load_mpqs.run_if(resource_exists::<LoadArchivesTask>))
+            .add_systems(
+                Update,
+                load_mpqs.run_if(resource_exists::<LoadArchivesTask>),
+            )
             .add_systems(Update, load_selected_model);
     }
 }
@@ -102,7 +105,7 @@ fn load_selected_model(
     query: Query<Entity, With<CurrentModel>>,
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut custom_materials: ResMut<Assets<CustomMaterial>>,
 ) -> Result {
     // Ignore all but the last event
     if let Some(event) = event_reader.read().last() {
@@ -119,14 +122,10 @@ fn load_selected_model(
                 });
 
                 for mesh in loaded_mesh {
-                    add_mesh(
-                        &mut commands,
-                        &mut meshes,
-                        &mut materials,
-                        mesh,
-                        &event.model_path,
-                    );
+                    add_mesh(&mut commands, &mut meshes, &mut custom_materials, mesh);
                 }
+
+                info!("Loaded model from {}", event.model_path.display());
             }
             Err(err) => {
                 error!(
@@ -570,20 +569,18 @@ fn normalize_vec3(v: [f32; 3]) -> [f32; 3] {
     }
 }
 
-fn add_mesh<P: AsRef<Path>>(
+fn add_mesh(
     commands: &mut Commands,
     meshes: &mut ResMut<Assets<Mesh>>,
-    materials: &mut ResMut<Assets<StandardMaterial>>,
+    custom_materials: &mut ResMut<Assets<CustomMaterial>>,
     mesh: Mesh,
-    file: P,
 ) {
-    let material = materials.add(StandardMaterial {
-        base_color: Color::linear_rgb(0.8, 0.7, 0.6),
-        perceptual_roughness: 0.9,
-        ..default()
+    let custom_material = custom_materials.add(CustomMaterial {
+        color: LinearRgba::WHITE,
+        alpha_mode: AlphaMode::Opaque,
+        color_texture: None,
     });
 
-    info!("Loaded model from {}", file.as_ref().display());
     let mesh_handle = meshes.add(mesh);
 
     let mut transform = Transform::from_xyz(0.0, 0.0, 0.0);
@@ -593,7 +590,7 @@ fn add_mesh<P: AsRef<Path>>(
     commands.spawn((
         CurrentModel,
         Mesh3d(mesh_handle),
-        MeshMaterial3d(material.clone()),
+        MeshMaterial3d(custom_material.clone()),
         transform,
     ));
 }
