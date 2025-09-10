@@ -16,7 +16,7 @@ impl Plugin for CustomMaterialPlugin {
 }
 
 // This struct defines the data that will be passed to your shader
-#[derive(Asset, TypePath, AsBindGroup, Debug, Clone)]
+#[derive(Asset, Default, TypePath, AsBindGroup, Debug, Clone)]
 pub struct CustomMaterial {
     #[uniform(0)]
     pub color: LinearRgba,

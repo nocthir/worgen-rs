@@ -15,7 +15,7 @@ use bevy::{
 use wow_m2 as m2;
 use wow_mpq as mpq;
 
-use crate::data::normalize_vec3;
+use crate::{data::normalize_vec3, material::CustomMaterial};
 
 pub struct ModelInfo {
     pub path: PathBuf,
@@ -64,7 +64,9 @@ fn read_m2<P: AsRef<Path>>(path: P, archive: &mut mpq::Archive) -> Result<m2::M2
 pub fn create_meshes_from_m2_path<P: AsRef<Path>>(
     archive: &mut mpq::Archive,
     path: P,
-) -> Result<Vec<Mesh>> {
+    materials: &mut Assets<CustomMaterial>,
+    meshes: &mut Assets<Mesh>,
+) -> Result<Vec<(Handle<Mesh>, Handle<CustomMaterial>)>> {
     let path_str = path
         .as_ref()
         .to_str()
@@ -75,12 +77,19 @@ pub fn create_meshes_from_m2_path<P: AsRef<Path>>(
 
     let mut ret = Vec::default();
 
+    let material_handle = materials.add(CustomMaterial {
+        color: LinearRgba::WHITE,
+        color_texture: None,
+        alpha_mode: AlphaMode::Opaque,
+    });
+
     if let Ok(m2) = m2::M2Model::parse(&mut reader)
         && !m2.vertices.is_empty()
     {
         for skin_index in 0..m2.embedded_skin_count().unwrap().min(1) {
             if let Ok(mesh) = create_mesh(&m2, &file, 0) {
-                ret.push(mesh);
+                let mesh_handle = meshes.add(mesh);
+                ret.push((mesh_handle, material_handle.clone()));
             } else {
                 return Err(format!(
                     "Failed to create mesh for skin index {} in model {} from archive {}",

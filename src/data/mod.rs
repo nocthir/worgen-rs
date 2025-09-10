@@ -54,9 +54,9 @@ fn load_selected_model(
 ) -> Result {
     // Ignore all but the last event
     if let Some(event) = event_reader.read().last() {
-        match create_mesh_from_selected_model(event) {
-            Ok(loaded_mesh) => {
-                if loaded_mesh.is_empty() {
+        match create_mesh_from_selected_model(event, &mut custom_materials, &mut meshes) {
+            Ok(bundles) => {
+                if bundles.is_empty() {
                     error!("No meshes loaded for model: {}", event.model_path.display());
                     return Ok(());
                 }
@@ -66,8 +66,8 @@ fn load_selected_model(
                     commands.entity(entity).despawn();
                 });
 
-                for mesh in loaded_mesh {
-                    add_mesh(&mut commands, &mut meshes, &mut custom_materials, mesh);
+                for (mesh, material) in bundles {
+                    add_bundle(&mut commands, mesh, material);
                 }
 
                 info!("Loaded model from {}", event.model_path.display());
@@ -84,12 +84,16 @@ fn load_selected_model(
     Ok(())
 }
 
-fn create_mesh_from_selected_model(model_info: &ModelSelected) -> Result<Vec<Mesh>> {
+fn create_mesh_from_selected_model(
+    model_info: &ModelSelected,
+    materials: &mut Assets<CustomMaterial>,
+    meshes: &mut Assets<Mesh>,
+) -> Result<Vec<(Handle<Mesh>, Handle<CustomMaterial>)>> {
     let mpq_path = &model_info.archive_path;
     let mut archive = mpq::Archive::open(mpq_path)?;
     info!("Loaded archive {}", mpq_path.display());
     let model_path = model_info.model_path.to_str().unwrap();
-    create_mesh_from_path_archive(model_path, &mut archive)
+    create_mesh_from_path_archive(model_path, &mut archive, materials, meshes)
 }
 
 fn _read_adt(path: &str, archive: &mut mpq::Archive) -> Result<()> {
@@ -117,16 +121,18 @@ fn _read_adt(path: &str, archive: &mut mpq::Archive) -> Result<()> {
 fn create_mesh_from_path_archive<P: AsRef<Path>>(
     path: P,
     archive: &mut mpq::Archive,
-) -> Result<Vec<Mesh>> {
+    materials: &mut Assets<CustomMaterial>,
+    meshes: &mut Assets<Mesh>,
+) -> Result<Vec<(Handle<Mesh>, Handle<CustomMaterial>)>> {
     let ext = path
         .as_ref()
         .extension()
         .ok_or_else(|| format!("Model path has no extension: {}", path.as_ref().display()))?;
 
     if ext == OsStr::new("m2") {
-        model::create_meshes_from_m2_path(archive, path)
+        model::create_meshes_from_m2_path(archive, path, materials, meshes)
     } else if ext == OsStr::new("wmo") {
-        world_model::create_meshes_from_wmo_path(archive, path)
+        world_model::create_meshes_from_wmo_path(archive, path, materials, meshes)
     } else {
         Err(format!("Unsupported model format: {}", path.as_ref().display()).into())
     }
@@ -141,28 +147,15 @@ fn normalize_vec3(v: [f32; 3]) -> [f32; 3] {
     }
 }
 
-fn add_mesh(
-    commands: &mut Commands,
-    meshes: &mut ResMut<Assets<Mesh>>,
-    custom_materials: &mut ResMut<Assets<CustomMaterial>>,
-    mesh: Mesh,
-) {
-    let custom_material = custom_materials.add(CustomMaterial {
-        color: LinearRgba::WHITE,
-        alpha_mode: AlphaMode::Opaque,
-        color_texture: None,
-    });
-
-    let mesh_handle = meshes.add(mesh);
-
+fn add_bundle(commands: &mut Commands, mesh: Handle<Mesh>, material: Handle<CustomMaterial>) {
     let mut transform = Transform::from_xyz(0.0, 0.0, 0.0);
     transform.rotate_local_x(-f32::consts::FRAC_PI_2);
     transform.rotate_local_z(-f32::consts::FRAC_PI_2);
 
     commands.spawn((
         CurrentModel,
-        Mesh3d(mesh_handle),
-        MeshMaterial3d(custom_material.clone()),
+        Mesh3d(mesh),
+        MeshMaterial3d(material),
         transform,
     ));
 }
@@ -176,7 +169,9 @@ mod test {
     fn main_menu() -> Result {
         let settings = settings::load_settings()?;
         let selected_model = ModelSelected::from(&settings.default_model);
-        create_mesh_from_selected_model(&selected_model)?;
+        let mut custom_materials = Assets::<CustomMaterial>::default();
+        let mut meshes = Assets::<Mesh>::default();
+        create_mesh_from_selected_model(&selected_model, &mut custom_materials, &mut meshes)?;
         Ok(())
     }
 
@@ -185,7 +180,9 @@ mod test {
         env_logger::init();
         let model = settings::load_settings()?;
         let selected_model = ModelSelected::from(&model.test_model);
-        create_mesh_from_selected_model(&selected_model)?;
+        let mut custom_materials = Assets::<CustomMaterial>::default();
+        let mut meshes = Assets::<Mesh>::default();
+        create_mesh_from_selected_model(&selected_model, &mut custom_materials, &mut meshes)?;
         Ok(())
     }
 
@@ -194,7 +191,9 @@ mod test {
         env_logger::init();
         let model = settings::load_settings()?;
         let selected_model = ModelSelected::from(&model.test_world_model);
-        create_mesh_from_selected_model(&selected_model)?;
+        let mut custom_materials = Assets::<CustomMaterial>::default();
+        let mut meshes = Assets::<Mesh>::default();
+        create_mesh_from_selected_model(&selected_model, &mut custom_materials, &mut meshes)?;
         Ok(())
     }
 }

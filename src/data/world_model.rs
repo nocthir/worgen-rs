@@ -13,7 +13,7 @@ use bevy::{asset::RenderAssetUsages, prelude::*, render::mesh::*};
 use wow_mpq as mpq;
 use wow_wmo as wmo;
 
-use crate::data::normalize_vec3;
+use crate::{data::normalize_vec3, material::CustomMaterial};
 
 pub struct WmoInfo {
     pub path: PathBuf,
@@ -111,7 +111,9 @@ fn read_wmo_groups<P: AsRef<Path>>(
 pub fn create_meshes_from_wmo_path<P: AsRef<Path>>(
     archive: &mut mpq::Archive,
     path: P,
-) -> Result<Vec<Mesh>> {
+    custom_materials: &mut Assets<CustomMaterial>,
+    meshes: &mut Assets<Mesh>,
+) -> Result<Vec<(Handle<Mesh>, Handle<CustomMaterial>)>> {
     let path_str = path
         .as_ref()
         .to_str()
@@ -125,9 +127,21 @@ pub fn create_meshes_from_wmo_path<P: AsRef<Path>>(
     if let Ok(wmo) = wmo::parse_wmo(&mut reader)
         && !wmo.groups.is_empty()
     {
+        let materials = create_materials_from_wmo(&wmo);
+        let material_handles = materials
+            .into_iter()
+            .map(|mat| custom_materials.add(mat))
+            .collect::<Vec<_>>();
+
         for group_index in 0..wmo.groups.len() {
-            if let Ok(mesh) = create_mesh_from_wmo_group_path(archive, path_str, group_index) {
-                ret.push(mesh);
+            if let Ok(bundle) = create_mesh_from_wmo_group_path(
+                archive,
+                path_str,
+                group_index,
+                &material_handles,
+                meshes,
+            ) {
+                ret.push(bundle);
             } else {
                 error!("Failed to create mesh for group {group_index}");
             }
@@ -137,13 +151,37 @@ pub fn create_meshes_from_wmo_path<P: AsRef<Path>>(
     Ok(ret)
 }
 
+fn create_materials_from_wmo(wmo: &wmo::WmoRoot) -> Vec<CustomMaterial> {
+    let mut materials = Vec::new();
+    for material in &wmo.materials {
+        let color = material.diffuse_color;
+        let material = CustomMaterial {
+            color: linear_rgba_from_model_color(color),
+            ..Default::default()
+        };
+        materials.push(material);
+    }
+    materials
+}
+
+fn linear_rgba_from_model_color(color: wmo::Color) -> LinearRgba {
+    LinearRgba {
+        red: color.r as f32 / 255.0,
+        green: color.g as f32 / 255.0,
+        blue: color.b as f32 / 255.0,
+        alpha: color.a as f32 / 255.0,
+    }
+}
+
 fn create_mesh_from_wmo_group_path<P: AsRef<Path>>(
     archive: &mut mpq::Archive,
     wmo_path: P,
     group_index: usize,
-) -> Result<Mesh> {
+    material_handles: &[Handle<CustomMaterial>],
+    meshes: &mut Assets<Mesh>,
+) -> Result<(Handle<Mesh>, Handle<CustomMaterial>)> {
     let wmo_group = read_wmo_group(archive, wmo_path, group_index)?;
-    create_mesh_from_wmo_group(&wmo_group)
+    create_mesh_from_wmo_group(&wmo_group, material_handles, meshes)
 }
 
 fn read_wmo_group<P: AsRef<Path>>(
@@ -166,7 +204,11 @@ fn get_wmo_group_filename<P: AsRef<Path>>(wmo_path: P, group_index: usize) -> St
     format!("{}_{:03}.wmo", base_path.display(), group_index)
 }
 
-fn create_mesh_from_wmo_group(wmo: &wmo::WmoGroup) -> Result<Mesh> {
+fn create_mesh_from_wmo_group(
+    wmo: &wmo::WmoGroup,
+    material_handles: &[Handle<CustomMaterial>],
+    meshes: &mut Assets<Mesh>,
+) -> Result<(Handle<Mesh>, Handle<CustomMaterial>)> {
     let positions: Vec<_> = wmo.vertices.iter().map(|v| [v.x, v.y, v.z]).collect();
     let normals: Vec<_> = wmo
         .normals
@@ -207,5 +249,9 @@ fn create_mesh_from_wmo_group(wmo: &wmo::WmoGroup) -> Result<Mesh> {
         mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, colors);
     }
 
-    Ok(mesh)
+    let mesh_handle = meshes.add(mesh);
+
+    // Wrong?
+    let material_handle = material_handles[wmo.materials[0] as usize].clone();
+    Ok((mesh_handle, material_handle))
 }
