@@ -8,12 +8,12 @@ use bevy_egui::*;
 use crate::{loading::LoadingPlugin, material::CustomMaterialPlugin};
 
 mod camera;
+mod data;
 mod loading;
 mod material;
 mod settings;
 mod state;
 mod ui;
-mod worgen;
 
 fn main() {
     App::new()
@@ -25,7 +25,7 @@ fn main() {
         .add_plugins(settings::SettingsPlugin)
         .add_plugins(LoadingPlugin)
         .add_plugins(ui::UiPlugin)
-        .add_plugins(worgen::WorgenPlugin)
+        .add_plugins(data::DataPlugin)
         .add_plugins(camera::PanOrbitCameraPlugin)
         .run();
 }

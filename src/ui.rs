@@ -8,9 +8,14 @@ use bevy::prelude::*;
 use bevy_egui::*;
 
 use crate::{
+    data::{
+        DataInfo,
+        archive::ArchiveInfo,
+        model::ModelInfo,
+        world_model::{WmoGroupInfo, WmoInfo},
+    },
     settings::{ModelSettings, Settings},
     state::GameState,
-    worgen::{ArchiveInfo, DataInfo, ModelInfo, WmoGroupInfo, WmoInfo},
 };
 
 pub struct UiPlugin;
