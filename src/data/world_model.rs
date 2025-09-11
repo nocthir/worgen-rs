@@ -13,7 +13,10 @@ use bevy::{asset::RenderAssetUsages, prelude::*, render::mesh::*};
 use wow_mpq as mpq;
 use wow_wmo as wmo;
 
-use crate::data::normalize_vec3;
+use crate::data::{
+    normalize_vec3,
+    texture::{self, TextureArchiveMap},
+};
 
 #[derive(Clone)]
 pub struct WmoInfo {
@@ -113,6 +116,8 @@ fn read_wmo_groups<P: AsRef<Path>>(
 pub fn create_meshes_from_wmo_path<P: AsRef<Path>>(
     archive: &mut mpq::Archive,
     path: P,
+    texture_archive_map: &TextureArchiveMap,
+    images: &mut Assets<Image>,
     standard_materials: &mut Assets<StandardMaterial>,
     meshes: &mut Assets<Mesh>,
 ) -> Result<Vec<(Handle<Mesh>, Handle<StandardMaterial>)>> {
@@ -129,7 +134,8 @@ pub fn create_meshes_from_wmo_path<P: AsRef<Path>>(
     if let Ok(wmo) = wmo::parse_wmo(&mut reader)
         && !wmo.groups.is_empty()
     {
-        let materials = create_materials_from_wmo(&wmo);
+        let textures = texture::create_textures_from_wmo(&wmo, texture_archive_map, images)?;
+        let materials = create_materials_from_wmo(&wmo, &textures);
         let material_handles = materials
             .into_iter()
             .map(|mat| standard_materials.add(mat))
@@ -161,10 +167,17 @@ pub fn create_meshes_from_wmo_path<P: AsRef<Path>>(
     Ok(ret)
 }
 
-fn create_materials_from_wmo(wmo: &wmo::WmoRoot) -> Vec<StandardMaterial> {
+fn create_materials_from_wmo(
+    wmo: &wmo::WmoRoot,
+    images: &[Handle<Image>],
+) -> Vec<StandardMaterial> {
     let mut materials = Vec::new();
+
     for material in &wmo.materials {
         let color = material.diffuse_color;
+        let texture_index = material.get_texture1_index(&wmo.texture_offset_index_map);
+        let image = images[texture_index as usize].clone();
+
         let material = StandardMaterial {
             base_color: Color::linear_rgba(
                 color.r as f32 / 255.0,
@@ -173,6 +186,7 @@ fn create_materials_from_wmo(wmo: &wmo::WmoRoot) -> Vec<StandardMaterial> {
                 color.a as f32 / 255.0,
             ),
             perceptual_roughness: 1.0,
+            base_color_texture: Some(image),
             unlit: true,
             ..Default::default()
         };
@@ -293,16 +307,28 @@ fn create_mesh_from_wmo_group(
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::*;
+    use crate::{data::texture, *};
 
     #[test]
     fn altar() -> Result {
         env_logger::init();
-        let model = settings::load_settings()?;
-        let selected_model = ui::ModelSelected::from(&model.test_world_model);
+        let settings = settings::load_settings()?;
+        let selected_model = ui::ModelSelected::from(&settings.test_world_model);
+        let mut texture_archive_map = texture::TextureArchiveMap::default();
+        let interface_archive_path = PathBuf::from(&settings.interface_archive_path);
+        let texture_archive_path = PathBuf::from(&settings.texture_archive_path);
+        texture_archive_map.fill(&interface_archive_path)?;
+        texture_archive_map.fill(&texture_archive_path)?;
+        let mut images = Assets::<Image>::default();
         let mut custom_materials = Assets::<StandardMaterial>::default();
         let mut meshes = Assets::<Mesh>::default();
-        data::create_mesh_from_selected_model(&selected_model, &mut custom_materials, &mut meshes)?;
+        data::create_mesh_from_selected_model(
+            &selected_model,
+            &texture_archive_map,
+            &mut images,
+            &mut custom_materials,
+            &mut meshes,
+        )?;
         Ok(())
     }
 }

@@ -145,16 +145,20 @@ fn create_mesh(m2: &m2::M2Model, m2_data: &[u8], skin_index: u32) -> Result<Mesh
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::*;
+    use crate::{data::texture, *};
 
     #[test]
     fn main_menu() -> Result {
         let settings = settings::load_settings()?;
         let selected_model = ui::ModelSelected::from(&settings.default_model);
+        let texture_archive_map = texture::TextureArchiveMap::default();
+        let mut images = Assets::<Image>::default();
         let mut standard_materials = Assets::<StandardMaterial>::default();
         let mut meshes = Assets::<Mesh>::default();
         data::create_mesh_from_selected_model(
             &selected_model,
+            &texture_archive_map,
+            &mut images,
             &mut standard_materials,
             &mut meshes,
         )?;
@@ -166,10 +170,14 @@ mod test {
         env_logger::init();
         let model = settings::load_settings()?;
         let selected_model = ui::ModelSelected::from(&model.test_model);
+        let texture_archive_map = texture::TextureArchiveMap::default();
+        let mut images = Assets::<Image>::default();
         let mut standard_materials = Assets::<StandardMaterial>::default();
         let mut meshes = Assets::<Mesh>::default();
         data::create_mesh_from_selected_model(
             &selected_model,
+            &texture_archive_map,
+            &mut images,
             &mut standard_materials,
             &mut meshes,
         )?;

@@ -77,8 +77,15 @@ fn archive_info(
 ) {
     egui::CollapsingHeader::new(format!("{}", archive.path.display()))
         .default_open(false)
-        .enabled(archive.has_models())
+        .enabled(archive.has_stuff())
         .show(ui, |ui| {
+            egui::CollapsingHeader::new("Textures")
+                .enabled(!archive.texture_infos.is_empty())
+                .show(ui, |ui| {
+                    for texture in &archive.texture_infos {
+                        ui.label(&texture.texture_path);
+                    }
+                });
             egui::CollapsingHeader::new("M2")
                 .enabled(!archive.model_infos.is_empty())
                 .show(ui, |ui| {

@@ -7036,7 +7036,7 @@ checksum = "5c573471f125075647d03df72e026074b7203790d41351cd6edc96f46bcccd36"
 
 [[package]]
 name = "worgen-rs"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "anyhow",
  "bevy",
@@ -7046,6 +7046,7 @@ dependencies = [
  "serde",
  "serde_json",
  "wow-adt",
+ "wow-blp",
  "wow-m2",
  "wow-mpq",
  "wow-wmo",

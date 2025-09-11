@@ -4,6 +4,7 @@
 
 pub mod archive;
 pub mod model;
+pub mod texture;
 pub mod world_model;
 
 use std::{f32, ffi::OsStr, io, path::Path};
@@ -14,7 +15,10 @@ use wow_adt as adt;
 use wow_mpq as mpq;
 
 use crate::{
-    data::archive::{ArchiveInfo, ArchiveLoaded, LoadArchiveTasks},
+    data::{
+        archive::{ArchiveInfo, ArchiveLoaded, LoadArchiveTasks},
+        texture::TextureArchiveMap,
+    },
     ui::ModelSelected,
 };
 
@@ -23,6 +27,7 @@ pub struct DataPlugin;
 impl Plugin for DataPlugin {
     fn build(&self, app: &mut App) {
         app.add_event::<ArchiveLoaded>()
+            .insert_resource(texture::TextureArchiveMap::default())
             .add_systems(Startup, archive::start_loading)
             .add_systems(
                 Update,
@@ -43,12 +48,20 @@ fn load_selected_model(
     mut event_reader: EventReader<ModelSelected>,
     query: Query<Entity, With<CurrentModel>>,
     mut commands: Commands,
+    texture_archive_map: Res<TextureArchiveMap>,
+    mut images: ResMut<Assets<Image>>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut standard_materials: ResMut<Assets<StandardMaterial>>,
 ) -> Result {
     // Ignore all but the last event
     if let Some(event) = event_reader.read().last() {
-        match create_mesh_from_selected_model(event, &mut standard_materials, &mut meshes) {
+        match create_mesh_from_selected_model(
+            event,
+            &texture_archive_map,
+            &mut images,
+            &mut standard_materials,
+            &mut meshes,
+        ) {
             Ok(bundles) => {
                 if bundles.is_empty() {
                     error!("No meshes loaded for model: {}", event.model_path.display());
@@ -80,6 +93,8 @@ fn load_selected_model(
 
 fn create_mesh_from_selected_model(
     model_info: &ModelSelected,
+    texture_archive_map: &TextureArchiveMap,
+    images: &mut Assets<Image>,
     materials: &mut Assets<StandardMaterial>,
     meshes: &mut Assets<Mesh>,
 ) -> Result<Vec<(Handle<Mesh>, Handle<StandardMaterial>)>> {
@@ -87,7 +102,14 @@ fn create_mesh_from_selected_model(
     let mut archive = mpq::Archive::open(mpq_path)?;
     info!("Loaded archive {}", mpq_path.display());
     let model_path = model_info.model_path.to_str().unwrap();
-    create_mesh_from_path_archive(model_path, &mut archive, materials, meshes)
+    create_mesh_from_path_archive(
+        model_path,
+        &mut archive,
+        texture_archive_map,
+        images,
+        materials,
+        meshes,
+    )
 }
 
 fn _read_adt(path: &str, archive: &mut mpq::Archive) -> Result<()> {
@@ -115,6 +137,8 @@ fn _read_adt(path: &str, archive: &mut mpq::Archive) -> Result<()> {
 fn create_mesh_from_path_archive<P: AsRef<Path>>(
     path: P,
     archive: &mut mpq::Archive,
+    texture_archive_map: &TextureArchiveMap,
+    images: &mut Assets<Image>,
     materials: &mut Assets<StandardMaterial>,
     meshes: &mut Assets<Mesh>,
 ) -> Result<Vec<(Handle<Mesh>, Handle<StandardMaterial>)>> {
@@ -126,7 +150,14 @@ fn create_mesh_from_path_archive<P: AsRef<Path>>(
     if ext == OsStr::new("m2") {
         model::create_meshes_from_m2_path(archive, path, materials, meshes)
     } else if ext == OsStr::new("wmo") {
-        world_model::create_meshes_from_wmo_path(archive, path, materials, meshes)
+        world_model::create_meshes_from_wmo_path(
+            archive,
+            path,
+            texture_archive_map,
+            images,
+            materials,
+            meshes,
+        )
     } else {
         Err(format!("Unsupported model format: {}", path.as_ref().display()).into())
     }
