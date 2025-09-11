@@ -13,7 +13,7 @@ use bevy::{asset::RenderAssetUsages, prelude::*, render::mesh::*};
 use wow_mpq as mpq;
 use wow_wmo as wmo;
 
-use crate::{data::normalize_vec3, material::CustomMaterial};
+use crate::data::normalize_vec3;
 
 #[derive(Clone)]
 pub struct WmoInfo {
@@ -113,9 +113,9 @@ fn read_wmo_groups<P: AsRef<Path>>(
 pub fn create_meshes_from_wmo_path<P: AsRef<Path>>(
     archive: &mut mpq::Archive,
     path: P,
-    custom_materials: &mut Assets<CustomMaterial>,
+    standard_materials: &mut Assets<StandardMaterial>,
     meshes: &mut Assets<Mesh>,
-) -> Result<Vec<(Handle<Mesh>, Handle<CustomMaterial>)>> {
+) -> Result<Vec<(Handle<Mesh>, Handle<StandardMaterial>)>> {
     let path_str = path
         .as_ref()
         .to_str()
@@ -132,11 +132,13 @@ pub fn create_meshes_from_wmo_path<P: AsRef<Path>>(
         let materials = create_materials_from_wmo(&wmo);
         let material_handles = materials
             .into_iter()
-            .map(|mat| custom_materials.add(mat))
+            .map(|mat| standard_materials.add(mat))
             .collect::<Vec<_>>();
 
-        let default_material_handle = custom_materials.add(CustomMaterial {
-            color: LinearRgba::WHITE,
+        let default_material_handle = standard_materials.add(StandardMaterial {
+            base_color: Color::WHITE,
+            perceptual_roughness: 1.0,
+            unlit: true,
             ..Default::default()
         });
 
@@ -159,12 +161,19 @@ pub fn create_meshes_from_wmo_path<P: AsRef<Path>>(
     Ok(ret)
 }
 
-fn create_materials_from_wmo(wmo: &wmo::WmoRoot) -> Vec<CustomMaterial> {
+fn create_materials_from_wmo(wmo: &wmo::WmoRoot) -> Vec<StandardMaterial> {
     let mut materials = Vec::new();
     for material in &wmo.materials {
         let color = material.diffuse_color;
-        let material = CustomMaterial {
-            color: linear_rgba_from_model_color(color),
+        let material = StandardMaterial {
+            base_color: Color::linear_rgba(
+                color.r as f32 / 255.0,
+                color.g as f32 / 255.0,
+                color.b as f32 / 255.0,
+                color.a as f32 / 255.0,
+            ),
+            perceptual_roughness: 1.0,
+            unlit: true,
             ..Default::default()
         };
         materials.push(material);
@@ -172,23 +181,14 @@ fn create_materials_from_wmo(wmo: &wmo::WmoRoot) -> Vec<CustomMaterial> {
     materials
 }
 
-fn linear_rgba_from_model_color(color: wmo::Color) -> LinearRgba {
-    LinearRgba {
-        red: color.r as f32 / 255.0,
-        green: color.g as f32 / 255.0,
-        blue: color.b as f32 / 255.0,
-        alpha: color.a as f32 / 255.0,
-    }
-}
-
 fn create_mesh_from_wmo_group_path<P: AsRef<Path>>(
     archive: &mut mpq::Archive,
     wmo_path: P,
     group_index: usize,
-    default_material_handle: Handle<CustomMaterial>,
-    material_handles: &[Handle<CustomMaterial>],
+    default_material_handle: Handle<StandardMaterial>,
+    material_handles: &[Handle<StandardMaterial>],
     meshes: &mut Assets<Mesh>,
-) -> Result<Vec<(Handle<Mesh>, Handle<CustomMaterial>)>> {
+) -> Result<Vec<(Handle<Mesh>, Handle<StandardMaterial>)>> {
     let wmo_group = read_wmo_group(archive, wmo_path, group_index)?;
     Ok(create_mesh_from_wmo_group(
         &wmo_group,
@@ -220,10 +220,10 @@ fn get_wmo_group_filename<P: AsRef<Path>>(wmo_path: P, group_index: usize) -> St
 
 fn create_mesh_from_wmo_group(
     wmo: &wmo::WmoGroup,
-    default_material_handle: Handle<CustomMaterial>,
-    material_handles: &[Handle<CustomMaterial>],
+    default_material_handle: Handle<StandardMaterial>,
+    material_handles: &[Handle<StandardMaterial>],
     meshes: &mut Assets<Mesh>,
-) -> Vec<(Handle<Mesh>, Handle<CustomMaterial>)> {
+) -> Vec<(Handle<Mesh>, Handle<StandardMaterial>)> {
     let positions: Vec<_> = wmo.vertices.iter().map(|v| [v.x, v.y, v.z]).collect();
     let normals: Vec<_> = wmo
         .normals
@@ -300,7 +300,7 @@ mod test {
         env_logger::init();
         let model = settings::load_settings()?;
         let selected_model = ui::ModelSelected::from(&model.test_world_model);
-        let mut custom_materials = Assets::<CustomMaterial>::default();
+        let mut custom_materials = Assets::<StandardMaterial>::default();
         let mut meshes = Assets::<Mesh>::default();
         data::create_mesh_from_selected_model(&selected_model, &mut custom_materials, &mut meshes)?;
         Ok(())

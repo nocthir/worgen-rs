@@ -15,7 +15,7 @@ use bevy::{
 use wow_m2 as m2;
 use wow_mpq as mpq;
 
-use crate::{data::normalize_vec3, material::CustomMaterial};
+use crate::data::normalize_vec3;
 
 #[derive(Clone)]
 pub struct ModelInfo {
@@ -65,9 +65,9 @@ fn read_m2<P: AsRef<Path>>(path: P, archive: &mut mpq::Archive) -> Result<m2::M2
 pub fn create_meshes_from_m2_path<P: AsRef<Path>>(
     archive: &mut mpq::Archive,
     path: P,
-    materials: &mut Assets<CustomMaterial>,
+    standard_materials: &mut Assets<StandardMaterial>,
     meshes: &mut Assets<Mesh>,
-) -> Result<Vec<(Handle<Mesh>, Handle<CustomMaterial>)>> {
+) -> Result<Vec<(Handle<Mesh>, Handle<StandardMaterial>)>> {
     let path_str = path
         .as_ref()
         .to_str()
@@ -78,10 +78,10 @@ pub fn create_meshes_from_m2_path<P: AsRef<Path>>(
 
     let mut ret = Vec::default();
 
-    let material_handle = materials.add(CustomMaterial {
-        color: LinearRgba::WHITE,
-        color_texture: None,
-        alpha_mode: AlphaMode::Opaque,
+    let material_handle = standard_materials.add(StandardMaterial {
+        base_color: Color::WHITE,
+        perceptual_roughness: 1.0,
+        ..Default::default()
     });
 
     if let Ok(m2) = m2::M2Model::parse(&mut reader)
@@ -111,55 +111,15 @@ fn create_mesh(m2: &m2::M2Model, m2_data: &[u8], skin_index: u32) -> Result<Mesh
     // These are used to index into the global vertices array.
     let indices = skin.get_resolved_indices();
 
-    // Local vertex attributes.
-    let positions: Vec<_> = indices
-        .iter()
-        .copied()
-        .filter_map(|i| {
-            if i < m2.vertices.len() as u16 {
-                let v = &m2.vertices[i as usize];
-                Some([v.position.x, v.position.y, v.position.z])
-            } else {
-                None
-            }
-        })
-        .collect();
-    let normals: Vec<_> = indices
-        .iter()
-        .copied()
-        .filter_map(|i| {
-            if i < m2.vertices.len() as u16 {
-                let v = &m2.vertices[i as usize];
-                Some(normalize_vec3([v.normal.x, v.normal.y, v.normal.z]))
-            } else {
-                None
-            }
-        })
-        .collect();
-    let tex_coords_0: Vec<_> = indices
-        .iter()
-        .copied()
-        .filter_map(|i| {
-            if i < m2.vertices.len() as u16 {
-                let v = &m2.vertices[i as usize];
-                Some([v.tex_coords.x, v.tex_coords.y])
-            } else {
-                None
-            }
-        })
-        .collect();
+    let mut positions = Vec::with_capacity(m2.vertices.len());
+    let mut normals = Vec::with_capacity(m2.vertices.len());
+    let mut tex_coords_0 = Vec::with_capacity(m2.vertices.len());
 
-    // This is used to index into the local vertices array.
-    let triangles = skin.triangles();
-
-    let mut mesh_indices = Vec::default();
-    for submesh in skin.submeshes() {
-        let submesh_triangles = triangles
-            .iter()
-            .copied()
-            .skip(submesh.triangle_start as usize)
-            .take(submesh.triangle_count as usize);
-        mesh_indices.extend(submesh_triangles);
+    for i in 0..m2.vertices.len() {
+        let v = &m2.vertices[i];
+        positions.push([v.position.x, v.position.y, v.position.z]);
+        normals.push(normalize_vec3([v.normal.x, v.normal.y, v.normal.z]));
+        tex_coords_0.push([v.tex_coords.x, v.tex_coords.y]);
     }
 
     // Keep the mesh data accessible in future frames to be able to mutate it in toggle_texture.
@@ -177,7 +137,7 @@ fn create_mesh(m2: &m2::M2Model, m2_data: &[u8], skin_index: u32) -> Result<Mesh
     )
     .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, normals)
     .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, tex_coords_0)
-    .with_inserted_indices(Indices::U16(mesh_indices));
+    .with_inserted_indices(Indices::U16(indices));
 
     Ok(mesh)
 }
@@ -191,9 +151,13 @@ mod test {
     fn main_menu() -> Result {
         let settings = settings::load_settings()?;
         let selected_model = ui::ModelSelected::from(&settings.default_model);
-        let mut custom_materials = Assets::<CustomMaterial>::default();
+        let mut standard_materials = Assets::<StandardMaterial>::default();
         let mut meshes = Assets::<Mesh>::default();
-        data::create_mesh_from_selected_model(&selected_model, &mut custom_materials, &mut meshes)?;
+        data::create_mesh_from_selected_model(
+            &selected_model,
+            &mut standard_materials,
+            &mut meshes,
+        )?;
         Ok(())
     }
 
@@ -202,9 +166,13 @@ mod test {
         env_logger::init();
         let model = settings::load_settings()?;
         let selected_model = ui::ModelSelected::from(&model.test_model);
-        let mut custom_materials = Assets::<CustomMaterial>::default();
+        let mut standard_materials = Assets::<StandardMaterial>::default();
         let mut meshes = Assets::<Mesh>::default();
-        data::create_mesh_from_selected_model(&selected_model, &mut custom_materials, &mut meshes)?;
+        data::create_mesh_from_selected_model(
+            &selected_model,
+            &mut standard_materials,
+            &mut meshes,
+        )?;
         Ok(())
     }
 }

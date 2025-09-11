@@ -15,7 +15,6 @@ use wow_mpq as mpq;
 
 use crate::{
     data::archive::{ArchiveInfo, ArchiveLoaded, LoadArchiveTasks},
-    material::CustomMaterial,
     ui::ModelSelected,
 };
 
@@ -45,11 +44,11 @@ fn load_selected_model(
     query: Query<Entity, With<CurrentModel>>,
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
-    mut custom_materials: ResMut<Assets<CustomMaterial>>,
+    mut standard_materials: ResMut<Assets<StandardMaterial>>,
 ) -> Result {
     // Ignore all but the last event
     if let Some(event) = event_reader.read().last() {
-        match create_mesh_from_selected_model(event, &mut custom_materials, &mut meshes) {
+        match create_mesh_from_selected_model(event, &mut standard_materials, &mut meshes) {
             Ok(bundles) => {
                 if bundles.is_empty() {
                     error!("No meshes loaded for model: {}", event.model_path.display());
@@ -81,9 +80,9 @@ fn load_selected_model(
 
 fn create_mesh_from_selected_model(
     model_info: &ModelSelected,
-    materials: &mut Assets<CustomMaterial>,
+    materials: &mut Assets<StandardMaterial>,
     meshes: &mut Assets<Mesh>,
-) -> Result<Vec<(Handle<Mesh>, Handle<CustomMaterial>)>> {
+) -> Result<Vec<(Handle<Mesh>, Handle<StandardMaterial>)>> {
     let mpq_path = &model_info.archive_path;
     let mut archive = mpq::Archive::open(mpq_path)?;
     info!("Loaded archive {}", mpq_path.display());
@@ -116,9 +115,9 @@ fn _read_adt(path: &str, archive: &mut mpq::Archive) -> Result<()> {
 fn create_mesh_from_path_archive<P: AsRef<Path>>(
     path: P,
     archive: &mut mpq::Archive,
-    materials: &mut Assets<CustomMaterial>,
+    materials: &mut Assets<StandardMaterial>,
     meshes: &mut Assets<Mesh>,
-) -> Result<Vec<(Handle<Mesh>, Handle<CustomMaterial>)>> {
+) -> Result<Vec<(Handle<Mesh>, Handle<StandardMaterial>)>> {
     let ext = path
         .as_ref()
         .extension()
@@ -142,7 +141,7 @@ fn normalize_vec3(v: [f32; 3]) -> [f32; 3] {
     }
 }
 
-fn add_bundle(commands: &mut Commands, mesh: Handle<Mesh>, material: Handle<CustomMaterial>) {
+fn add_bundle(commands: &mut Commands, mesh: Handle<Mesh>, material: Handle<StandardMaterial>) {
     let mut transform = Transform::from_xyz(0.0, 0.0, 0.0);
     transform.rotate_local_x(-f32::consts::FRAC_PI_2);
     transform.rotate_local_z(-f32::consts::FRAC_PI_2);
