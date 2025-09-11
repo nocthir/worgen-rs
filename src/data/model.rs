@@ -181,3 +181,30 @@ fn create_mesh(m2: &m2::M2Model, m2_data: &[u8], skin_index: u32) -> Result<Mesh
 
     Ok(mesh)
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::*;
+
+    #[test]
+    fn main_menu() -> Result {
+        let settings = settings::load_settings()?;
+        let selected_model = ui::ModelSelected::from(&settings.default_model);
+        let mut custom_materials = Assets::<CustomMaterial>::default();
+        let mut meshes = Assets::<Mesh>::default();
+        data::create_mesh_from_selected_model(&selected_model, &mut custom_materials, &mut meshes)?;
+        Ok(())
+    }
+
+    #[test]
+    fn dwarf() -> Result {
+        env_logger::init();
+        let model = settings::load_settings()?;
+        let selected_model = ui::ModelSelected::from(&model.test_model);
+        let mut custom_materials = Assets::<CustomMaterial>::default();
+        let mut meshes = Assets::<Mesh>::default();
+        data::create_mesh_from_selected_model(&selected_model, &mut custom_materials, &mut meshes)?;
+        Ok(())
+    }
+}

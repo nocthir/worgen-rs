@@ -135,15 +135,21 @@ pub fn create_meshes_from_wmo_path<P: AsRef<Path>>(
             .map(|mat| custom_materials.add(mat))
             .collect::<Vec<_>>();
 
+        let default_material_handle = custom_materials.add(CustomMaterial {
+            color: LinearRgba::WHITE,
+            ..Default::default()
+        });
+
         for group_index in 0..wmo.groups.len() {
             if let Ok(bundle) = create_mesh_from_wmo_group_path(
                 archive,
                 path_str,
                 group_index,
+                default_material_handle.clone(),
                 &material_handles,
                 meshes,
             ) {
-                ret.push(bundle);
+                ret.extend(bundle);
             } else {
                 error!("Failed to create mesh for group {group_index}");
             }
@@ -179,11 +185,17 @@ fn create_mesh_from_wmo_group_path<P: AsRef<Path>>(
     archive: &mut mpq::Archive,
     wmo_path: P,
     group_index: usize,
+    default_material_handle: Handle<CustomMaterial>,
     material_handles: &[Handle<CustomMaterial>],
     meshes: &mut Assets<Mesh>,
-) -> Result<(Handle<Mesh>, Handle<CustomMaterial>)> {
+) -> Result<Vec<(Handle<Mesh>, Handle<CustomMaterial>)>> {
     let wmo_group = read_wmo_group(archive, wmo_path, group_index)?;
-    create_mesh_from_wmo_group(&wmo_group, material_handles, meshes)
+    Ok(create_mesh_from_wmo_group(
+        &wmo_group,
+        default_material_handle,
+        material_handles,
+        meshes,
+    ))
 }
 
 fn read_wmo_group<P: AsRef<Path>>(
@@ -208,9 +220,10 @@ fn get_wmo_group_filename<P: AsRef<Path>>(wmo_path: P, group_index: usize) -> St
 
 fn create_mesh_from_wmo_group(
     wmo: &wmo::WmoGroup,
+    default_material_handle: Handle<CustomMaterial>,
     material_handles: &[Handle<CustomMaterial>],
     meshes: &mut Assets<Mesh>,
-) -> Result<(Handle<Mesh>, Handle<CustomMaterial>)> {
+) -> Vec<(Handle<Mesh>, Handle<CustomMaterial>)> {
     let positions: Vec<_> = wmo.vertices.iter().map(|v| [v.x, v.y, v.z]).collect();
     let normals: Vec<_> = wmo
         .normals
@@ -226,34 +239,70 @@ fn create_mesh_from_wmo_group(
             .collect();
     }
 
-    // Keep the mesh data accessible in future frames to be able to mutate it in toggle_texture.
-    let mut mesh = Mesh::new(
-        PrimitiveTopology::TriangleList,
-        RenderAssetUsages::MAIN_WORLD | RenderAssetUsages::RENDER_WORLD,
-    )
-    .with_inserted_attribute(
-        Mesh::ATTRIBUTE_POSITION,
-        // Each array is an [x, y, z] coordinate in local space.
-        // The camera coordinate space is right-handed x-right, y-up, z-back. This means "forward" is -Z.
-        // Meshes always rotate around their local [0, 0, 0] when a rotation is applied to their Transform.
-        // By centering our mesh around the origin, rotating the mesh preserves its center of mass.
-        positions,
-    )
-    .with_inserted_indices(Indices::U16(wmo.indices.clone()));
+    let mut ret = Vec::new();
 
-    if !normals.is_empty() {
-        mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
-    }
-    if !tex_coords_0.is_empty() {
-        mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, tex_coords_0);
-    }
-    if !colors.is_empty() {
-        mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, colors);
+    for batch in &wmo.batches {
+        let indices = wmo
+            .indices
+            .iter()
+            .copied()
+            .skip(batch.start_index as usize)
+            .take(batch.count as usize)
+            .collect();
+
+        // Keep the mesh data accessible in future frames to be able to mutate it in toggle_texture.
+        let mut mesh = Mesh::new(
+            PrimitiveTopology::TriangleList,
+            RenderAssetUsages::MAIN_WORLD | RenderAssetUsages::RENDER_WORLD,
+        )
+        .with_inserted_attribute(
+            Mesh::ATTRIBUTE_POSITION,
+            // Each array is an [x, y, z] coordinate in local space.
+            // The camera coordinate space is right-handed x-right, y-up, z-back. This means "forward" is -Z.
+            // Meshes always rotate around their local [0, 0, 0] when a rotation is applied to their Transform.
+            // By centering our mesh around the origin, rotating the mesh preserves its center of mass.
+            positions.clone(),
+        )
+        .with_inserted_indices(Indices::U16(indices));
+
+        if !normals.is_empty() {
+            mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals.clone());
+        }
+        if !tex_coords_0.is_empty() {
+            mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, tex_coords_0.clone());
+        }
+        if !colors.is_empty() {
+            mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, colors.clone());
+        }
+
+        let mesh_handle = meshes.add(mesh);
+
+        let material_index = batch.material_id as usize;
+        let material_handle = if material_index < material_handles.len() {
+            material_handles[material_index].clone()
+        } else {
+            default_material_handle.clone()
+        };
+
+        ret.push((mesh_handle, material_handle));
     }
 
-    let mesh_handle = meshes.add(mesh);
+    ret
+}
 
-    // Wrong?
-    let material_handle = material_handles[wmo.materials[0] as usize].clone();
-    Ok((mesh_handle, material_handle))
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::*;
+
+    #[test]
+    fn altar() -> Result {
+        env_logger::init();
+        let model = settings::load_settings()?;
+        let selected_model = ui::ModelSelected::from(&model.test_world_model);
+        let mut custom_materials = Assets::<CustomMaterial>::default();
+        let mut meshes = Assets::<Mesh>::default();
+        data::create_mesh_from_selected_model(&selected_model, &mut custom_materials, &mut meshes)?;
+        Ok(())
+    }
 }
