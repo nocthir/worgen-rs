@@ -2,10 +2,7 @@
 // Author: Nocthir <nocthir@proton.me>
 // SPDX-License-Identifier: MIT or Apache-2.0
 
-use bevy::{diagnostic::FrameTimeDiagnosticsPlugin, prelude::*};
-use bevy_egui::*;
-
-use crate::material::CustomMaterialPlugin;
+use bevy::{diagnostic, prelude::*};
 
 mod camera;
 mod data;
@@ -16,9 +13,10 @@ mod ui;
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
-        .add_plugins(FrameTimeDiagnosticsPlugin::default())
-        .add_plugins(CustomMaterialPlugin)
-        .add_plugins(EguiPlugin::default())
+        .add_plugins(diagnostic::FrameTimeDiagnosticsPlugin::default())
+        .add_plugins(bevy_egui::EguiPlugin::default())
+        .add_plugins(bevy_inspector_egui::quick::WorldInspectorPlugin::default())
+        .add_plugins(material::CustomMaterialPlugin)
         .add_plugins(settings::SettingsPlugin)
         .add_plugins(ui::UiPlugin)
         .add_plugins(data::DataPlugin)
