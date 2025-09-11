@@ -15,6 +15,7 @@ use wow_wmo as wmo;
 
 use crate::{data::normalize_vec3, material::CustomMaterial};
 
+#[derive(Clone)]
 pub struct WmoInfo {
     pub path: PathBuf,
     pub groups: Vec<WmoGroupInfo>,
@@ -22,6 +23,7 @@ pub struct WmoInfo {
     pub texture_count: usize,
 }
 
+#[derive(Clone)]
 pub struct WmoGroupInfo {
     pub name: String,
     pub vertex_count: usize,

@@ -8,34 +8,29 @@ pub mod world_model;
 
 use std::{f32, ffi::OsStr, io, path::Path};
 
-use bevy::{prelude::*, tasks};
+use bevy::prelude::*;
 
 use wow_adt as adt;
 use wow_mpq as mpq;
 
-use crate::{data::archive::ArchiveInfo, material::CustomMaterial, ui::ModelSelected};
+use crate::{
+    data::archive::{ArchiveInfo, ArchiveLoaded, LoadArchiveTasks},
+    material::CustomMaterial,
+    ui::ModelSelected,
+};
 
 pub struct DataPlugin;
 
 impl Plugin for DataPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, start_info)
+        app.add_event::<ArchiveLoaded>()
+            .add_systems(Startup, archive::start_loading)
             .add_systems(
                 Update,
-                archive::load_mpqs.run_if(resource_exists::<LoadArchivesTask>),
+                archive::check_archive_loading.run_if(resource_exists::<LoadArchiveTasks>),
             )
             .add_systems(Update, load_selected_model);
     }
-}
-
-#[derive(Resource)]
-pub struct LoadArchivesTask {
-    task: tasks::Task<Result<DataInfo>>,
-}
-
-fn start_info(mut commands: Commands) {
-    let task = tasks::IoTaskPool::get().spawn(archive::load_mpqs_impl());
-    commands.insert_resource(LoadArchivesTask { task });
 }
 
 #[derive(Component)]

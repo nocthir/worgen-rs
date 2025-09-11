@@ -7,8 +7,6 @@ use std::{fs, io};
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
-use crate::state::GameState;
-
 #[derive(Resource, Default, Serialize, Deserialize)]
 pub struct Settings {
     pub default_model: ModelSettings,
@@ -26,13 +24,12 @@ pub struct SettingsPlugin;
 
 impl Plugin for SettingsPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, load_resource);
+        app.add_systems(PreStartup, load_resource);
     }
 }
 
-fn load_resource(mut commands: Commands, mut next: ResMut<NextState<GameState>>) -> Result {
+fn load_resource(mut commands: Commands) -> Result {
     commands.insert_resource(load_settings()?);
-    next.set(GameState::Loading);
     Ok(())
 }
 

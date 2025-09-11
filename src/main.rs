@@ -5,14 +5,12 @@
 use bevy::{diagnostic::FrameTimeDiagnosticsPlugin, prelude::*};
 use bevy_egui::*;
 
-use crate::{loading::LoadingPlugin, material::CustomMaterialPlugin};
+use crate::material::CustomMaterialPlugin;
 
 mod camera;
 mod data;
-mod loading;
 mod material;
 mod settings;
-mod state;
 mod ui;
 
 fn main() {
@@ -20,10 +18,8 @@ fn main() {
         .add_plugins(DefaultPlugins)
         .add_plugins(FrameTimeDiagnosticsPlugin::default())
         .add_plugins(CustomMaterialPlugin)
-        .init_state::<state::GameState>()
         .add_plugins(EguiPlugin::default())
         .add_plugins(settings::SettingsPlugin)
-        .add_plugins(LoadingPlugin)
         .add_plugins(ui::UiPlugin)
         .add_plugins(data::DataPlugin)
         .add_plugins(camera::PanOrbitCameraPlugin)

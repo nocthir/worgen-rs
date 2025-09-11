@@ -17,6 +17,7 @@ use wow_mpq as mpq;
 
 use crate::{data::normalize_vec3, material::CustomMaterial};
 
+#[derive(Clone)]
 pub struct ModelInfo {
     pub path: PathBuf,
     pub vertex_count: usize,

@@ -10,12 +10,11 @@ use bevy_egui::*;
 use crate::{
     data::{
         DataInfo,
-        archive::ArchiveInfo,
+        archive::{ArchiveInfo, ArchiveLoaded},
         model::ModelInfo,
         world_model::{WmoGroupInfo, WmoInfo},
     },
     settings::{ModelSettings, Settings},
-    state::GameState,
 };
 
 pub struct UiPlugin;
@@ -23,13 +22,11 @@ pub struct UiPlugin;
 impl Plugin for UiPlugin {
     fn build(&self, app: &mut App) {
         app.add_event::<ModelSelected>()
+            .insert_resource(DataInfo::default())
+            .add_systems(EguiPrimaryContextPass, data_info)
             .add_systems(
-                OnEnter(GameState::Main),
+                Startup,
                 select_main_menu_model.run_if(resource_exists::<Settings>),
-            )
-            .add_systems(
-                EguiPrimaryContextPass,
-                data_info.run_if(resource_exists::<DataInfo>),
             );
     }
 }
@@ -55,9 +52,14 @@ fn select_main_menu_model(mut event_writer: EventWriter<ModelSelected>, settings
 
 fn data_info(
     mut contexts: EguiContexts,
-    data_info: Res<DataInfo>,
+    mut data_info: ResMut<DataInfo>,
+    mut event_reader: EventReader<ArchiveLoaded>,
     mut event_writer: EventWriter<ModelSelected>,
 ) -> Result<()> {
+    for event in event_reader.read() {
+        data_info.archives.push(event.archive.clone());
+    }
+
     egui::Window::new("Info")
         .scroll([false, true])
         .show(contexts.ctx_mut()?, |ui| {
