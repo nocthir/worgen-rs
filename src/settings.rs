@@ -13,6 +13,7 @@ use crate::state::GameState;
 pub struct Settings {
     pub default_model: ModelSettings,
     pub test_model: ModelSettings,
+    pub test_world_model: ModelSettings,
 }
 
 #[derive(Serialize, Deserialize, Default)]

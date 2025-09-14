@@ -10,7 +10,7 @@ use bevy_egui::*;
 use crate::{
     settings::{ModelSettings, Settings},
     state::GameState,
-    worgen::{ArchiveInfo, DataInfo, ModelInfo},
+    worgen::{ArchiveInfo, DataInfo, ModelInfo, WmoGroupInfo, WmoInfo},
 };
 
 pub struct UiPlugin;
@@ -70,11 +70,22 @@ fn archive_info(
 ) {
     egui::CollapsingHeader::new(format!("{}", archive.path.display()))
         .default_open(false)
-        .enabled(!archive.model_infos.is_empty())
+        .enabled(archive.has_models())
         .show(ui, |ui| {
-            for model in &archive.model_infos {
-                model_info(archive, model, ui, event_writer);
-            }
+            egui::CollapsingHeader::new("M2")
+                .enabled(!archive.model_infos.is_empty())
+                .show(ui, |ui| {
+                    for model in &archive.model_infos {
+                        model_info(archive, model, ui, event_writer);
+                    }
+                });
+            egui::CollapsingHeader::new("WMO")
+                .enabled(!archive.wmo_infos.is_empty())
+                .show(ui, |ui| {
+                    for wmo in &archive.wmo_infos {
+                        wmo_info(archive, wmo, ui, event_writer);
+                    }
+                });
         });
 }
 
@@ -97,4 +108,39 @@ fn model_info(
             model_path: model.path.clone(),
         });
     }
+}
+
+fn wmo_info(
+    archive: &ArchiveInfo,
+    wmo: &WmoInfo,
+    ui: &mut egui::Ui,
+    event_writer: &mut EventWriter<ModelSelected>,
+) {
+    let any_group_with_vertices = wmo.groups.iter().any(|g| g.vertex_count > 0);
+
+    let header = egui::CollapsingHeader::new(format!("{}", wmo.path.display()))
+        .enabled(any_group_with_vertices)
+        .show(ui, |ui| {
+            ui.label(format!("Materials: {}", wmo.material_count));
+            ui.label(format!("Textures: {}", wmo.texture_count));
+
+            egui::CollapsingHeader::new("Groups").show(ui, |ui| {
+                for group in &wmo.groups {
+                    wmo_group_info(group, ui);
+                }
+            });
+        });
+    if header.header_response.clicked() {
+        event_writer.write(ModelSelected {
+            archive_path: archive.path.clone(),
+            model_path: wmo.path.clone(),
+        });
+    }
+}
+
+fn wmo_group_info(group: &WmoGroupInfo, ui: &mut egui::Ui) {
+    egui::CollapsingHeader::new(&group.name).show(ui, |ui| {
+        ui.label(format!("Vertices: {}", group.vertex_count));
+        ui.label(format!("Indices: {}", group.index_count));
+    });
 }
