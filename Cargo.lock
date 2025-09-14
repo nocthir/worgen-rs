@@ -6940,6 +6940,8 @@ dependencies = [
  "anyhow",
  "bevy",
  "bevy_egui",
+ "serde",
+ "serde_json",
  "wow-adt",
  "wow-m2",
  "wow-mpq",

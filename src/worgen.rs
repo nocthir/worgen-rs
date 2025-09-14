@@ -57,6 +57,9 @@ impl ArchiveInfo {
 
 pub struct ModelInfo {
     pub path: PathBuf,
+    pub vertex_count: usize,
+    pub texture_count: usize,
+    pub materials: usize,
 }
 
 fn load_m2(
@@ -67,26 +70,41 @@ fn load_m2(
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) -> Result {
     if let Some(event) = event_reader.read().next() {
-        let mpq_path = &event.archive_path;
-        info!("Reading MPQ: {}", mpq_path.display());
-        let mut archive = mpq::Archive::open(mpq_path)?;
-        let mesh = read_m2(event.model_path.to_str().unwrap(), &mut archive)?;
-        if let Some(mesh) = mesh {
-            query.into_iter().for_each(|entity| {
-                commands.entity(entity).despawn();
-            });
-            add_mesh(
-                &mut commands,
-                &mut meshes,
-                &mut materials,
-                mesh,
-                &event.model_path,
-            );
-        } else {
-            error!("Failed to read model: {}", event.model_path.display());
+        match create_mesh_from_selected_model(event) {
+            Ok(loaded_mesh) => {
+                if let Some(mesh) = loaded_mesh {
+                    query.into_iter().for_each(|entity| {
+                        commands.entity(entity).despawn();
+                    });
+                    add_mesh(
+                        &mut commands,
+                        &mut meshes,
+                        &mut materials,
+                        mesh,
+                        &event.model_path,
+                    );
+                } else {
+                    error!("Failed to read model: {}", event.model_path.display());
+                }
+            }
+            Err(err) => {
+                error!(
+                    "Error loading model {} from archive {}: {err}",
+                    event.model_path.display(),
+                    event.archive_path.display()
+                );
+            }
         }
     }
     Ok(())
+}
+
+fn create_mesh_from_selected_model(model_info: &ModelSelected) -> Result<Option<Mesh>> {
+    let mpq_path = &model_info.archive_path;
+    info!("Reading MPQ: {}", mpq_path.display());
+    let mut archive = mpq::Archive::open(mpq_path)?;
+    let model_path = model_info.model_path.to_str().unwrap();
+    create_mesh_from_path_archive(model_path, &mut archive)
 }
 
 fn load_mpqs(mut exit: EventWriter<AppExit>, commands: Commands) {
@@ -99,9 +117,8 @@ fn load_mpqs(mut exit: EventWriter<AppExit>, commands: Commands) {
 fn load_mpqs_impl(mut commands: Commands) -> Result<()> {
     let mut data_info = DataInfo::default();
 
-    let client_path =
-        PathBuf::from(std::env::var("CLIENT_PATH").unwrap_or_else(|_| ".".to_string()));
-    let data_path = client_path.join("Data");
+    let game_path = PathBuf::from(std::env::var("GAME_PATH").unwrap_or_else(|_| ".".to_string()));
+    let data_path = game_path.join("Data");
 
     for file in data_path.read_dir()? {
         let file = file?;
@@ -123,9 +140,17 @@ fn load_mpqs_impl(mut commands: Commands) -> Result<()> {
 fn read_m2s(archive: &mut mpq::Archive) -> Result<Vec<ModelInfo>> {
     let mut infos = Vec::new();
     for entry in archive.list()?.iter() {
-        if entry.name.ends_with(".m2") {
+        if entry.name.ends_with(".m2")
+            && let Ok(model) = read_m2(&entry.name, archive)
+        {
+            let vertex_count = model.vertices.len();
+            let texture_count = model.textures.len();
+            let materials = model.materials.len();
             let info = ModelInfo {
                 path: PathBuf::from(&entry.name),
+                vertex_count,
+                texture_count,
+                materials,
             };
             infos.push(info);
         }
@@ -168,15 +193,31 @@ fn _read_wmo(path: &str, archive: &mut mpq::Archive) -> Result<()> {
     Ok(())
 }
 
-fn read_m2<P: AsRef<Path>>(path: P, archive: &mut mpq::Archive) -> Result<Option<Mesh>> {
+fn read_m2<P: AsRef<Path>>(path: P, archive: &mut mpq::Archive) -> Result<m2::M2Model> {
+    let file_path = path
+        .as_ref()
+        .to_str()
+        .ok_or_else(|| format!("Invalid model path: {}", path.as_ref().display()))?;
+
+    let file = archive
+        .read_file(file_path)
+        .map_err(|e| format!("Failed to read model file {}: {}", file_path, e))?;
+    let mut reader = io::Cursor::new(&file);
+    let model = m2::M2Model::parse(&mut reader)
+        .map_err(|e| format!("Failed to parse model file {}: {}", file_path, e))?;
+    Ok(model)
+}
+
+fn create_mesh_from_path_archive<P: AsRef<Path>>(
+    path: P,
+    archive: &mut mpq::Archive,
+) -> Result<Option<Mesh>> {
     let file = archive.read_file(path.as_ref().to_str().unwrap())?;
     let mut reader = io::Cursor::new(&file);
     if let Ok(m2) = m2::M2Model::parse(&mut reader)
         && !m2.vertices.is_empty()
     {
         info!("{}: {:?}", path.as_ref().display(), m2.header.version());
-        info!("  Vertices: {}", m2.vertices.len());
-        info!("  Bones: {}", m2.bones.len());
         return Ok(Some(create_mesh(m2, &file)?));
     }
     Ok(None)
@@ -185,18 +226,9 @@ fn read_m2<P: AsRef<Path>>(path: P, archive: &mut mpq::Archive) -> Result<Option
 fn create_mesh(m2: m2::M2Model, m2_data: &[u8]) -> Result<Mesh> {
     let skin = m2.parse_embedded_skin(m2_data, 0)?;
     // These are used to index into the global vertices array.
-    let submesh = &skin.submeshes()[0];
     let indices = skin.get_resolved_indices();
-    // This is used to index into the local vertices array.
-    let triangles = skin
-        .triangles()
-        .iter()
-        .copied()
-        .skip(submesh.triangle_start as usize)
-        .take(submesh.triangle_count as usize)
-        .collect();
 
-    // Local vertex positions and normals arrays
+    // Local vertex attributes.
     let positions: Vec<_> = indices
         .iter()
         .copied()
@@ -222,6 +254,19 @@ fn create_mesh(m2: m2::M2Model, m2_data: &[u8]) -> Result<Mesh> {
         })
         .collect();
 
+    // This is used to index into the local vertices array.
+    let triangles = skin.triangles();
+
+    let mut mesh_indices = Vec::default();
+    for submesh in skin.submeshes() {
+        let submesh_triangles = triangles
+            .iter()
+            .copied()
+            .skip(submesh.triangle_start as usize)
+            .take(submesh.triangle_count as usize);
+        mesh_indices.extend(submesh_triangles);
+    }
+
     // Keep the mesh data accessible in future frames to be able to mutate it in toggle_texture.
     let mesh = Mesh::new(
         PrimitiveTopology::TriangleList,
@@ -237,7 +282,7 @@ fn create_mesh(m2: m2::M2Model, m2_data: &[u8]) -> Result<Mesh> {
     )
     .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, normals)
     .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, tex_coords_0)
-    .with_inserted_indices(Indices::U16(triangles));
+    .with_inserted_indices(Indices::U16(mesh_indices));
 
     Ok(mesh)
 }
@@ -275,4 +320,26 @@ fn add_mesh<P: AsRef<Path>>(
         MeshMaterial3d(material.clone()),
         transform,
     ));
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::*;
+
+    #[test]
+    fn main_menu() -> Result {
+        let settings = settings::load_settings()?;
+        let selected_model = ModelSelected::from(&settings.default_model);
+        create_mesh_from_selected_model(&selected_model)?.unwrap();
+        Ok(())
+    }
+
+    #[test]
+    fn dwarf() -> Result {
+        let model = settings::load_settings()?;
+        let selected_model = ModelSelected::from(&model.test_model);
+        create_mesh_from_selected_model(&selected_model)?.unwrap();
+        Ok(())
+    }
 }

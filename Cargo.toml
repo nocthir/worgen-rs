@@ -19,6 +19,8 @@ opt-level = 3
 anyhow = "1.0.*"
 bevy = { version = "0.16.*", features = [ "bevy_gltf" ] }
 bevy_egui = "0.36.*"
+serde = "1.0.*"
+serde_json = "1.0.*"
 #wow-adt = "0.3.*"
 #wow-m2 = "0.3.*"
 #wow-mpq = "0.3.*"

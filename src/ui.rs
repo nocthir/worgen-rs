@@ -7,16 +7,25 @@ use std::path::PathBuf;
 use bevy::prelude::*;
 use bevy_egui::*;
 
-use crate::worgen::DataInfo;
+use crate::{
+    settings::{ModelSettings, Settings},
+    state::GameState,
+    worgen::{ArchiveInfo, DataInfo, ModelInfo},
+};
 
 pub struct UiPlugin;
 
 impl Plugin for UiPlugin {
     fn build(&self, app: &mut App) {
-        app.add_event::<ModelSelected>().add_systems(
-            EguiPrimaryContextPass,
-            example.run_if(resource_exists::<DataInfo>),
-        );
+        app.add_event::<ModelSelected>()
+            .add_systems(
+                OnEnter(GameState::Main),
+                select_main_menu_model.run_if(resource_exists::<Settings>),
+            )
+            .add_systems(
+                EguiPrimaryContextPass,
+                data_info.run_if(resource_exists::<DataInfo>),
+            );
     }
 }
 
@@ -26,7 +35,20 @@ pub struct ModelSelected {
     pub model_path: PathBuf,
 }
 
-fn example(
+impl From<&ModelSettings> for ModelSelected {
+    fn from(settings: &ModelSettings) -> Self {
+        Self {
+            archive_path: PathBuf::from(&settings.archive_path),
+            model_path: PathBuf::from(&settings.model_path),
+        }
+    }
+}
+
+fn select_main_menu_model(mut event_writer: EventWriter<ModelSelected>, settings: Res<Settings>) {
+    event_writer.write(ModelSelected::from(&settings.default_model));
+}
+
+fn data_info(
     mut contexts: EguiContexts,
     data_info: Res<DataInfo>,
     mut event_writer: EventWriter<ModelSelected>,
@@ -35,21 +57,44 @@ fn example(
         .scroll([false, true])
         .show(contexts.ctx_mut()?, |ui| {
             for archive in &data_info.archives {
-                egui::CollapsingHeader::new(format!("{}", archive.path.display()))
-                    .default_open(false)
-                    .enabled(!archive.model_infos.is_empty())
-                    .show(ui, |ui| {
-                        for model in &archive.model_infos {
-                            let e = ui.button(format!("{}", model.path.display()));
-                            if e.clicked() {
-                                event_writer.write(ModelSelected {
-                                    archive_path: archive.path.clone(),
-                                    model_path: model.path.clone(),
-                                });
-                            }
-                        }
-                    });
+                archive_info(archive, ui, &mut event_writer);
             }
         });
     Ok(())
+}
+
+fn archive_info(
+    archive: &ArchiveInfo,
+    ui: &mut egui::Ui,
+    event_writer: &mut EventWriter<ModelSelected>,
+) {
+    egui::CollapsingHeader::new(format!("{}", archive.path.display()))
+        .default_open(false)
+        .enabled(!archive.model_infos.is_empty())
+        .show(ui, |ui| {
+            for model in &archive.model_infos {
+                model_info(archive, model, ui, event_writer);
+            }
+        });
+}
+
+fn model_info(
+    archive: &ArchiveInfo,
+    model: &ModelInfo,
+    ui: &mut egui::Ui,
+    event_writer: &mut EventWriter<ModelSelected>,
+) {
+    let header = egui::CollapsingHeader::new(format!("{}", model.path.display()))
+        .enabled(model.vertex_count > 0)
+        .show(ui, |ui| {
+            ui.label(format!("Vertices: {}", model.vertex_count));
+            ui.label(format!("Textures: {}", model.texture_count));
+            ui.label(format!("Materials: {}", model.materials));
+        });
+    if header.header_response.clicked() {
+        event_writer.write(ModelSelected {
+            archive_path: archive.path.clone(),
+            model_path: model.path.clone(),
+        });
+    }
 }
