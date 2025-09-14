@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Resource, Default, Serialize, Deserialize)]
 pub struct Settings {
+    pub game_path: String,
     pub default_model: ModelSettings,
     pub test_model: ModelSettings,
     pub test_world_model: ModelSettings,

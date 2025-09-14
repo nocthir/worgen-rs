@@ -15,6 +15,7 @@ use crate::data::texture;
 use crate::data::texture::TextureInfo;
 use crate::data::world_model;
 use crate::data::world_model::*;
+use crate::settings::Settings;
 
 #[derive(Clone)]
 pub struct ArchiveInfo {
@@ -54,8 +55,8 @@ pub struct LoadArchiveTasks {
     tasks: Vec<tasks::Task<Result<ArchiveInfo>>>,
 }
 
-pub fn start_loading(mut commands: Commands) -> Result<()> {
-    let game_path = PathBuf::from(std::env::var("GAME_PATH").unwrap_or_else(|_| ".".to_string()));
+pub fn start_loading(mut commands: Commands, settings: Res<Settings>) -> Result<()> {
+    let game_path = PathBuf::from(&settings.game_path);
     let data_path = game_path.join("Data");
 
     let mut tasks = LoadArchiveTasks::default();
