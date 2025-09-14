@@ -148,7 +148,14 @@ fn create_mesh_from_path_archive<P: AsRef<Path>>(
         .ok_or_else(|| format!("Model path has no extension: {}", path.as_ref().display()))?;
 
     if ext == OsStr::new("m2") {
-        model::create_meshes_from_m2_path(archive, path, materials, meshes)
+        model::create_meshes_from_m2_path(
+            archive,
+            path,
+            texture_archive_map,
+            images,
+            materials,
+            meshes,
+        )
     } else if ext == OsStr::new("wmo") {
         world_model::create_meshes_from_wmo_path(
             archive,

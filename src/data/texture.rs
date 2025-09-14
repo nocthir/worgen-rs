@@ -11,6 +11,7 @@ use bevy::{
     render::render_resource::{Extent3d, TextureDimension, TextureFormat},
 };
 use wow_blp as blp;
+use wow_m2 as m2;
 use wow_mpq as mpq;
 use wow_wmo as wmo;
 
@@ -69,36 +70,73 @@ pub fn create_textures_from_wmo(
     images: &mut Assets<Image>,
 ) -> Result<Vec<Handle<Image>>> {
     let mut image_handles = Vec::new();
-    for texture in &wmo.textures {
+    for texture_path in &wmo.textures {
         // At this point we do not know which archive contains this texture.
         // But we have built a map of blp paths to their respective archives.
-
-        // The texture paths are case insensitive.
-        let texture_path = texture.to_lowercase();
-
-        let archive_path = texture_archive_map
-            .map
-            .get(&texture_path)
-            .ok_or_else(|| format!("Texture {} not found in any loaded archive", texture_path))?;
-
-        let mut archive = mpq::Archive::open(archive_path)
-            .map_err(|e| format!("Failed to open archive {}: {}", archive_path.display(), e))?;
-        let file = archive.read_file(&texture_path)?;
-        let blp = blp::parser::load_blp_from_buf(&file)?;
-        let dyn_image = blp::convert::blp_to_image(&blp, 0)?;
-
-        let extent = Extent3d {
-            width: dyn_image.width(),
-            height: dyn_image.height(),
-            depth_or_array_layers: 1,
-        };
-        let dimension = TextureDimension::D2;
-        let data = dyn_image.to_rgba8().into_raw();
-        let texture_format = TextureFormat::Rgba8Unorm;
-        let usage = RenderAssetUsages::RENDER_WORLD;
-        let image = Image::new(extent, dimension, data, texture_format, usage);
-        let image_handle = images.add(image);
+        let image_handle = create_image_from_path(texture_path, texture_archive_map, images)?;
         image_handles.push(image_handle);
     }
     Ok(image_handles)
+}
+
+pub fn create_textures_from_model(
+    model: &m2::M2Model,
+    texture_archive_map: &TextureArchiveMap,
+    images: &mut Assets<Image>,
+) -> Result<Vec<Handle<Image>>> {
+    let mut handles = Vec::new();
+    for texture in &model.textures {
+        // Case insensitive texture filename.
+        let texture_path = texture.filename.string.to_string_lossy();
+        let image_handle = create_image_from_path(&texture_path, texture_archive_map, images)?;
+        handles.push(image_handle);
+    }
+    Ok(handles)
+}
+
+pub fn create_image_from_path(
+    texture_path: &str,
+    texture_archive_map: &TextureArchiveMap,
+    images: &mut Assets<Image>,
+) -> Result<Handle<Image>> {
+    // Case insensitive texture filename.
+    let texture_path = texture_path.to_lowercase();
+
+    let archive_path = texture_archive_map
+        .map
+        .get(&texture_path)
+        .ok_or_else(|| format!("Texture {} not found in any loaded archive", texture_path))?;
+
+    let mut archive = mpq::Archive::open(archive_path)
+        .map_err(|e| format!("Failed to open archive {}: {}", archive_path.display(), e))?;
+    let file = archive.read_file(&texture_path)?;
+    let blp = blp::parser::load_blp_from_buf(&file)?;
+    let dyn_image = blp::convert::blp_to_image(&blp, 0)?;
+    let extent = Extent3d {
+        width: dyn_image.width(),
+        height: dyn_image.height(),
+        depth_or_array_layers: 1,
+    };
+    let dimension = TextureDimension::D2;
+    let data = dyn_image.to_rgba8().into_raw();
+    let texture_format = TextureFormat::Rgba8Unorm;
+    let usage = RenderAssetUsages::RENDER_WORLD;
+    let image = Image::new(extent, dimension, data, texture_format, usage);
+    let image_handle = images.add(image);
+    Ok(image_handle)
+}
+
+#[cfg(test)]
+pub mod test {
+    use super::*;
+    use crate::*;
+
+    pub fn default_texture_archive_map(settings: &settings::Settings) -> Result<TextureArchiveMap> {
+        let mut texture_archive_map = TextureArchiveMap::default();
+        let interface_archive_path = PathBuf::from(&settings.interface_archive_path);
+        let texture_archive_path = PathBuf::from(&settings.texture_archive_path);
+        texture_archive_map.fill(&interface_archive_path)?;
+        texture_archive_map.fill(&texture_archive_path)?;
+        Ok(texture_archive_map)
+    }
 }

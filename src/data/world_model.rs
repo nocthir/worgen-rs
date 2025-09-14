@@ -334,11 +334,7 @@ mod test {
         env_logger::init();
         let settings = settings::load_settings()?;
         let selected_model = ui::ModelSelected::from(&settings.test_world_model);
-        let mut texture_archive_map = texture::TextureArchiveMap::default();
-        let interface_archive_path = PathBuf::from(&settings.interface_archive_path);
-        let texture_archive_path = PathBuf::from(&settings.texture_archive_path);
-        texture_archive_map.fill(&interface_archive_path)?;
-        texture_archive_map.fill(&texture_archive_path)?;
+        let texture_archive_map = texture::test::default_texture_archive_map(&settings)?;
         let mut images = Assets::<Image>::default();
         let mut custom_materials = Assets::<StandardMaterial>::default();
         let mut meshes = Assets::<Mesh>::default();

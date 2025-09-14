@@ -13,6 +13,7 @@ pub struct Settings {
     pub default_model: ModelSettings,
     pub test_model: ModelSettings,
     pub test_world_model: ModelSettings,
+    pub city_model: ModelSettings,
     pub texture_archive_path: String,
     pub interface_archive_path: String,
 }

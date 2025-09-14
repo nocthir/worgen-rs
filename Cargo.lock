@@ -7036,7 +7036,7 @@ checksum = "5c573471f125075647d03df72e026074b7203790d41351cd6edc96f46bcccd36"
 
 [[package]]
 name = "worgen-rs"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "anyhow",
  "bevy",

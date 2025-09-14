@@ -15,7 +15,10 @@ use bevy::{
 use wow_m2 as m2;
 use wow_mpq as mpq;
 
-use crate::data::normalize_vec3;
+use crate::data::{
+    normalize_vec3,
+    texture::{self, TextureArchiveMap},
+};
 
 #[derive(Clone)]
 pub struct ModelInfo {
@@ -65,7 +68,9 @@ fn read_m2<P: AsRef<Path>>(path: P, archive: &mut mpq::Archive) -> Result<m2::M2
 pub fn create_meshes_from_m2_path<P: AsRef<Path>>(
     archive: &mut mpq::Archive,
     path: P,
-    standard_materials: &mut Assets<StandardMaterial>,
+    texture_archive_map: &TextureArchiveMap,
+    images: &mut Assets<Image>,
+    materials: &mut Assets<StandardMaterial>,
     meshes: &mut Assets<Mesh>,
 ) -> Result<Vec<(Handle<Mesh>, Handle<StandardMaterial>)>> {
     let path_str = path
@@ -73,54 +78,107 @@ pub fn create_meshes_from_m2_path<P: AsRef<Path>>(
         .to_str()
         .ok_or_else(|| format!("Invalid model path: {}", path.as_ref().display()))?;
 
-    let file = archive.read_file(path_str)?;
-    let mut reader = io::Cursor::new(&file);
+    let data = archive.read_file(path_str)?;
+    let mut reader = io::Cursor::new(&data);
 
     let mut ret = Vec::default();
 
-    let material_handle = standard_materials.add(StandardMaterial {
-        base_color: Color::WHITE,
-        perceptual_roughness: 1.0,
-        ..Default::default()
-    });
-
-    if let Ok(m2) = m2::M2Model::parse(&mut reader)
-        && !m2.vertices.is_empty()
+    if let Ok(model) = m2::M2Model::parse(&mut reader)
+        && !model.vertices.is_empty()
     {
-        for skin_index in 0..m2.embedded_skin_count().unwrap().min(1) {
-            if let Ok(mesh) = create_mesh(&m2, &file, 0) {
-                let mesh_handle = meshes.add(mesh);
-                ret.push((mesh_handle, material_handle.clone()));
-            } else {
-                return Err(format!(
-                    "Failed to create mesh for skin index {} in model {} from archive {}",
-                    skin_index,
-                    path_str,
-                    archive.path().display(),
-                )
-                .into());
-            }
+        let image_handles =
+            texture::create_textures_from_model(&model, texture_archive_map, images)?;
+        if let Ok(res) = create_mesh(&model, &data, &image_handles, materials, meshes) {
+            ret.extend(res);
+        } else {
+            return Err(format!(
+                "Failed to create mesh for model {} from archive {}",
+                path_str,
+                archive.path().display(),
+            )
+            .into());
         }
     }
 
     Ok(ret)
 }
 
-fn create_mesh(m2: &m2::M2Model, m2_data: &[u8], skin_index: u32) -> Result<Mesh> {
-    let skin = m2.parse_embedded_skin(m2_data, skin_index as _)?;
-    // These are used to index into the global vertices array.
-    let indices = skin.get_resolved_indices();
+fn create_mesh(
+    model: &m2::M2Model,
+    model_data: &[u8],
+    image_handles: &[Handle<Image>],
+    materials: &mut Assets<StandardMaterial>,
+    meshes: &mut Assets<Mesh>,
+) -> Result<Vec<(Handle<Mesh>, Handle<StandardMaterial>)>> {
+    let skin = model.parse_embedded_skin(model_data, 0)?;
 
-    let mut positions = Vec::with_capacity(m2.vertices.len());
-    let mut normals = Vec::with_capacity(m2.vertices.len());
-    let mut tex_coords_0 = Vec::with_capacity(m2.vertices.len());
-
-    for i in 0..m2.vertices.len() {
-        let v = &m2.vertices[i];
-        positions.push([v.position.x, v.position.y, v.position.z]);
-        normals.push(normalize_vec3([v.normal.x, v.normal.y, v.normal.z]));
-        tex_coords_0.push([v.tex_coords.x, v.tex_coords.y]);
+    let vertex_count = model.vertices.len();
+    let mut positions = Vec::with_capacity(vertex_count);
+    let mut normals = Vec::with_capacity(vertex_count);
+    let mut tex_coords_0 = Vec::with_capacity(vertex_count);
+    for vertex in model.vertices.iter() {
+        positions.push([vertex.position.x, vertex.position.y, vertex.position.z]);
+        normals.push(normalize_vec3([
+            vertex.normal.x,
+            vertex.normal.y,
+            vertex.normal.z,
+        ]));
+        tex_coords_0.push([vertex.tex_coords.x, vertex.tex_coords.y]);
     }
+
+    let mut ret = Vec::new();
+    for batch_index in 0..skin.batches().len() {
+        ret.push(create_mesh_for_submesh(
+            model,
+            &skin,
+            batch_index,
+            &positions,
+            &normals,
+            &tex_coords_0,
+            image_handles,
+            materials,
+            meshes,
+        )?);
+    }
+    Ok(ret)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn create_mesh_for_submesh(
+    model: &m2::M2Model,
+    skin: &m2::skin::SkinFile,
+    batch_index: usize,
+    positions: &[[f32; 3]],
+    normals: &[[f32; 3]],
+    tex_coords_0: &[[f32; 2]],
+    image_handles: &[Handle<Image>],
+    materials: &mut Assets<StandardMaterial>,
+    meshes: &mut Assets<Mesh>,
+) -> Result<(Handle<Mesh>, Handle<StandardMaterial>)> {
+    let batch = &skin.batches()[batch_index];
+    let submesh = &skin.submeshes()[batch.skin_section_index as usize];
+    let texture_index =
+        model.raw_data.texture_lookup_table[batch.texture_combo_index as usize] as usize;
+    let texture = &image_handles[texture_index];
+
+    // Determine alpha mode from material blend mode.
+    // Note that multiple batches can share the same material.
+    let model_material = &model.materials[batch.material_index as usize];
+    let alpha_mode = blend_mode_to_alpha_mode(model_material.blend_mode);
+
+    let material_handle = materials.add(StandardMaterial {
+        base_color_texture: Some(texture.clone()),
+        perceptual_roughness: 1.0,
+        alpha_mode,
+        ..Default::default()
+    });
+
+    // Index into local arrays
+    assert_eq!(submesh.triangle_start % 3, 0);
+    assert_eq!(submesh.triangle_count % 3, 0);
+    let submesh_indices = skin.get_resolved_indices()[submesh.triangle_start as usize
+        ..(submesh.triangle_start + submesh.triangle_count) as usize]
+        .to_vec();
 
     // Keep the mesh data accessible in future frames to be able to mutate it in toggle_texture.
     let mesh = Mesh::new(
@@ -133,13 +191,30 @@ fn create_mesh(m2: &m2::M2Model, m2_data: &[u8], skin_index: u32) -> Result<Mesh
         // The camera coordinate space is right-handed x-right, y-up, z-back. This means "forward" is -Z.
         // Meshes always rotate around their local [0, 0, 0] when a rotation is applied to their Transform.
         // By centering our mesh around the origin, rotating the mesh preserves its center of mass.
-        positions,
+        positions.to_vec(),
     )
-    .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, normals)
-    .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, tex_coords_0)
-    .with_inserted_indices(Indices::U16(indices));
+    .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, normals.to_vec())
+    .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, tex_coords_0.to_vec())
+    .with_inserted_indices(Indices::U16(submesh_indices));
 
-    Ok(mesh)
+    let mesh_handle = meshes.add(mesh);
+
+    Ok((mesh_handle, material_handle))
+}
+
+fn blend_mode_to_alpha_mode(blend_mode: m2::chunks::material::M2BlendMode) -> AlphaMode {
+    use m2::chunks::material::M2BlendMode as BM;
+    if blend_mode.intersects(BM::ALPHA_KEY | BM::NO_ALPHA_ADD) {
+        AlphaMode::AlphaToCoverage
+    } else if blend_mode.intersects(BM::ADD | BM::BLEND_ADD) {
+        AlphaMode::Add
+    } else if blend_mode.intersects(BM::MOD | BM::MOD2X) {
+        AlphaMode::Multiply
+    } else if blend_mode.intersects(BM::ALPHA) {
+        AlphaMode::Blend
+    } else {
+        AlphaMode::Opaque
+    }
 }
 
 #[cfg(test)]
@@ -150,8 +225,26 @@ mod test {
     #[test]
     fn main_menu() -> Result {
         let settings = settings::load_settings()?;
+        let texture_archive_map = texture::test::default_texture_archive_map(&settings)?;
         let selected_model = ui::ModelSelected::from(&settings.default_model);
-        let texture_archive_map = texture::TextureArchiveMap::default();
+        let mut images = Assets::<Image>::default();
+        let mut standard_materials = Assets::<StandardMaterial>::default();
+        let mut meshes = Assets::<Mesh>::default();
+        data::create_mesh_from_selected_model(
+            &selected_model,
+            &texture_archive_map,
+            &mut images,
+            &mut standard_materials,
+            &mut meshes,
+        )?;
+        Ok(())
+    }
+
+    #[test]
+    fn city() -> Result {
+        let settings = settings::load_settings()?;
+        let texture_archive_map = texture::test::default_texture_archive_map(&settings)?;
+        let selected_model = ui::ModelSelected::from(&settings.city_model);
         let mut images = Assets::<Image>::default();
         let mut standard_materials = Assets::<StandardMaterial>::default();
         let mut meshes = Assets::<Mesh>::default();
@@ -168,9 +261,9 @@ mod test {
     #[test]
     fn dwarf() -> Result {
         env_logger::init();
-        let model = settings::load_settings()?;
-        let selected_model = ui::ModelSelected::from(&model.test_model);
-        let texture_archive_map = texture::TextureArchiveMap::default();
+        let settings = settings::load_settings()?;
+        let texture_archive_map = texture::test::default_texture_archive_map(&settings)?;
+        let selected_model = ui::ModelSelected::from(&settings.test_model);
         let mut images = Assets::<Image>::default();
         let mut standard_materials = Assets::<StandardMaterial>::default();
         let mut meshes = Assets::<Mesh>::default();

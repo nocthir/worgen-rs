@@ -102,7 +102,7 @@ pub fn setup_camera(mut commands: Commands) {
             shadows_enabled: true,
             ..Default::default()
         },
-        Transform::from_xyz(4.0, 8.0, 4.0),
+        Transform::from_rotation(Quat::from_axis_angle(Vec3::X, -1.14)),
     ));
 
     let mut camera = PanOrbitCameraBundle::default();
