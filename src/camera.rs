@@ -17,6 +17,6 @@ pub fn setup_camera(mut commands: Commands) {
     // Camera
     commands.spawn((
         Camera3d::default(),
-        Transform::from_xyz(104.5, 104.5, 6.0).looking_at(Vec3::ZERO, Vec3::Z),
+        Transform::from_xyz(4.0, 4.0, 2.0).looking_at(Vec3::ZERO, Vec3::Z),
     ));
 }

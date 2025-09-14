@@ -2,7 +2,10 @@
 // Author: Nocthir <nocthir@proton.me>
 // SPDX-License-Identifier: MIT or Apache-2.0
 
-use std::{io, path::PathBuf};
+use std::{
+    io,
+    path::{Path, PathBuf},
+};
 
 use bevy::{
     asset::RenderAssetUsages,
@@ -15,11 +18,14 @@ use wow_m2 as m2;
 use wow_mpq as mpq;
 use wow_wmo as wmo;
 
+use crate::ui::ModelSelected;
+
 pub struct WorgenPlugin;
 
 impl Plugin for WorgenPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, (start_info, load_mpqs).chain());
+        app.add_systems(Startup, (start_info, load_mpqs).chain())
+            .add_systems(Update, load_m2);
     }
 }
 
@@ -27,70 +33,105 @@ fn start_info() {
     info!("Hello, Worgen!");
 }
 
-fn load_mpqs(
-    mut exit: EventWriter<AppExit>,
-    commands: Commands,
-    meshes: ResMut<Assets<Mesh>>,
-    materials: ResMut<Assets<StandardMaterial>>,
-) {
-    if let Err(err) = load_mpqs_impl(commands, meshes, materials) {
+#[derive(Component)]
+pub struct CurrentModel;
+
+#[derive(Default, Resource)]
+pub struct DataInfo {
+    pub archives: Vec<ArchiveInfo>,
+}
+
+pub struct ArchiveInfo {
+    pub path: PathBuf,
+    pub model_infos: Vec<ModelInfo>,
+}
+
+impl ArchiveInfo {
+    pub fn new<P: AsRef<Path>>(path: P, model_infos: Vec<ModelInfo>) -> Self {
+        Self {
+            path: path.as_ref().to_path_buf(),
+            model_infos,
+        }
+    }
+}
+
+pub struct ModelInfo {
+    pub path: PathBuf,
+}
+
+fn load_m2(
+    mut event_reader: EventReader<ModelSelected>,
+    query: Query<Entity, With<CurrentModel>>,
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+) -> Result {
+    if let Some(event) = event_reader.read().next() {
+        let mpq_path = &event.archive_path;
+        info!("Reading MPQ: {}", mpq_path.display());
+        let mut archive = mpq::Archive::open(mpq_path)?;
+        let mesh = read_m2(event.model_path.to_str().unwrap(), &mut archive)?;
+        if let Some(mesh) = mesh {
+            query.into_iter().for_each(|entity| {
+                commands.entity(entity).despawn();
+            });
+            add_mesh(
+                &mut commands,
+                &mut meshes,
+                &mut materials,
+                mesh,
+                &event.model_path,
+            );
+        } else {
+            error!("Failed to read model: {}", event.model_path.display());
+        }
+    }
+    Ok(())
+}
+
+fn load_mpqs(mut exit: EventWriter<AppExit>, commands: Commands) {
+    if let Err(err) = load_mpqs_impl(commands) {
         error!("Error loading MPQs: {err}");
         exit.write(AppExit::error());
     }
 }
 
-fn load_mpqs_impl(
-    mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
-) -> Result<()> {
-    let wow_path = PathBuf::from(std::env::var("GAME_PATH").unwrap_or_else(|_| ".".to_string()));
-    let data_path = wow_path.join("Data");
+fn load_mpqs_impl(mut commands: Commands) -> Result<()> {
+    let mut data_info = DataInfo::default();
+
+    let client_path =
+        PathBuf::from(std::env::var("CLIENT_PATH").unwrap_or_else(|_| ".".to_string()));
+    let data_path = client_path.join("Data");
 
     for file in data_path.read_dir()? {
         let file = file?;
         if file.file_name().to_string_lossy().ends_with(".MPQ") {
-            let m2_meshes = read_mpq(&file.path())?;
-            for (i, mesh) in m2_meshes.into_iter().enumerate() {
-                info!("Loaded model from {}", file.path().display());
-                let mesh_handle = meshes.add(mesh);
-
-                let transform =
-                    Transform::from_xyz((i % 20) as f32 * 14.0, (i / 20) as f32 * 14.0, 0.0);
-
-                commands.spawn((
-                    Mesh3d(mesh_handle),
-                    MeshMaterial3d(materials.add(StandardMaterial {
-                        base_color: Color::linear_rgb(0.8, 0.7, 0.6),
-                        perceptual_roughness: 0.9,
-                        ..default()
-                    })),
-                    transform,
-                ));
-            }
+            let mpq_path = file.path();
+            info!("Reading MPQ: {}", mpq_path.display());
+            let mut archive = mpq::Archive::open(&mpq_path)?;
+            let model_infos = read_m2s(&mut archive)?;
+            let archive_info = ArchiveInfo::new(mpq_path, model_infos);
+            data_info.archives.push(archive_info);
         }
     }
+
+    commands.insert_resource(data_info);
 
     Ok(())
 }
 
-fn read_mpq(mpq_path: &PathBuf) -> Result<Vec<Mesh>> {
-    info!("Reading MPQ: {}", mpq_path.display());
-    let mut archive = mpq::Archive::open(mpq_path)?;
-
-    let mut meshes = Vec::new();
+fn read_m2s(archive: &mut mpq::Archive) -> Result<Vec<ModelInfo>> {
+    let mut infos = Vec::new();
     for entry in archive.list()?.iter() {
-        if meshes.len() >= 400 {
-            break;
-        }
-        if entry.name.ends_with(".m2")
-            && let Some(mesh) = read_m2(&entry.name, &mut archive)?
-        {
-            meshes.push(mesh);
+        if entry.name.ends_with(".m2") {
+            let info = ModelInfo {
+                path: PathBuf::from(&entry.name),
+            };
+            infos.push(info);
         }
     }
 
-    Ok(meshes)
+    Ok(infos)
 }
 
 fn _read_adt(path: &str, archive: &mut mpq::Archive) -> Result<()> {
@@ -127,13 +168,13 @@ fn _read_wmo(path: &str, archive: &mut mpq::Archive) -> Result<()> {
     Ok(())
 }
 
-fn read_m2(path: &str, archive: &mut mpq::Archive) -> Result<Option<Mesh>> {
-    let file = archive.read_file(path)?;
+fn read_m2<P: AsRef<Path>>(path: P, archive: &mut mpq::Archive) -> Result<Option<Mesh>> {
+    let file = archive.read_file(path.as_ref().to_str().unwrap())?;
     let mut reader = io::Cursor::new(&file);
     if let Ok(m2) = m2::M2Model::parse(&mut reader)
         && !m2.vertices.is_empty()
     {
-        info!("{path}: {:?}", m2.header.version());
+        info!("{}: {:?}", path.as_ref().display(), m2.header.version());
         info!("  Vertices: {}", m2.vertices.len());
         info!("  Bones: {}", m2.bones.len());
         return Ok(Some(create_mesh(m2, &file)?));
@@ -208,4 +249,30 @@ fn normalize_vec3(v: [f32; 3]) -> [f32; 3] {
     } else {
         v
     }
+}
+
+fn add_mesh<P: AsRef<Path>>(
+    commands: &mut Commands,
+    meshes: &mut ResMut<Assets<Mesh>>,
+    materials: &mut ResMut<Assets<StandardMaterial>>,
+    mesh: Mesh,
+    file: P,
+) {
+    let material = materials.add(StandardMaterial {
+        base_color: Color::linear_rgb(0.8, 0.7, 0.6),
+        perceptual_roughness: 0.9,
+        ..default()
+    });
+
+    info!("Loaded model from {}", file.as_ref().display());
+    let mesh_handle = meshes.add(mesh);
+
+    let transform = Transform::from_xyz(0.0, 0.0, 0.0);
+
+    commands.spawn((
+        CurrentModel,
+        Mesh3d(mesh_handle),
+        MeshMaterial3d(material.clone()),
+        transform,
+    ));
 }

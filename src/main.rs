@@ -13,8 +13,8 @@ fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
         .add_plugins(EguiPlugin::default())
+        .add_plugins(ui::UiPlugin)
         .add_plugins(worgen::WorgenPlugin)
         .add_systems(Startup, camera::setup_camera)
-        .add_systems(EguiPrimaryContextPass, ui::example)
         .run();
 }
