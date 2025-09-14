@@ -8,7 +8,11 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use bevy::{asset::RenderAssetUsages, prelude::*, render::mesh::*};
+use bevy::{
+    asset::RenderAssetUsages,
+    prelude::*,
+    render::{mesh::*, render_resource::Face},
+};
 
 use wow_mpq as mpq;
 use wow_wmo as wmo;
@@ -174,25 +178,39 @@ fn create_materials_from_wmo(
     let mut materials = Vec::new();
 
     for material in &wmo.materials {
-        let color = material.diffuse_color;
+        let base_color = create_color_from_wmo(material.diffuse_color);
+        let emissive = create_color_from_wmo(material.emissive_color).to_linear();
+
         let texture_index = material.get_texture1_index(&wmo.texture_offset_index_map);
         let image = images[texture_index as usize].clone();
+        let unlit = material.flags.contains(wmo::WmoMaterialFlags::UNLIT);
+        let cull_mode = if material.flags.contains(wmo::WmoMaterialFlags::TWO_SIDED) {
+            None
+        } else {
+            Some(Face::Back)
+        };
 
         let material = StandardMaterial {
-            base_color: Color::linear_rgba(
-                color.r as f32 / 255.0,
-                color.g as f32 / 255.0,
-                color.b as f32 / 255.0,
-                color.a as f32 / 255.0,
-            ),
+            base_color,
+            emissive,
             perceptual_roughness: 1.0,
             base_color_texture: Some(image),
-            unlit: true,
+            unlit,
+            cull_mode,
             ..Default::default()
         };
         materials.push(material);
     }
     materials
+}
+
+fn create_color_from_wmo(color: wmo::types::Color) -> Color {
+    Color::linear_rgba(
+        color.r as f32 / 255.0,
+        color.g as f32 / 255.0,
+        color.b as f32 / 255.0,
+        color.a as f32 / 255.0,
+    )
 }
 
 fn create_mesh_from_wmo_group_path<P: AsRef<Path>>(
@@ -281,6 +299,8 @@ fn create_mesh_from_wmo_group(
 
         if !normals.is_empty() {
             mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals.clone());
+        } else {
+            mesh.compute_normals();
         }
         if !tex_coords_0.is_empty() {
             mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, tex_coords_0.clone());
