@@ -12,14 +12,12 @@ use std::f32;
 
 use bevy::prelude::*;
 
-use wow_mpq as mpq;
-
 use crate::{
     data::{
         archive::{ArchiveInfo, ArchiveLoaded, LoadArchiveTasks},
-        texture::TextureArchiveMap,
+        texture::FileArchiveMap,
     },
-    ui::ModelSelected,
+    ui::FileSelected,
 };
 
 pub struct DataPlugin;
@@ -27,7 +25,7 @@ pub struct DataPlugin;
 impl Plugin for DataPlugin {
     fn build(&self, app: &mut App) {
         app.add_event::<ArchiveLoaded>()
-            .insert_resource(texture::TextureArchiveMap::default())
+            .insert_resource(texture::FileArchiveMap::default())
             .add_systems(Startup, archive::start_loading)
             .add_systems(
                 Update,
@@ -45,26 +43,26 @@ pub struct DataInfo {
     pub archives: Vec<ArchiveInfo>,
 }
 fn load_selected_model(
-    mut event_reader: EventReader<ModelSelected>,
+    mut event_reader: EventReader<FileSelected>,
     query: Query<Entity, With<CurrentModel>>,
     mut commands: Commands,
-    texture_archive_map: Res<TextureArchiveMap>,
+    file_archive_map: Res<FileArchiveMap>,
     mut images: ResMut<Assets<Image>>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut standard_materials: ResMut<Assets<StandardMaterial>>,
 ) -> Result {
     // Ignore all but the last event
     if let Some(event) = event_reader.read().last() {
-        match create_mesh_from_selected_model(
+        match create_mesh_from_selected_file(
             event,
-            &texture_archive_map,
+            &file_archive_map,
             &mut images,
             &mut standard_materials,
             &mut meshes,
         ) {
             Ok(bundles) => {
                 if bundles.is_empty() {
-                    error!("No meshes loaded for model: {}", event.model_path);
+                    error!("No meshes loaded for file: {}", event.file_path);
                     return Ok(());
                 }
 
@@ -77,12 +75,12 @@ fn load_selected_model(
                     add_bundle(&mut commands, mesh, material);
                 }
 
-                info!("Loaded model from {}", event.model_path);
+                info!("Loaded model from {}", event.file_path);
             }
             Err(err) => {
                 error!(
                     "Error loading model {} from archive {}: {err}",
-                    event.model_path, event.archive_path
+                    event.file_path, event.archive_path
                 );
             }
         }
@@ -90,48 +88,43 @@ fn load_selected_model(
     Ok(())
 }
 
-fn create_mesh_from_selected_model(
-    model_info: &ModelSelected,
-    texture_archive_map: &TextureArchiveMap,
+fn create_mesh_from_selected_file(
+    file_info: &FileSelected,
+    file_archive_map: &FileArchiveMap,
     images: &mut Assets<Image>,
     materials: &mut Assets<StandardMaterial>,
     meshes: &mut Assets<Mesh>,
 ) -> Result<Vec<(Handle<Mesh>, Handle<StandardMaterial>)>> {
-    let mpq_path = &model_info.archive_path;
-    let mut archive = mpq::Archive::open(mpq_path)?;
-    info!("Loaded archive {}", mpq_path);
-    create_mesh_from_path_archive(
-        &model_info.model_path,
-        &mut archive,
-        texture_archive_map,
+    create_mesh_from_file_path(
+        &file_info.file_path,
+        file_archive_map,
         images,
         materials,
         meshes,
     )
 }
 
-fn create_mesh_from_path_archive(
+fn create_mesh_from_file_path(
     file_path: &str,
-    archive: &mut mpq::Archive,
-    texture_archive_map: &TextureArchiveMap,
+    file_archive_map: &FileArchiveMap,
     images: &mut Assets<Image>,
     materials: &mut Assets<StandardMaterial>,
     meshes: &mut Assets<Mesh>,
 ) -> Result<Vec<(Handle<Mesh>, Handle<StandardMaterial>)>> {
     if model::is_model_extension(file_path) {
-        model::create_meshes_from_model_path(
-            archive,
+        model::create_meshes_from_model_path(file_path, file_archive_map, images, materials, meshes)
+    } else if world_model::is_world_model_extension(file_path) {
+        world_model::create_meshes_from_world_model_path(
             file_path,
-            texture_archive_map,
+            file_archive_map,
             images,
             materials,
             meshes,
         )
-    } else if world_model::is_world_model_extension(file_path) {
-        world_model::create_meshes_from_wmo_path(
-            archive,
+    } else if world_map::is_world_map_extension(file_path) {
+        world_map::create_meshes_from_world_map_path(
             file_path,
-            texture_archive_map,
+            file_archive_map,
             images,
             materials,
             meshes,

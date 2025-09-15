@@ -20,7 +20,7 @@ pub struct UiPlugin;
 
 impl Plugin for UiPlugin {
     fn build(&self, app: &mut App) {
-        app.add_event::<ModelSelected>()
+        app.add_event::<FileSelected>()
             .insert_resource(DataInfo::default())
             .add_systems(EguiPrimaryContextPass, data_info)
             .add_systems(
@@ -31,29 +31,29 @@ impl Plugin for UiPlugin {
 }
 
 #[derive(Event)]
-pub struct ModelSelected {
+pub struct FileSelected {
     pub archive_path: String,
-    pub model_path: String,
+    pub file_path: String,
 }
 
-impl From<&FileSettings> for ModelSelected {
+impl From<&FileSettings> for FileSelected {
     fn from(settings: &FileSettings) -> Self {
         Self {
             archive_path: settings.archive_path.clone(),
-            model_path: settings.file_path.clone(),
+            file_path: settings.file_path.clone(),
         }
     }
 }
 
-fn select_main_menu_model(mut event_writer: EventWriter<ModelSelected>, settings: Res<Settings>) {
-    event_writer.write(ModelSelected::from(&settings.default_model));
+fn select_main_menu_model(mut event_writer: EventWriter<FileSelected>, settings: Res<Settings>) {
+    event_writer.write(FileSelected::from(&settings.default_model));
 }
 
 fn data_info(
     mut contexts: EguiContexts,
     mut data_info: ResMut<DataInfo>,
     mut event_reader: EventReader<ArchiveLoaded>,
-    mut event_writer: EventWriter<ModelSelected>,
+    mut event_writer: EventWriter<FileSelected>,
 ) -> Result<()> {
     for event in event_reader.read() {
         data_info.archives.push(event.archive.clone());
@@ -72,7 +72,7 @@ fn data_info(
 fn archive_info(
     archive: &ArchiveInfo,
     ui: &mut egui::Ui,
-    event_writer: &mut EventWriter<ModelSelected>,
+    event_writer: &mut EventWriter<FileSelected>,
 ) {
     egui::CollapsingHeader::new(&archive.path)
         .default_open(false)
@@ -82,7 +82,7 @@ fn archive_info(
                 .enabled(!archive.texture_infos.is_empty())
                 .show(ui, |ui| {
                     for texture in &archive.texture_infos {
-                        ui.label(&texture.texture_path);
+                        ui.label(&texture.path);
                     }
                 });
             egui::CollapsingHeader::new("Models")
@@ -103,7 +103,7 @@ fn archive_info(
                 .enabled(!archive.world_map_infos.is_empty())
                 .show(ui, |ui| {
                     for world_map in &archive.world_map_infos {
-                        world_map_info(world_map, ui);
+                        world_map_info(archive, world_map, ui, event_writer);
                     }
                 });
         });
@@ -113,7 +113,7 @@ fn model_info(
     archive: &ArchiveInfo,
     model: &ModelInfo,
     ui: &mut egui::Ui,
-    event_writer: &mut EventWriter<ModelSelected>,
+    event_writer: &mut EventWriter<FileSelected>,
 ) {
     let header = egui::CollapsingHeader::new(&model.path)
         .enabled(model.vertex_count > 0)
@@ -123,9 +123,9 @@ fn model_info(
             ui.label(format!("Materials: {}", model.materials));
         });
     if header.header_response.clicked() {
-        event_writer.write(ModelSelected {
+        event_writer.write(FileSelected {
             archive_path: archive.path.clone(),
-            model_path: model.path.clone(),
+            file_path: model.path.clone(),
         });
     }
 }
@@ -134,7 +134,7 @@ fn wmo_info(
     archive: &ArchiveInfo,
     wmo: &WmoInfo,
     ui: &mut egui::Ui,
-    event_writer: &mut EventWriter<ModelSelected>,
+    event_writer: &mut EventWriter<FileSelected>,
 ) {
     let any_group_with_vertices = wmo.groups.iter().any(|g| g.vertex_count > 0);
 
@@ -151,9 +151,9 @@ fn wmo_info(
             });
         });
     if header.header_response.clicked() {
-        event_writer.write(ModelSelected {
+        event_writer.write(FileSelected {
             archive_path: archive.path.clone(),
-            model_path: wmo.path.clone(),
+            file_path: wmo.path.clone(),
         });
     }
 }
@@ -165,8 +165,13 @@ fn wmo_group_info(group: &WmoGroupInfo, ui: &mut egui::Ui) {
     });
 }
 
-fn world_map_info(world_map: &WorldMapInfo, ui: &mut egui::Ui) {
-    egui::CollapsingHeader::new(&world_map.path)
+fn world_map_info(
+    archive: &ArchiveInfo,
+    world_map: &WorldMapInfo,
+    ui: &mut egui::Ui,
+    event_writer: &mut EventWriter<FileSelected>,
+) {
+    let header = egui::CollapsingHeader::new(&world_map.path)
         .enabled(world_map.has_stuff())
         .show(ui, |ui| {
             egui::CollapsingHeader::new("Models")
@@ -184,4 +189,10 @@ fn world_map_info(world_map: &WorldMapInfo, ui: &mut egui::Ui) {
                     }
                 });
         });
+    if header.header_response.clicked() {
+        event_writer.write(FileSelected {
+            archive_path: archive.path.clone(),
+            file_path: world_map.path.clone(),
+        });
+    }
 }

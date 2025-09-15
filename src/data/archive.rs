@@ -2,6 +2,7 @@
 // Author: Nocthir <nocthir@proton.me>
 // SPDX-License-Identifier: MIT or Apache-2.0
 
+use std::path::Path;
 use std::path::PathBuf;
 
 use bevy::prelude::*;
@@ -83,10 +84,10 @@ pub fn start_loading(mut commands: Commands, settings: Res<Settings>) -> Result<
 }
 
 async fn load_archive(archive_path: String) -> Result<ArchiveInfo> {
-    let mut archive = mpq::Archive::open(&archive_path)?;
+    let mut archive = open_archive(&archive_path)?;
     let texture_infos = texture::read_textures(&mut archive)?;
     let model_infos = model::read_models(&mut archive)?;
-    let wmo_infos = world_model::read_mwos(&mut archive)?;
+    let wmo_infos = world_model::read_world_models(&mut archive)?;
     let world_map_infos = world_map::read_world_maps(&mut archive)?;
     Ok(ArchiveInfo::new(
         archive_path,
@@ -97,11 +98,22 @@ async fn load_archive(archive_path: String) -> Result<ArchiveInfo> {
     ))
 }
 
+pub fn open_archive<P: AsRef<Path>>(archive_path: P) -> Result<mpq::Archive> {
+    mpq::Archive::open(archive_path.as_ref()).map_err(|e| {
+        format!(
+            "Failed to open archive {}: {}",
+            archive_path.as_ref().display(),
+            e
+        )
+        .into()
+    })
+}
+
 pub fn check_archive_loading(
     mut exit: EventWriter<AppExit>,
     mut load_task: ResMut<LoadArchiveTasks>,
     mut event_writer: EventWriter<ArchiveLoaded>,
-    mut texture_archive_map: ResMut<texture::TextureArchiveMap>,
+    mut file_archive_map: ResMut<texture::FileArchiveMap>,
 ) {
     let mut tasks = Vec::new();
     tasks.append(&mut load_task.tasks);
@@ -115,13 +127,31 @@ pub fn check_archive_loading(
                     exit.write(AppExit::error());
                 }
                 Ok(archive) => {
-                    info!("Loaded archive: {}", archive.path);
+                    info!("Loaded archive info: {}", archive.path);
 
-                    // Update the texture to archive map
-                    for texture_info in &archive.texture_infos {
-                        texture_archive_map
+                    // Update the file archive map
+                    for model_info in &archive.model_infos {
+                        file_archive_map
                             .map
-                            .insert(texture_info.texture_path.clone(), archive.path.clone());
+                            .insert(model_info.path.to_lowercase().clone(), archive.path.clone());
+                    }
+                    for world_model_info in &archive.wmo_infos {
+                        file_archive_map.map.insert(
+                            world_model_info.path.to_lowercase().clone(),
+                            archive.path.clone(),
+                        );
+                    }
+                    for texture_info in &archive.texture_infos {
+                        file_archive_map.map.insert(
+                            texture_info.path.to_lowercase().clone(),
+                            archive.path.clone(),
+                        );
+                    }
+                    for world_map_info in &archive.world_map_infos {
+                        file_archive_map.map.insert(
+                            world_map_info.path.to_lowercase().clone(),
+                            archive.path.clone(),
+                        );
                     }
 
                     event_writer.write(ArchiveLoaded { archive });

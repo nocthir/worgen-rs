@@ -14,7 +14,7 @@ use wow_mpq as mpq;
 
 use crate::data::{
     normalize_vec3,
-    texture::{self, TextureArchiveMap},
+    texture::{self, FileArchiveMap},
 };
 
 #[derive(Clone)]
@@ -65,13 +65,13 @@ fn read_model(file_path: &str, archive: &mut mpq::Archive) -> Result<m2::M2Model
 }
 
 pub fn create_meshes_from_model_path(
-    archive: &mut mpq::Archive,
     file_path: &str,
-    texture_archive_map: &TextureArchiveMap,
+    file_archive_map: &FileArchiveMap,
     images: &mut Assets<Image>,
     materials: &mut Assets<StandardMaterial>,
     meshes: &mut Assets<Mesh>,
 ) -> Result<Vec<(Handle<Mesh>, Handle<StandardMaterial>)>> {
+    let mut archive = file_archive_map.get_archive(file_path)?;
     let data = archive.read_file(file_path)?;
     let mut reader = io::Cursor::new(&data);
 
@@ -80,8 +80,7 @@ pub fn create_meshes_from_model_path(
     if let Ok(model) = m2::M2Model::parse(&mut reader)
         && !model.vertices.is_empty()
     {
-        let image_handles =
-            texture::create_textures_from_model(&model, texture_archive_map, images)?;
+        let image_handles = texture::create_textures_from_model(&model, file_archive_map, images)?;
         if let Ok(res) = create_mesh(&model, &data, &image_handles, materials, meshes) {
             ret.extend(res);
         } else {
@@ -219,14 +218,14 @@ mod test {
     #[test]
     fn main_menu() -> Result {
         let settings = settings::load_settings()?;
-        let texture_archive_map = texture::test::default_texture_archive_map(&settings)?;
-        let selected_model = ui::ModelSelected::from(&settings.default_model);
+        let file_archive_map = texture::test::default_file_archive_map(&settings)?;
+        let selected_model = ui::FileSelected::from(&settings.default_model);
         let mut images = Assets::<Image>::default();
         let mut standard_materials = Assets::<StandardMaterial>::default();
         let mut meshes = Assets::<Mesh>::default();
-        data::create_mesh_from_selected_model(
+        data::create_mesh_from_selected_file(
             &selected_model,
-            &texture_archive_map,
+            &file_archive_map,
             &mut images,
             &mut standard_materials,
             &mut meshes,
@@ -237,14 +236,14 @@ mod test {
     #[test]
     fn city() -> Result {
         let settings = settings::load_settings()?;
-        let texture_archive_map = texture::test::default_texture_archive_map(&settings)?;
-        let selected_model = ui::ModelSelected::from(&settings.city_model);
+        let file_archive_map = texture::test::default_file_archive_map(&settings)?;
+        let selected_model = ui::FileSelected::from(&settings.city_model);
         let mut images = Assets::<Image>::default();
         let mut standard_materials = Assets::<StandardMaterial>::default();
         let mut meshes = Assets::<Mesh>::default();
-        data::create_mesh_from_selected_model(
+        data::create_mesh_from_selected_file(
             &selected_model,
-            &texture_archive_map,
+            &file_archive_map,
             &mut images,
             &mut standard_materials,
             &mut meshes,
@@ -256,14 +255,14 @@ mod test {
     fn dwarf() -> Result {
         env_logger::init();
         let settings = settings::load_settings()?;
-        let texture_archive_map = texture::test::default_texture_archive_map(&settings)?;
-        let selected_model = ui::ModelSelected::from(&settings.test_model);
+        let file_archive_map = texture::test::default_file_archive_map(&settings)?;
+        let selected_model = ui::FileSelected::from(&settings.test_model);
         let mut images = Assets::<Image>::default();
         let mut standard_materials = Assets::<StandardMaterial>::default();
         let mut meshes = Assets::<Mesh>::default();
-        data::create_mesh_from_selected_model(
+        data::create_mesh_from_selected_file(
             &selected_model,
-            &texture_archive_map,
+            &file_archive_map,
             &mut images,
             &mut standard_materials,
             &mut meshes,

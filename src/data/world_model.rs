@@ -15,7 +15,7 @@ use wow_wmo as wmo;
 
 use crate::data::{
     normalize_vec3,
-    texture::{self, TextureArchiveMap},
+    texture::{self, FileArchiveMap},
 };
 
 #[derive(Clone)]
@@ -33,13 +33,13 @@ pub struct WmoGroupInfo {
     pub index_count: usize,
 }
 
-pub fn read_mwos(archive: &mut mpq::Archive) -> Result<Vec<WmoInfo>> {
+pub fn read_world_models(archive: &mut mpq::Archive) -> Result<Vec<WmoInfo>> {
     let mut infos = Vec::new();
     for entry in archive.list()?.iter() {
         if is_wmo_root_path(&entry.name)
             && let Ok(model) = read_wmo(&entry.name, archive)
         {
-            let groups = match read_wmo_groups(archive, &entry.name, &model) {
+            let groups = match read_groups(&entry.name, archive, &model) {
                 Ok(groups) => groups,
                 Err(err) => {
                     error!("Failed to read WMO groups for {}: {}", entry.name, err);
@@ -95,14 +95,14 @@ pub fn is_world_model_extension(file_path: &str) -> bool {
     lower.ends_with(".wmo")
 }
 
-fn read_wmo_groups<P: AsRef<Path>>(
+fn read_groups(
+    file_path: &str,
     archive: &mut mpq::Archive,
-    wmo_path: P,
     wmo: &wmo::WmoRoot,
 ) -> Result<Vec<WmoGroupInfo>> {
     let mut infos = Vec::new();
     for (group_index, wmo_group_info) in wmo.groups.iter().enumerate() {
-        let wmo_group = read_wmo_group(archive, wmo_path.as_ref(), group_index)?;
+        let wmo_group = read_group(file_path, archive, group_index)?;
         let name = wmo_group_info.name.clone();
         let vertex_count = wmo_group.vertices.len();
         let index_count = wmo_group.indices.len();
@@ -116,20 +116,15 @@ fn read_wmo_groups<P: AsRef<Path>>(
     Ok(infos)
 }
 
-pub fn create_meshes_from_wmo_path<P: AsRef<Path>>(
-    archive: &mut mpq::Archive,
-    path: P,
-    texture_archive_map: &TextureArchiveMap,
+pub fn create_meshes_from_world_model_path(
+    file_path: &str,
+    file_archive_map: &FileArchiveMap,
     images: &mut Assets<Image>,
     standard_materials: &mut Assets<StandardMaterial>,
     meshes: &mut Assets<Mesh>,
 ) -> Result<Vec<(Handle<Mesh>, Handle<StandardMaterial>)>> {
-    let path_str = path
-        .as_ref()
-        .to_str()
-        .ok_or_else(|| format!("Invalid world model path: {}", path.as_ref().display()))?;
-
-    let file = archive.read_file(path_str)?;
+    let mut archive = file_archive_map.get_archive(file_path)?;
+    let file = archive.read_file(file_path)?;
     let mut reader = io::Cursor::new(&file);
 
     let mut ret = Vec::default();
@@ -137,7 +132,7 @@ pub fn create_meshes_from_wmo_path<P: AsRef<Path>>(
     if let Ok(wmo) = wmo::parse_wmo(&mut reader)
         && !wmo.groups.is_empty()
     {
-        let textures = texture::create_textures_from_wmo(&wmo, texture_archive_map, images)?;
+        let textures = texture::create_textures_from_wmo(&wmo, file_archive_map, images)?;
         let materials = create_materials_from_wmo(&wmo, &textures);
         let material_handles = materials
             .into_iter()
@@ -152,9 +147,9 @@ pub fn create_meshes_from_wmo_path<P: AsRef<Path>>(
         });
 
         for group_index in 0..wmo.groups.len() {
-            if let Ok(bundle) = create_mesh_from_wmo_group_path(
-                archive,
-                path_str,
+            if let Ok(bundle) = create_mesh_from_group_path(
+                file_path,
+                &mut archive,
                 group_index,
                 default_material_handle.clone(),
                 &material_handles,
@@ -212,15 +207,15 @@ fn create_color_from_wmo(color: wmo::types::Color) -> Color {
     )
 }
 
-fn create_mesh_from_wmo_group_path<P: AsRef<Path>>(
+fn create_mesh_from_group_path(
+    file_path: &str,
     archive: &mut mpq::Archive,
-    wmo_path: P,
     group_index: usize,
     default_material_handle: Handle<StandardMaterial>,
     material_handles: &[Handle<StandardMaterial>],
     meshes: &mut Assets<Mesh>,
 ) -> Result<Vec<(Handle<Mesh>, Handle<StandardMaterial>)>> {
-    let wmo_group = read_wmo_group(archive, wmo_path, group_index)?;
+    let wmo_group = read_group(file_path, archive, group_index)?;
     Ok(create_mesh_from_wmo_group(
         &wmo_group,
         default_material_handle,
@@ -229,12 +224,12 @@ fn create_mesh_from_wmo_group_path<P: AsRef<Path>>(
     ))
 }
 
-fn read_wmo_group<P: AsRef<Path>>(
+fn read_group(
+    file_path: &str,
     archive: &mut mpq::Archive,
-    wmo_path: P,
     group_index: usize,
 ) -> Result<wmo::WmoGroup> {
-    let group_filename = get_wmo_group_filename(&wmo_path, group_index);
+    let group_filename = get_wmo_group_filename(file_path, group_index);
     let file = archive
         .read_file(&group_filename)
         .map_err(|e| format!("Failed to read WMO group file {}: {}", group_filename, e))?;
@@ -332,14 +327,14 @@ mod test {
     fn altar() -> Result {
         env_logger::init();
         let settings = settings::load_settings()?;
-        let selected_model = ui::ModelSelected::from(&settings.test_world_model);
-        let texture_archive_map = texture::test::default_texture_archive_map(&settings)?;
+        let selected_model = ui::FileSelected::from(&settings.test_world_model);
+        let file_archive_map = texture::test::default_file_archive_map(&settings)?;
         let mut images = Assets::<Image>::default();
         let mut custom_materials = Assets::<StandardMaterial>::default();
         let mut meshes = Assets::<Mesh>::default();
-        data::create_mesh_from_selected_model(
+        data::create_mesh_from_selected_file(
             &selected_model,
-            &texture_archive_map,
+            &file_archive_map,
             &mut images,
             &mut custom_materials,
             &mut meshes,
