@@ -70,7 +70,7 @@ pub fn create_meshes_from_model_path(
     images: &mut Assets<Image>,
     materials: &mut Assets<StandardMaterial>,
     meshes: &mut Assets<Mesh>,
-) -> Result<Vec<(Handle<Mesh>, Handle<StandardMaterial>)>> {
+) -> Result<Vec<(Handle<Mesh>, Handle<StandardMaterial>, Transform)>> {
     let mut archive = file_archive_map.get_archive(file_path)?;
     let data = archive.read_file(file_path)?;
     let mut reader = io::Cursor::new(&data);
@@ -102,7 +102,7 @@ fn create_mesh(
     image_handles: &[Handle<Image>],
     materials: &mut Assets<StandardMaterial>,
     meshes: &mut Assets<Mesh>,
-) -> Result<Vec<(Handle<Mesh>, Handle<StandardMaterial>)>> {
+) -> Result<Vec<(Handle<Mesh>, Handle<StandardMaterial>, Transform)>> {
     let skin = model.parse_embedded_skin(model_data, 0)?;
 
     let vertex_count = model.vertices.len();
@@ -147,7 +147,7 @@ fn create_mesh_for_submesh(
     image_handles: &[Handle<Image>],
     materials: &mut Assets<StandardMaterial>,
     meshes: &mut Assets<Mesh>,
-) -> Result<(Handle<Mesh>, Handle<StandardMaterial>)> {
+) -> Result<(Handle<Mesh>, Handle<StandardMaterial>, Transform)> {
     let batch = &skin.batches()[batch_index];
     let submesh = &skin.submeshes()[batch.skin_section_index as usize];
     let texture_index =
@@ -192,7 +192,7 @@ fn create_mesh_for_submesh(
 
     let mesh_handle = meshes.add(mesh);
 
-    Ok((mesh_handle, material_handle))
+    Ok((mesh_handle, material_handle, Transform::default()))
 }
 
 fn blend_mode_to_alpha_mode(blend_mode: m2::chunks::material::M2BlendMode) -> AlphaMode {

@@ -71,8 +71,8 @@ fn load_selected_model(
                     commands.entity(entity).despawn();
                 });
 
-                for (mesh, material) in bundles {
-                    add_bundle(&mut commands, mesh, material);
+                for (mesh, material, transform) in bundles {
+                    add_bundle(&mut commands, mesh, material, transform);
                 }
 
                 info!("Loaded model from {}", event.file_path);
@@ -94,7 +94,7 @@ fn create_mesh_from_selected_file(
     images: &mut Assets<Image>,
     materials: &mut Assets<StandardMaterial>,
     meshes: &mut Assets<Mesh>,
-) -> Result<Vec<(Handle<Mesh>, Handle<StandardMaterial>)>> {
+) -> Result<Vec<(Handle<Mesh>, Handle<StandardMaterial>, Transform)>> {
     create_mesh_from_file_path(
         &file_info.file_path,
         file_archive_map,
@@ -110,7 +110,7 @@ fn create_mesh_from_file_path(
     images: &mut Assets<Image>,
     materials: &mut Assets<StandardMaterial>,
     meshes: &mut Assets<Mesh>,
-) -> Result<Vec<(Handle<Mesh>, Handle<StandardMaterial>)>> {
+) -> Result<Vec<(Handle<Mesh>, Handle<StandardMaterial>, Transform)>> {
     if model::is_model_extension(file_path) {
         model::create_meshes_from_model_path(file_path, file_archive_map, images, materials, meshes)
     } else if world_model::is_world_model_extension(file_path) {
@@ -143,8 +143,12 @@ fn normalize_vec3(v: [f32; 3]) -> [f32; 3] {
     }
 }
 
-fn add_bundle(commands: &mut Commands, mesh: Handle<Mesh>, material: Handle<StandardMaterial>) {
-    let mut transform = Transform::from_xyz(0.0, 0.0, 0.0);
+fn add_bundle(
+    commands: &mut Commands,
+    mesh: Handle<Mesh>,
+    material: Handle<StandardMaterial>,
+    mut transform: Transform,
+) {
     transform.rotate_local_x(-f32::consts::FRAC_PI_2);
     transform.rotate_local_z(-f32::consts::FRAC_PI_2);
 

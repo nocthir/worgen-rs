@@ -30,16 +30,15 @@ pub fn read_world_maps(archive: &mut mpq::Archive) -> Result<Vec<WorldMapInfo>> 
         if !lowercase_name.ends_with(".adt") {
             continue;
         }
-        if let Ok(world_map_info) = read_world_map_info(&entry.name, archive) {
-            infos.push(world_map_info);
+        if let Ok(world_map) = read_world_map(&entry.name, archive) {
+            infos.push(get_world_map_info(&world_map, &entry.name));
         }
     }
 
     Ok(infos)
 }
 
-fn read_world_map_info(file_name: &str, archive: &mut mpq::Archive) -> Result<WorldMapInfo> {
-    let world_map = read_world_map(file_name, archive)?;
+fn get_world_map_info(world_map: &adt::Adt, file_name: &str) -> WorldMapInfo {
     let mut models = Vec::new();
     if let Some(mmdx) = &world_map.mmdx {
         for filename in &mmdx.filenames {
@@ -72,14 +71,14 @@ fn read_world_map_info(file_name: &str, archive: &mut mpq::Archive) -> Result<Wo
         }
     }
 
-    Ok(WorldMapInfo {
+    WorldMapInfo {
         path: file_name.to_string(),
         models,
         world_models,
-    })
+    }
 }
 
-fn read_world_map(path: &str, archive: &mut mpq::Archive) -> Result<adt::Adt> {
+pub fn read_world_map(path: &str, archive: &mut mpq::Archive) -> Result<adt::Adt> {
     let file = archive.read_file(path)?;
     let mut reader = io::Cursor::new(file);
     Ok(adt::Adt::from_reader(&mut reader)?)
@@ -96,30 +95,54 @@ pub fn create_meshes_from_world_map_path(
     images: &mut Assets<Image>,
     materials: &mut Assets<StandardMaterial>,
     meshes: &mut Assets<Mesh>,
-) -> Result<Vec<(Handle<Mesh>, Handle<StandardMaterial>)>> {
+) -> Result<Vec<(Handle<Mesh>, Handle<StandardMaterial>, Transform)>> {
     let mut bundles = Vec::new();
 
     let mut archive = file_archive_map.get_archive(world_map_path)?;
-    let world_map_info = read_world_map_info(world_map_path, &mut archive)?;
+    let world_map = read_world_map(world_map_path, &mut archive)?;
+    let world_map_info = get_world_map_info(&world_map, world_map_path);
 
     for model_path in &world_map_info.models {
-        bundles.extend(model::create_meshes_from_model_path(
+        let mut model_bundles = model::create_meshes_from_model_path(
             model_path,
             file_archive_map,
             images,
             materials,
             meshes,
-        )?);
+        )?;
+        if let Some(mddf) = &world_map.mddf {
+            for placement in &mddf.doodads {
+                let transform = &mut model_bundles[placement.name_id as usize].2;
+                transform.translation = Vec3::new(
+                    placement.position[0],
+                    placement.position[1],
+                    placement.position[2],
+                );
+                transform.scale = Vec3::splat(placement.scale);
+            }
+        }
+        bundles.extend(model_bundles);
     }
 
     for world_model_path in &world_map_info.world_models {
-        bundles.extend(world_model::create_meshes_from_world_model_path(
+        let mut world_model_bundles = world_model::create_meshes_from_world_model_path(
             world_model_path,
             file_archive_map,
             images,
             materials,
             meshes,
-        )?);
+        )?;
+        if let Some(modf) = &world_map.modf {
+            for placement in &modf.models {
+                let transform = &mut world_model_bundles[placement.name_id as usize].2;
+                transform.translation = Vec3::new(
+                    placement.position[0],
+                    placement.position[1],
+                    placement.position[2],
+                );
+            }
+        }
+        bundles.extend(world_model_bundles);
     }
 
     Ok(bundles)
