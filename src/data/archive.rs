@@ -2,7 +2,6 @@
 // Author: Nocthir <nocthir@proton.me>
 // SPDX-License-Identifier: MIT or Apache-2.0
 
-use std::path::Path;
 use std::path::PathBuf;
 
 use bevy::prelude::*;
@@ -13,35 +12,43 @@ use crate::data::model;
 use crate::data::model::*;
 use crate::data::texture;
 use crate::data::texture::TextureInfo;
+use crate::data::world_map;
+use crate::data::world_map::WorldMapInfo;
 use crate::data::world_model;
 use crate::data::world_model::*;
 use crate::settings::Settings;
 
 #[derive(Clone)]
 pub struct ArchiveInfo {
-    pub path: PathBuf,
+    pub path: String,
     pub texture_infos: Vec<TextureInfo>,
     pub model_infos: Vec<ModelInfo>,
     pub wmo_infos: Vec<WmoInfo>,
+    pub world_map_infos: Vec<WorldMapInfo>,
 }
 
 impl ArchiveInfo {
-    pub fn new<P: AsRef<Path>>(
-        path: P,
+    pub fn new<S: Into<String>>(
+        path: S,
         texture_infos: Vec<TextureInfo>,
         model_infos: Vec<ModelInfo>,
         wmo_infos: Vec<WmoInfo>,
+        world_map_infos: Vec<WorldMapInfo>,
     ) -> Self {
         Self {
-            path: path.as_ref().to_path_buf(),
+            path: path.into(),
             texture_infos,
             model_infos,
             wmo_infos,
+            world_map_infos,
         }
     }
 
     pub fn has_stuff(&self) -> bool {
-        !self.model_infos.is_empty() || !self.wmo_infos.is_empty() || !self.texture_infos.is_empty()
+        !self.model_infos.is_empty()
+            || !self.wmo_infos.is_empty()
+            || !self.texture_infos.is_empty()
+            || !self.world_map_infos.is_empty()
     }
 }
 
@@ -64,7 +71,7 @@ pub fn start_loading(mut commands: Commands, settings: Res<Settings>) -> Result<
     for file in data_path.read_dir()? {
         let file = file?;
         if file.file_name().to_string_lossy().ends_with(".MPQ") {
-            let mpq_path = file.path();
+            let mpq_path = file.path().to_string_lossy().to_string();
             let task = tasks::IoTaskPool::get().spawn(load_archive(mpq_path));
             tasks.tasks.push(task);
         }
@@ -75,16 +82,18 @@ pub fn start_loading(mut commands: Commands, settings: Res<Settings>) -> Result<
     Ok(())
 }
 
-async fn load_archive(archive_path: PathBuf) -> Result<ArchiveInfo> {
+async fn load_archive(archive_path: String) -> Result<ArchiveInfo> {
     let mut archive = mpq::Archive::open(&archive_path)?;
     let texture_infos = texture::read_textures(&mut archive)?;
-    let model_infos = model::read_m2s(&mut archive)?;
+    let model_infos = model::read_models(&mut archive)?;
     let wmo_infos = world_model::read_mwos(&mut archive)?;
+    let world_map_infos = world_map::read_world_maps(&mut archive)?;
     Ok(ArchiveInfo::new(
         archive_path,
         texture_infos,
         model_infos,
         wmo_infos,
+        world_map_infos,
     ))
 }
 
@@ -106,7 +115,7 @@ pub fn check_archive_loading(
                     exit.write(AppExit::error());
                 }
                 Ok(archive) => {
-                    info!("Loaded archive: {}", archive.path.display());
+                    info!("Loaded archive: {}", archive.path);
 
                     // Update the texture to archive map
                     for texture_info in &archive.texture_infos {

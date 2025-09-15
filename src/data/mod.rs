@@ -5,13 +5,13 @@
 pub mod archive;
 pub mod model;
 pub mod texture;
+pub mod world_map;
 pub mod world_model;
 
-use std::{f32, ffi::OsStr, io, path::Path};
+use std::f32;
 
 use bevy::prelude::*;
 
-use wow_adt as adt;
 use wow_mpq as mpq;
 
 use crate::{
@@ -64,7 +64,7 @@ fn load_selected_model(
         ) {
             Ok(bundles) => {
                 if bundles.is_empty() {
-                    error!("No meshes loaded for model: {}", event.model_path.display());
+                    error!("No meshes loaded for model: {}", event.model_path);
                     return Ok(());
                 }
 
@@ -77,13 +77,12 @@ fn load_selected_model(
                     add_bundle(&mut commands, mesh, material);
                 }
 
-                info!("Loaded model from {}", event.model_path.display());
+                info!("Loaded model from {}", event.model_path);
             }
             Err(err) => {
                 error!(
                     "Error loading model {} from archive {}: {err}",
-                    event.model_path.display(),
-                    event.archive_path.display()
+                    event.model_path, event.archive_path
                 );
             }
         }
@@ -100,10 +99,9 @@ fn create_mesh_from_selected_model(
 ) -> Result<Vec<(Handle<Mesh>, Handle<StandardMaterial>)>> {
     let mpq_path = &model_info.archive_path;
     let mut archive = mpq::Archive::open(mpq_path)?;
-    info!("Loaded archive {}", mpq_path.display());
-    let model_path = model_info.model_path.to_str().unwrap();
+    info!("Loaded archive {}", mpq_path);
     create_mesh_from_path_archive(
-        model_path,
+        &model_info.model_path,
         &mut archive,
         texture_archive_map,
         images,
@@ -112,61 +110,34 @@ fn create_mesh_from_selected_model(
     )
 }
 
-fn _read_adt(path: &str, archive: &mut mpq::Archive) -> Result<()> {
-    let file = archive.read_file(path)?;
-    if file.is_empty() {
-        // Skip this
-        return Ok(());
-    }
-    let mut reader = io::Cursor::new(file);
-    let adt = adt::Adt::from_reader(&mut reader)?;
-    if let Some(modf) = adt.modf
-        && !modf.models.is_empty()
-    {
-        info!("{}: {} MOPR entries", path, modf.models.len());
-        for model in &modf.models {
-            if let Some(mwmo) = &adt.mwmo {
-                let model_name = &mwmo.filenames[model.name_id as usize];
-                info!("    - WMO: {model_name}");
-            }
-        }
-    }
-    Ok(())
-}
-
-fn create_mesh_from_path_archive<P: AsRef<Path>>(
-    path: P,
+fn create_mesh_from_path_archive(
+    file_path: &str,
     archive: &mut mpq::Archive,
     texture_archive_map: &TextureArchiveMap,
     images: &mut Assets<Image>,
     materials: &mut Assets<StandardMaterial>,
     meshes: &mut Assets<Mesh>,
 ) -> Result<Vec<(Handle<Mesh>, Handle<StandardMaterial>)>> {
-    let ext = path
-        .as_ref()
-        .extension()
-        .ok_or_else(|| format!("Model path has no extension: {}", path.as_ref().display()))?;
-
-    if ext == OsStr::new("m2") {
-        model::create_meshes_from_m2_path(
+    if model::is_model_extension(file_path) {
+        model::create_meshes_from_model_path(
             archive,
-            path,
+            file_path,
             texture_archive_map,
             images,
             materials,
             meshes,
         )
-    } else if ext == OsStr::new("wmo") {
+    } else if world_model::is_world_model_extension(file_path) {
         world_model::create_meshes_from_wmo_path(
             archive,
-            path,
+            file_path,
             texture_archive_map,
             images,
             materials,
             meshes,
         )
     } else {
-        Err(format!("Unsupported model format: {}", path.as_ref().display()).into())
+        Err(format!("Unsupported model format: {}", file_path).into())
     }
 }
 

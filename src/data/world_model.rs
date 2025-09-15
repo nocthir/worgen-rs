@@ -2,11 +2,7 @@
 // Author: Nocthir <nocthir@proton.me>
 // SPDX-License-Identifier: MIT or Apache-2.0
 
-use std::{
-    ffi::OsStr,
-    io,
-    path::{Path, PathBuf},
-};
+use std::{io, path::Path};
 
 use bevy::{
     asset::RenderAssetUsages,
@@ -24,7 +20,7 @@ use crate::data::{
 
 #[derive(Clone)]
 pub struct WmoInfo {
-    pub path: PathBuf,
+    pub path: String,
     pub groups: Vec<WmoGroupInfo>,
     pub material_count: usize,
     pub texture_count: usize,
@@ -40,9 +36,7 @@ pub struct WmoGroupInfo {
 pub fn read_mwos(archive: &mut mpq::Archive) -> Result<Vec<WmoInfo>> {
     let mut infos = Vec::new();
     for entry in archive.list()?.iter() {
-        let wmo_path = PathBuf::from(&entry.name);
-
-        if is_wmo_root_path(&wmo_path)
+        if is_wmo_root_path(&entry.name)
             && let Ok(model) = read_wmo(&entry.name, archive)
         {
             let groups = match read_wmo_groups(archive, &entry.name, &model) {
@@ -55,7 +49,7 @@ pub fn read_mwos(archive: &mut mpq::Archive) -> Result<Vec<WmoInfo>> {
             let material_count = model.materials.len();
             let texture_count = model.textures.len();
             let info = WmoInfo {
-                path: PathBuf::from(&entry.name),
+                path: entry.name.clone(),
                 groups,
                 material_count,
                 texture_count,
@@ -73,19 +67,19 @@ fn read_wmo(path: &str, archive: &mut mpq::Archive) -> Result<wmo::WmoRoot> {
     Ok(wmo::parse_wmo(&mut reader)?)
 }
 
-fn is_wmo_root_path<P: AsRef<Path>>(path: P) -> bool {
-    if path.as_ref().extension() != Some(OsStr::new("wmo")) {
+fn is_wmo_root_path(file_path: &str) -> bool {
+    if !is_world_model_extension(file_path) {
         return false;
     }
-    !is_wmo_group_path(path)
+    !is_wmo_group_path(file_path)
 }
 
-fn is_wmo_group_path<P: AsRef<Path>>(path: P) -> bool {
-    if path.as_ref().extension() != Some(OsStr::new("wmo")) {
+fn is_wmo_group_path(file_path: &str) -> bool {
+    if !is_world_model_extension(file_path) {
         return false;
     }
-    let file_stem = path
-        .as_ref()
+    let file_path = Path::new(file_path);
+    let file_stem = file_path
         .file_stem()
         .unwrap_or_default()
         .to_str()
@@ -94,6 +88,11 @@ fn is_wmo_group_path<P: AsRef<Path>>(path: P) -> bool {
         .split('_')
         .next_back()
         .is_some_and(|s| s.len() == 3 && s.chars().all(|c| c.is_ascii_digit()))
+}
+
+pub fn is_world_model_extension(file_path: &str) -> bool {
+    let lower = file_path.to_lowercase();
+    lower.ends_with(".wmo")
 }
 
 fn read_wmo_groups<P: AsRef<Path>>(

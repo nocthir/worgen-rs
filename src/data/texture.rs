@@ -2,8 +2,6 @@
 // Author: Nocthir <nocthir@proton.me>
 // SPDX-License-Identifier: MIT or Apache-2.0
 
-use std::path::PathBuf;
-
 use bevy::{
     asset::RenderAssetUsages,
     platform::collections::HashMap,
@@ -17,26 +15,20 @@ use wow_wmo as wmo;
 
 #[derive(Resource, Default)]
 pub struct TextureArchiveMap {
-    pub map: HashMap<String, PathBuf>,
+    pub map: HashMap<String, String>,
 }
 
 impl TextureArchiveMap {
     // Actually used in tests
     #[allow(unused)]
-    pub fn fill(&mut self, archive_path: &PathBuf) -> Result<()> {
-        println!(
-            "Filling texture archive map from {}",
-            archive_path.display()
-        );
-        let mut archive = mpq::Archive::open(archive_path)?;
+    pub fn fill<S: Into<String>>(&mut self, archive_path: S) -> Result<()> {
+        let archive_path = archive_path.into();
+        println!("Filling texture archive map from {}", archive_path);
+        let mut archive = mpq::Archive::open(&archive_path)?;
 
         for file in archive.list()? {
             if file.name.to_lowercase().ends_with(".blp") {
-                println!(
-                    "Mapping texture {} to archive {}",
-                    file.name,
-                    archive_path.display()
-                );
+                println!("Mapping texture {} to archive {}", file.name, archive_path);
                 self.map
                     .insert(file.name.to_lowercase(), archive_path.clone());
             }
@@ -54,9 +46,10 @@ pub struct TextureInfo {
 pub fn read_textures(archive: &mut mpq::Archive) -> Result<Vec<TextureInfo>> {
     let mut infos = Vec::new();
     for entry in archive.list()?.iter() {
-        if entry.name.ends_with(".blp") {
+        let lowercase_name = entry.name.to_lowercase();
+        if lowercase_name.ends_with(".blp") {
             let texture_info = TextureInfo {
-                texture_path: entry.name.to_lowercase(),
+                texture_path: entry.name.clone(),
             };
             infos.push(texture_info);
         }
@@ -108,7 +101,7 @@ pub fn create_image_from_path(
         .ok_or_else(|| format!("Texture {} not found in any loaded archive", texture_path))?;
 
     let mut archive = mpq::Archive::open(archive_path)
-        .map_err(|e| format!("Failed to open archive {}: {}", archive_path.display(), e))?;
+        .map_err(|e| format!("Failed to open archive {}: {}", archive_path, e))?;
     let file = archive.read_file(&texture_path)?;
     let blp = blp::parser::load_blp_from_buf(&file)?;
     let dyn_image = blp::convert::blp_to_image(&blp, 0)?;
@@ -133,10 +126,8 @@ pub mod test {
 
     pub fn default_texture_archive_map(settings: &settings::Settings) -> Result<TextureArchiveMap> {
         let mut texture_archive_map = TextureArchiveMap::default();
-        let interface_archive_path = PathBuf::from(&settings.interface_archive_path);
-        let texture_archive_path = PathBuf::from(&settings.texture_archive_path);
-        texture_archive_map.fill(&interface_archive_path)?;
-        texture_archive_map.fill(&texture_archive_path)?;
+        texture_archive_map.fill(&settings.interface_archive_path)?;
+        texture_archive_map.fill(&settings.texture_archive_path)?;
         Ok(texture_archive_map)
     }
 }

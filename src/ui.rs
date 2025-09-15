@@ -2,8 +2,6 @@
 // Author: Nocthir <nocthir@proton.me>
 // SPDX-License-Identifier: MIT or Apache-2.0
 
-use std::path::PathBuf;
-
 use bevy::prelude::*;
 use bevy_egui::*;
 
@@ -12,9 +10,10 @@ use crate::{
         DataInfo,
         archive::{ArchiveInfo, ArchiveLoaded},
         model::ModelInfo,
+        world_map::WorldMapInfo,
         world_model::{WmoGroupInfo, WmoInfo},
     },
-    settings::{ModelSettings, Settings},
+    settings::{FileSettings, Settings},
 };
 
 pub struct UiPlugin;
@@ -33,15 +32,15 @@ impl Plugin for UiPlugin {
 
 #[derive(Event)]
 pub struct ModelSelected {
-    pub archive_path: PathBuf,
-    pub model_path: PathBuf,
+    pub archive_path: String,
+    pub model_path: String,
 }
 
-impl From<&ModelSettings> for ModelSelected {
-    fn from(settings: &ModelSettings) -> Self {
+impl From<&FileSettings> for ModelSelected {
+    fn from(settings: &FileSettings) -> Self {
         Self {
-            archive_path: PathBuf::from(&settings.archive_path),
-            model_path: PathBuf::from(&settings.model_path),
+            archive_path: settings.archive_path.clone(),
+            model_path: settings.file_path.clone(),
         }
     }
 }
@@ -75,7 +74,7 @@ fn archive_info(
     ui: &mut egui::Ui,
     event_writer: &mut EventWriter<ModelSelected>,
 ) {
-    egui::CollapsingHeader::new(format!("{}", archive.path.display()))
+    egui::CollapsingHeader::new(&archive.path)
         .default_open(false)
         .enabled(archive.has_stuff())
         .show(ui, |ui| {
@@ -86,18 +85,25 @@ fn archive_info(
                         ui.label(&texture.texture_path);
                     }
                 });
-            egui::CollapsingHeader::new("M2")
+            egui::CollapsingHeader::new("Models")
                 .enabled(!archive.model_infos.is_empty())
                 .show(ui, |ui| {
                     for model in &archive.model_infos {
                         model_info(archive, model, ui, event_writer);
                     }
                 });
-            egui::CollapsingHeader::new("WMO")
+            egui::CollapsingHeader::new("World Models")
                 .enabled(!archive.wmo_infos.is_empty())
                 .show(ui, |ui| {
                     for wmo in &archive.wmo_infos {
                         wmo_info(archive, wmo, ui, event_writer);
+                    }
+                });
+            egui::CollapsingHeader::new("World Maps")
+                .enabled(!archive.world_map_infos.is_empty())
+                .show(ui, |ui| {
+                    for world_map in &archive.world_map_infos {
+                        world_map_info(world_map, ui);
                     }
                 });
         });
@@ -109,7 +115,7 @@ fn model_info(
     ui: &mut egui::Ui,
     event_writer: &mut EventWriter<ModelSelected>,
 ) {
-    let header = egui::CollapsingHeader::new(format!("{}", model.path.display()))
+    let header = egui::CollapsingHeader::new(&model.path)
         .enabled(model.vertex_count > 0)
         .show(ui, |ui| {
             ui.label(format!("Vertices: {}", model.vertex_count));
@@ -132,7 +138,7 @@ fn wmo_info(
 ) {
     let any_group_with_vertices = wmo.groups.iter().any(|g| g.vertex_count > 0);
 
-    let header = egui::CollapsingHeader::new(format!("{}", wmo.path.display()))
+    let header = egui::CollapsingHeader::new(&wmo.path)
         .enabled(any_group_with_vertices)
         .show(ui, |ui| {
             ui.label(format!("Materials: {}", wmo.material_count));
@@ -157,4 +163,25 @@ fn wmo_group_info(group: &WmoGroupInfo, ui: &mut egui::Ui) {
         ui.label(format!("Vertices: {}", group.vertex_count));
         ui.label(format!("Indices: {}", group.index_count));
     });
+}
+
+fn world_map_info(world_map: &WorldMapInfo, ui: &mut egui::Ui) {
+    egui::CollapsingHeader::new(&world_map.path)
+        .enabled(world_map.has_stuff())
+        .show(ui, |ui| {
+            egui::CollapsingHeader::new("Models")
+                .enabled(!world_map.models.is_empty())
+                .show(ui, |ui| {
+                    for model in &world_map.models {
+                        ui.label(model);
+                    }
+                });
+            egui::CollapsingHeader::new("World Models")
+                .enabled(!world_map.world_models.is_empty())
+                .show(ui, |ui| {
+                    for world in &world_map.world_models {
+                        ui.label(world);
+                    }
+                });
+        });
 }

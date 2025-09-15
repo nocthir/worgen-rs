@@ -10,18 +10,19 @@ use serde::{Deserialize, Serialize};
 #[derive(Resource, Default, Serialize, Deserialize)]
 pub struct Settings {
     pub game_path: String,
-    pub default_model: ModelSettings,
-    pub test_model: ModelSettings,
-    pub test_world_model: ModelSettings,
-    pub city_model: ModelSettings,
+    pub default_model: FileSettings,
+    pub test_model: FileSettings,
+    pub test_world_model: FileSettings,
+    pub city_model: FileSettings,
+    pub world_map_path: FileSettings,
     pub texture_archive_path: String,
     pub interface_archive_path: String,
 }
 
 #[derive(Serialize, Deserialize, Default)]
-pub struct ModelSettings {
+pub struct FileSettings {
     pub archive_path: String,
-    pub model_path: String,
+    pub file_path: String,
 }
 
 pub struct SettingsPlugin;

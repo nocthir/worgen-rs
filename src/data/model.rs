@@ -2,10 +2,7 @@
 // Author: Nocthir <nocthir@proton.me>
 // SPDX-License-Identifier: MIT or Apache-2.0
 
-use std::{
-    io,
-    path::{Path, PathBuf},
-};
+use std::io;
 
 use bevy::{
     asset::RenderAssetUsages,
@@ -22,23 +19,23 @@ use crate::data::{
 
 #[derive(Clone)]
 pub struct ModelInfo {
-    pub path: PathBuf,
+    pub path: String,
     pub vertex_count: usize,
     pub texture_count: usize,
     pub materials: usize,
 }
 
-pub fn read_m2s(archive: &mut mpq::Archive) -> Result<Vec<ModelInfo>> {
+pub fn read_models(archive: &mut mpq::Archive) -> Result<Vec<ModelInfo>> {
     let mut infos = Vec::new();
     for entry in archive.list()?.iter() {
-        if entry.name.ends_with(".m2")
-            && let Ok(model) = read_m2(&entry.name, archive)
+        if is_model_extension(&entry.name)
+            && let Ok(model) = read_model(&entry.name, archive)
         {
             let vertex_count = model.vertices.len();
             let texture_count = model.textures.len();
             let materials = model.materials.len();
             let info = ModelInfo {
-                path: PathBuf::from(&entry.name),
+                path: entry.name.clone(),
                 vertex_count,
                 texture_count,
                 materials,
@@ -50,12 +47,14 @@ pub fn read_m2s(archive: &mut mpq::Archive) -> Result<Vec<ModelInfo>> {
     Ok(infos)
 }
 
-fn read_m2<P: AsRef<Path>>(path: P, archive: &mut mpq::Archive) -> Result<m2::M2Model> {
-    let file_path = path
-        .as_ref()
-        .to_str()
-        .ok_or_else(|| format!("Invalid model path: {}", path.as_ref().display()))?;
+pub fn is_model_extension(filename: &str) -> bool {
+    let lower_filename = filename.to_lowercase();
+    lower_filename.ends_with(".m2")
+        || lower_filename.ends_with(".mdx")
+        || lower_filename.ends_with(".mdl")
+}
 
+fn read_model(file_path: &str, archive: &mut mpq::Archive) -> Result<m2::M2Model> {
     let file = archive
         .read_file(file_path)
         .map_err(|e| format!("Failed to read model file {}: {}", file_path, e))?;
@@ -65,20 +64,15 @@ fn read_m2<P: AsRef<Path>>(path: P, archive: &mut mpq::Archive) -> Result<m2::M2
     Ok(model)
 }
 
-pub fn create_meshes_from_m2_path<P: AsRef<Path>>(
+pub fn create_meshes_from_model_path(
     archive: &mut mpq::Archive,
-    path: P,
+    file_path: &str,
     texture_archive_map: &TextureArchiveMap,
     images: &mut Assets<Image>,
     materials: &mut Assets<StandardMaterial>,
     meshes: &mut Assets<Mesh>,
 ) -> Result<Vec<(Handle<Mesh>, Handle<StandardMaterial>)>> {
-    let path_str = path
-        .as_ref()
-        .to_str()
-        .ok_or_else(|| format!("Invalid model path: {}", path.as_ref().display()))?;
-
-    let data = archive.read_file(path_str)?;
+    let data = archive.read_file(file_path)?;
     let mut reader = io::Cursor::new(&data);
 
     let mut ret = Vec::default();
@@ -93,7 +87,7 @@ pub fn create_meshes_from_m2_path<P: AsRef<Path>>(
         } else {
             return Err(format!(
                 "Failed to create mesh for model {} from archive {}",
-                path_str,
+                file_path,
                 archive.path().display(),
             )
             .into());
