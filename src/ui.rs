@@ -122,7 +122,7 @@ fn model_info(
             ui.label(format!("Textures: {}", model.texture_count));
             ui.label(format!("Materials: {}", model.materials));
         });
-    if header.header_response.clicked() {
+    if header.header_response.clicked() && !header.header_response.is_tooltip_open() {
         event_writer.write(FileSelected {
             archive_path: archive.path.clone(),
             file_path: model.path.clone(),
@@ -150,7 +150,7 @@ fn wmo_info(
                 }
             });
         });
-    if header.header_response.clicked() {
+    if header.header_response.clicked() && !header.header_response.is_tooltip_open() {
         event_writer.write(FileSelected {
             archive_path: archive.path.clone(),
             file_path: wmo.path.clone(),
@@ -189,7 +189,7 @@ fn world_map_info(
                     }
                 });
         });
-    if header.header_response.clicked() {
+    if header.header_response.clicked() && !header.header_response.is_tooltip_open() {
         event_writer.write(FileSelected {
             archive_path: archive.path.clone(),
             file_path: world_map.path.clone(),
