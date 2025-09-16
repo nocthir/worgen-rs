@@ -2,6 +2,7 @@
 // Author: Nocthir <nocthir@proton.me>
 // SPDX-License-Identifier: MIT or Apache-2.0
 
+use std::collections::HashMap;
 use std::path::Path;
 use std::path::PathBuf;
 
@@ -50,6 +51,43 @@ impl ArchiveInfo {
             || !self.wmo_infos.is_empty()
             || !self.texture_infos.is_empty()
             || !self.world_map_infos.is_empty()
+    }
+}
+
+#[derive(Resource, Default)]
+pub struct FileArchiveMap {
+    pub map: HashMap<String, String>,
+}
+
+impl FileArchiveMap {
+    pub fn get_archive_path(&self, file_path: &str) -> Result<&String> {
+        let lowercase_name = file_path.to_lowercase();
+        self.map
+            .get(&lowercase_name)
+            .ok_or(format!("File {} not found in any loaded archive", file_path).into())
+    }
+
+    pub fn get_archive(&self, file_path: &str) -> Result<mpq::Archive> {
+        let archive_path = self.get_archive_path(file_path)?;
+        open_archive(archive_path)
+    }
+
+    // Actually used in tests
+    #[allow(unused)]
+    pub fn fill_textures<S: Into<String>>(&mut self, archive_path: S) -> Result<()> {
+        let archive_path = archive_path.into();
+        println!("Filling texture archive map from {}", archive_path);
+        let mut archive = mpq::Archive::open(&archive_path)?;
+
+        for file in archive.list()? {
+            if file.name.to_lowercase().ends_with(".blp") {
+                println!("Mapping texture {} to archive {}", file.name, archive_path);
+                self.map
+                    .insert(file.name.to_lowercase(), archive_path.clone());
+            }
+        }
+
+        Ok(())
     }
 }
 
@@ -113,7 +151,7 @@ pub fn check_archive_loading(
     mut exit: EventWriter<AppExit>,
     mut load_task: ResMut<LoadArchiveTasks>,
     mut event_writer: EventWriter<ArchiveLoaded>,
-    mut file_archive_map: ResMut<texture::FileArchiveMap>,
+    mut file_archive_map: ResMut<FileArchiveMap>,
 ) {
     let mut tasks = Vec::new();
     tasks.append(&mut load_task.tasks);

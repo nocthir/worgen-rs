@@ -4,7 +4,6 @@
 
 use bevy::{
     asset::RenderAssetUsages,
-    platform::collections::HashMap,
     prelude::*,
     render::render_resource::{Extent3d, TextureDimension, TextureFormat},
 };
@@ -14,43 +13,6 @@ use wow_mpq as mpq;
 use wow_wmo as wmo;
 
 use crate::data::archive;
-
-#[derive(Resource, Default)]
-pub struct FileArchiveMap {
-    pub map: HashMap<String, String>,
-}
-
-impl FileArchiveMap {
-    pub fn get_archive_path(&self, file_path: &str) -> Result<&String> {
-        let lowercase_name = file_path.to_lowercase();
-        self.map
-            .get(&lowercase_name)
-            .ok_or(format!("File {} not found in any loaded archive", file_path).into())
-    }
-
-    pub fn get_archive(&self, file_path: &str) -> Result<mpq::Archive> {
-        let archive_path = self.get_archive_path(file_path)?;
-        archive::open_archive(archive_path)
-    }
-
-    // Actually used in tests
-    #[allow(unused)]
-    pub fn fill_textures<S: Into<String>>(&mut self, archive_path: S) -> Result<()> {
-        let archive_path = archive_path.into();
-        println!("Filling texture archive map from {}", archive_path);
-        let mut archive = mpq::Archive::open(&archive_path)?;
-
-        for file in archive.list()? {
-            if file.name.to_lowercase().ends_with(".blp") {
-                println!("Mapping texture {} to archive {}", file.name, archive_path);
-                self.map
-                    .insert(file.name.to_lowercase(), archive_path.clone());
-            }
-        }
-
-        Ok(())
-    }
-}
 
 #[derive(Clone)]
 pub struct TextureInfo {
@@ -73,7 +35,7 @@ pub fn read_textures(archive: &mut mpq::Archive) -> Result<Vec<TextureInfo>> {
 
 pub fn create_textures_from_wmo(
     wmo: &wmo::WmoRoot,
-    file_archive_map: &FileArchiveMap,
+    file_archive_map: &archive::FileArchiveMap,
     images: &mut Assets<Image>,
 ) -> Result<Vec<Handle<Image>>> {
     let mut image_handles = Vec::new();
@@ -88,7 +50,7 @@ pub fn create_textures_from_wmo(
 
 pub fn create_textures_from_model(
     model: &m2::M2Model,
-    file_archive_map: &FileArchiveMap,
+    file_archive_map: &archive::FileArchiveMap,
     images: &mut Assets<Image>,
 ) -> Result<Vec<Handle<Image>>> {
     let mut handles = Vec::new();
@@ -103,7 +65,7 @@ pub fn create_textures_from_model(
 
 pub fn create_image_from_path(
     texture_path: &str,
-    file_archive_map: &FileArchiveMap,
+    file_archive_map: &archive::FileArchiveMap,
     images: &mut Assets<Image>,
 ) -> Result<Handle<Image>> {
     // Case insensitive texture filename.
@@ -138,8 +100,10 @@ pub mod test {
     use super::*;
     use crate::*;
 
-    pub fn default_file_archive_map(settings: &settings::Settings) -> Result<FileArchiveMap> {
-        let mut file_archive_map = FileArchiveMap::default();
+    pub fn default_file_archive_map(
+        settings: &settings::Settings,
+    ) -> Result<archive::FileArchiveMap> {
+        let mut file_archive_map = archive::FileArchiveMap::default();
         file_archive_map.fill_textures(&settings.interface_archive_path)?;
         file_archive_map.fill_textures(&settings.texture_archive_path)?;
         Ok(file_archive_map)

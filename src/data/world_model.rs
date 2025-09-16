@@ -13,10 +13,7 @@ use bevy::{
 use wow_mpq as mpq;
 use wow_wmo as wmo;
 
-use crate::data::{
-    normalize_vec3,
-    texture::{self, FileArchiveMap},
-};
+use crate::data::{archive, normalize_vec3, texture};
 
 #[derive(Clone)]
 pub struct WmoInfo {
@@ -118,7 +115,7 @@ fn read_groups(
 
 pub fn create_meshes_from_world_model_path(
     file_path: &str,
-    file_archive_map: &FileArchiveMap,
+    file_archive_map: &archive::FileArchiveMap,
     images: &mut Assets<Image>,
     standard_materials: &mut Assets<StandardMaterial>,
     meshes: &mut Assets<Mesh>,

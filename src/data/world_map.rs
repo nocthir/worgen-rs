@@ -8,7 +8,7 @@ use bevy::prelude::*;
 use wow_adt as adt;
 use wow_mpq as mpq;
 
-use crate::data::{model, texture, world_model};
+use crate::data::{archive, model, world_model};
 
 #[derive(Default, Clone)]
 pub struct WorldMapInfo {
@@ -91,7 +91,7 @@ pub fn is_world_map_extension(filename: &str) -> bool {
 
 pub fn create_meshes_from_world_map_path(
     world_map_path: &str,
-    file_archive_map: &texture::FileArchiveMap,
+    file_archive_map: &archive::FileArchiveMap,
     images: &mut Assets<Image>,
     materials: &mut Assets<StandardMaterial>,
     meshes: &mut Assets<Mesh>,

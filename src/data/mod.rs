@@ -13,10 +13,7 @@ use std::f32;
 use bevy::prelude::*;
 
 use crate::{
-    data::{
-        archive::{ArchiveInfo, ArchiveLoaded, LoadArchiveTasks},
-        texture::FileArchiveMap,
-    },
+    data::archive::{ArchiveInfo, ArchiveLoaded, LoadArchiveTasks},
     ui::FileSelected,
 };
 
@@ -25,7 +22,7 @@ pub struct DataPlugin;
 impl Plugin for DataPlugin {
     fn build(&self, app: &mut App) {
         app.add_event::<ArchiveLoaded>()
-            .insert_resource(texture::FileArchiveMap::default())
+            .insert_resource(archive::FileArchiveMap::default())
             .add_systems(Startup, archive::start_loading)
             .add_systems(
                 Update,
@@ -46,7 +43,7 @@ fn load_selected_model(
     mut event_reader: EventReader<FileSelected>,
     query: Query<Entity, With<CurrentModel>>,
     mut commands: Commands,
-    file_archive_map: Res<FileArchiveMap>,
+    file_archive_map: Res<archive::FileArchiveMap>,
     mut images: ResMut<Assets<Image>>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut standard_materials: ResMut<Assets<StandardMaterial>>,
@@ -90,7 +87,7 @@ fn load_selected_model(
 
 fn create_mesh_from_selected_file(
     file_info: &FileSelected,
-    file_archive_map: &FileArchiveMap,
+    file_archive_map: &archive::FileArchiveMap,
     images: &mut Assets<Image>,
     materials: &mut Assets<StandardMaterial>,
     meshes: &mut Assets<Mesh>,
@@ -106,7 +103,7 @@ fn create_mesh_from_selected_file(
 
 fn create_mesh_from_file_path(
     file_path: &str,
-    file_archive_map: &FileArchiveMap,
+    file_archive_map: &archive::FileArchiveMap,
     images: &mut Assets<Image>,
     materials: &mut Assets<StandardMaterial>,
     meshes: &mut Assets<Mesh>,
