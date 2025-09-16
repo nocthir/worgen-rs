@@ -54,11 +54,17 @@ pub fn create_textures_from_model(
     images: &mut Assets<Image>,
 ) -> Result<Vec<Handle<Image>>> {
     let mut handles = Vec::new();
+    let default_texture = images.add(Image::default());
     for texture in &model.textures {
-        // Case insensitive texture filename.
-        let texture_path = texture.filename.string.to_string_lossy();
-        let image_handle = create_image_from_path(&texture_path, file_archive_map, images)?;
-        handles.push(image_handle);
+        if texture.texture_type == m2::chunks::M2TextureType::Hardcoded {
+            // Case insensitive texture filename.
+            let texture_path = texture.filename.string.to_string_lossy();
+            let image_handle = create_image_from_path(&texture_path, file_archive_map, images)?;
+            handles.push(image_handle);
+        } else {
+            // Ignore non-hardcoded textures for now.
+            handles.push(default_texture.clone())
+        }
     }
     Ok(handles)
 }

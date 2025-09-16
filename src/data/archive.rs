@@ -89,6 +89,39 @@ impl FileArchiveMap {
 
         Ok(())
     }
+
+    #[allow(unused)]
+    pub fn fill_models<S: Into<String>>(&mut self, archive_path: S) -> Result<()> {
+        let archive_path = archive_path.into();
+        println!("Filling model archive map from {}", archive_path);
+        let mut archive = mpq::Archive::open(&archive_path)?;
+        for file in archive.list()? {
+            if model::is_model_extension(&file.name) {
+                println!("Mapping model {} to archive {}", file.name, archive_path);
+                self.map
+                    .insert(file.name.to_lowercase(), archive_path.clone());
+            }
+        }
+        Ok(())
+    }
+
+    #[allow(unused)]
+    pub fn fill_world_map<S: Into<String>>(&mut self, archive_path: S) -> Result<()> {
+        let archive_path = archive_path.into();
+        println!("Filling world map archive map from {}", archive_path);
+        let mut archive = mpq::Archive::open(&archive_path)?;
+        for file in archive.list()? {
+            if world_map::is_world_map_extension(&file.name) {
+                println!(
+                    "Mapping world map {} to archive {}",
+                    file.name, archive_path
+                );
+                self.map
+                    .insert(file.name.to_lowercase(), archive_path.clone());
+            }
+        }
+        Ok(())
+    }
 }
 
 #[derive(Event)]

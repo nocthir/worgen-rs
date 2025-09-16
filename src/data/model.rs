@@ -18,7 +18,7 @@ use crate::data::{ModelBundle, archive, normalize_vec3, texture};
 pub struct ModelInfo {
     pub path: String,
     pub vertex_count: usize,
-    pub texture_count: usize,
+    pub textures: Vec<String>,
     pub materials: usize,
 }
 
@@ -29,12 +29,16 @@ pub fn read_models(archive: &mut mpq::Archive) -> Result<Vec<ModelInfo>> {
             && let Ok(model) = read_model(&entry.name, archive)
         {
             let vertex_count = model.vertices.len();
-            let texture_count = model.textures.len();
+            let textures = model
+                .textures
+                .iter()
+                .map(|t| t.filename.string.to_string_lossy())
+                .collect();
             let materials = model.materials.len();
             let info = ModelInfo {
                 path: entry.name.clone(),
                 vertex_count,
-                texture_count,
+                textures,
                 materials,
             };
             infos.push(info);
@@ -270,7 +274,8 @@ mod test {
     fn dwarf() -> Result {
         env_logger::init();
         let settings = settings::load_settings()?;
-        let file_archive_map = texture::test::default_file_archive_map(&settings)?;
+        let mut file_archive_map = texture::test::default_file_archive_map(&settings)?;
+        file_archive_map.fill_models(&settings.model_archive_path)?;
         let selected_model = ui::FileSelected::from(&settings.test_model);
         let mut images = Assets::<Image>::default();
         let mut standard_materials = Assets::<StandardMaterial>::default();

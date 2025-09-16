@@ -17,6 +17,7 @@ pub struct Settings {
     pub world_map_path: FileSettings,
     pub texture_archive_path: String,
     pub interface_archive_path: String,
+    pub model_archive_path: String,
 }
 
 #[derive(Serialize, Deserialize, Default)]

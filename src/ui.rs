@@ -119,7 +119,13 @@ fn model_info(
         .enabled(model.vertex_count > 0)
         .show(ui, |ui| {
             ui.label(format!("Vertices: {}", model.vertex_count));
-            ui.label(format!("Textures: {}", model.texture_count));
+            egui::CollapsingHeader::new("Textures")
+                .enabled(!model.textures.is_empty())
+                .show(ui, |ui| {
+                    for texture in &model.textures {
+                        ui.label(texture);
+                    }
+                });
             ui.label(format!("Materials: {}", model.materials));
         });
     if header.header_response.clicked() && !header.header_response.is_tooltip_open() {

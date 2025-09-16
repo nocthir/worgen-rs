@@ -102,47 +102,65 @@ pub fn create_meshes_from_world_map_path(
     let world_map = read_world_map(world_map_path, &mut archive)?;
     let world_map_info = get_world_map_info(&world_map, world_map_path);
 
+    let mut model_bundles = Vec::new();
     for model_path in &world_map_info.models {
-        let mut model_bundles = model::create_meshes_from_model_path(
+        let bundles = model::create_meshes_from_model_path(
             model_path,
             file_archive_map,
             images,
             materials,
             meshes,
         )?;
-        if let Some(mddf) = &world_map.mddf {
-            for placement in &mddf.doodads {
-                let transform = &mut model_bundles[placement.name_id as usize].transform;
-                transform.translation = Vec3::new(
+        model_bundles.push(bundles);
+    }
+
+    if let Some(mddf) = &world_map.mddf {
+        for placement in &mddf.doodads {
+            let mut instantiated_bundles = model_bundles[placement.name_id as usize].clone();
+            for bundle in &mut instantiated_bundles {
+                bundle.transform.translation = Vec3::new(
                     placement.position[0],
                     placement.position[1],
                     placement.position[2],
                 );
-                transform.scale = Vec3::splat(placement.scale);
+                bundle.transform.rotation =
+                    Quat::from_axis_angle(Vec3::X, placement.rotation[0].to_radians())
+                        * Quat::from_axis_angle(Vec3::Y, placement.rotation[1].to_radians())
+                        * Quat::from_axis_angle(Vec3::Z, placement.rotation[2].to_radians());
+                bundle.transform.scale = Vec3::splat(placement.scale);
             }
+            bundles.extend(instantiated_bundles);
         }
-        bundles.extend(model_bundles);
     }
 
+    let mut world_model_bundles = Vec::new();
     for world_model_path in &world_map_info.world_models {
-        let mut world_model_bundles = world_model::create_meshes_from_world_model_path(
+        let bundles = world_model::create_meshes_from_world_model_path(
             world_model_path,
             file_archive_map,
             images,
             materials,
             meshes,
         )?;
-        if let Some(modf) = &world_map.modf {
-            for placement in &modf.models {
-                let transform = &mut world_model_bundles[placement.name_id as usize].transform;
-                transform.translation = Vec3::new(
+        world_model_bundles.push(bundles);
+    }
+
+    if let Some(modf) = &world_map.modf {
+        for placement in &modf.models {
+            let mut instantiated_bundles = world_model_bundles[placement.name_id as usize].clone();
+            for bundle in &mut instantiated_bundles {
+                bundle.transform.translation = Vec3::new(
                     placement.position[0],
                     placement.position[1],
                     placement.position[2],
                 );
+                bundle.transform.rotation =
+                    Quat::from_axis_angle(Vec3::X, placement.rotation[0].to_radians())
+                        * Quat::from_axis_angle(Vec3::Y, placement.rotation[1].to_radians())
+                        * Quat::from_axis_angle(Vec3::Z, placement.rotation[2].to_radians());
             }
+            bundles.extend(instantiated_bundles);
         }
-        bundles.extend(world_model_bundles);
     }
 
     Ok(bundles)
@@ -151,16 +169,24 @@ pub fn create_meshes_from_world_map_path(
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::*;
+    use crate::{data::texture, *};
 
     #[test]
     fn read_adt() -> Result<()> {
         let settings = settings::load_settings()?;
-        let mut archive = mpq::Archive::open(&settings.world_map_path.archive_path)?;
-        let file = archive.read_file(&settings.world_map_path.file_path)?;
-        assert!(!file.is_empty());
-        let mut reader = io::Cursor::new(file);
-        adt::Adt::from_reader(&mut reader)?;
+        let mut file_archive_map = texture::test::default_file_archive_map(&settings)?;
+        file_archive_map.fill_models(&settings.model_archive_path)?;
+        file_archive_map.fill_world_map(&settings.world_map_path.archive_path)?;
+        let mut images = Assets::<Image>::default();
+        let mut materials = Assets::<StandardMaterial>::default();
+        let mut meshes = Assets::<Mesh>::default();
+        create_meshes_from_world_map_path(
+            &settings.world_map_path.file_path,
+            &file_archive_map,
+            &mut images,
+            &mut materials,
+            &mut meshes,
+        )?;
         Ok(())
     }
 }

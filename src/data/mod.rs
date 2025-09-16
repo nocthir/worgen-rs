@@ -40,7 +40,7 @@ pub struct DataInfo {
     pub archives: Vec<ArchiveInfo>,
 }
 
-#[derive(Bundle)]
+#[derive(Bundle, Clone)]
 pub struct ModelBundle {
     pub mesh: Mesh3d,
     pub material: MeshMaterial3d<StandardMaterial>,
