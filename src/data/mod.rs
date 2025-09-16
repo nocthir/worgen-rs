@@ -39,6 +39,14 @@ pub struct CurrentModel;
 pub struct DataInfo {
     pub archives: Vec<ArchiveInfo>,
 }
+
+#[derive(Bundle)]
+pub struct ModelBundle {
+    pub mesh: Mesh3d,
+    pub material: MeshMaterial3d<StandardMaterial>,
+    pub transform: Transform,
+}
+
 fn load_selected_model(
     mut event_reader: EventReader<FileSelected>,
     query: Query<Entity, With<CurrentModel>>,
@@ -68,8 +76,8 @@ fn load_selected_model(
                     commands.entity(entity).despawn();
                 });
 
-                for (mesh, material, transform) in bundles {
-                    add_bundle(&mut commands, mesh, material, transform);
+                for bundle in bundles {
+                    add_bundle(&mut commands, bundle);
                 }
 
                 info!("Loaded model from {}", event.file_path);
@@ -91,7 +99,7 @@ fn create_mesh_from_selected_file(
     images: &mut Assets<Image>,
     materials: &mut Assets<StandardMaterial>,
     meshes: &mut Assets<Mesh>,
-) -> Result<Vec<(Handle<Mesh>, Handle<StandardMaterial>, Transform)>> {
+) -> Result<Vec<ModelBundle>> {
     create_mesh_from_file_path(
         &file_info.file_path,
         file_archive_map,
@@ -107,7 +115,7 @@ fn create_mesh_from_file_path(
     images: &mut Assets<Image>,
     materials: &mut Assets<StandardMaterial>,
     meshes: &mut Assets<Mesh>,
-) -> Result<Vec<(Handle<Mesh>, Handle<StandardMaterial>, Transform)>> {
+) -> Result<Vec<ModelBundle>> {
     if model::is_model_extension(file_path) {
         model::create_meshes_from_model_path(file_path, file_archive_map, images, materials, meshes)
     } else if world_model::is_world_model_extension(file_path) {
@@ -140,19 +148,8 @@ fn normalize_vec3(v: [f32; 3]) -> [f32; 3] {
     }
 }
 
-fn add_bundle(
-    commands: &mut Commands,
-    mesh: Handle<Mesh>,
-    material: Handle<StandardMaterial>,
-    mut transform: Transform,
-) {
-    transform.rotate_local_x(-f32::consts::FRAC_PI_2);
-    transform.rotate_local_z(-f32::consts::FRAC_PI_2);
-
-    commands.spawn((
-        CurrentModel,
-        Mesh3d(mesh),
-        MeshMaterial3d(material),
-        transform,
-    ));
+fn add_bundle(commands: &mut Commands, mut bundle: ModelBundle) {
+    bundle.transform.rotate_local_x(-f32::consts::FRAC_PI_2);
+    bundle.transform.rotate_local_z(-f32::consts::FRAC_PI_2);
+    commands.spawn((CurrentModel, bundle));
 }

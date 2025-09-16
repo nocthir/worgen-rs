@@ -12,7 +12,7 @@ use bevy::{
 use wow_m2 as m2;
 use wow_mpq as mpq;
 
-use crate::data::{archive, normalize_vec3, texture};
+use crate::data::{ModelBundle, archive, normalize_vec3, texture};
 
 #[derive(Clone)]
 pub struct ModelInfo {
@@ -67,7 +67,7 @@ pub fn create_meshes_from_model_path(
     images: &mut Assets<Image>,
     materials: &mut Assets<StandardMaterial>,
     meshes: &mut Assets<Mesh>,
-) -> Result<Vec<(Handle<Mesh>, Handle<StandardMaterial>, Transform)>> {
+) -> Result<Vec<ModelBundle>> {
     let mut archive = file_archive_map.get_archive(file_path)?;
     let data = archive.read_file(file_path)?;
     let mut reader = io::Cursor::new(&data);
@@ -93,27 +93,46 @@ pub fn create_meshes_from_model_path(
     Ok(ret)
 }
 
+/// Helper class to reduce the number of parameters passed around when creating meshes.
+struct VertexAttributes {
+    positions: Vec<[f32; 3]>,
+    normals: Vec<[f32; 3]>,
+    tex_coords_0: Vec<[f32; 2]>,
+}
+
+impl VertexAttributes {
+    fn with_capacity(capacity: usize) -> Self {
+        Self {
+            positions: Vec::with_capacity(capacity),
+            normals: Vec::with_capacity(capacity),
+            tex_coords_0: Vec::with_capacity(capacity),
+        }
+    }
+}
+
 fn create_mesh(
     model: &m2::M2Model,
     model_data: &[u8],
     image_handles: &[Handle<Image>],
     materials: &mut Assets<StandardMaterial>,
     meshes: &mut Assets<Mesh>,
-) -> Result<Vec<(Handle<Mesh>, Handle<StandardMaterial>, Transform)>> {
+) -> Result<Vec<ModelBundle>> {
     let skin = model.parse_embedded_skin(model_data, 0)?;
 
     let vertex_count = model.vertices.len();
-    let mut positions = Vec::with_capacity(vertex_count);
-    let mut normals = Vec::with_capacity(vertex_count);
-    let mut tex_coords_0 = Vec::with_capacity(vertex_count);
+    let mut vertex_attributes = VertexAttributes::with_capacity(vertex_count);
     for vertex in model.vertices.iter() {
-        positions.push([vertex.position.x, vertex.position.y, vertex.position.z]);
-        normals.push(normalize_vec3([
+        vertex_attributes
+            .positions
+            .push([vertex.position.x, vertex.position.y, vertex.position.z]);
+        vertex_attributes.normals.push(normalize_vec3([
             vertex.normal.x,
             vertex.normal.y,
             vertex.normal.z,
         ]));
-        tex_coords_0.push([vertex.tex_coords.x, vertex.tex_coords.y]);
+        vertex_attributes
+            .tex_coords_0
+            .push([vertex.tex_coords.x, vertex.tex_coords.y]);
     }
 
     let mut ret = Vec::new();
@@ -122,9 +141,7 @@ fn create_mesh(
             model,
             &skin,
             batch_index,
-            &positions,
-            &normals,
-            &tex_coords_0,
+            &vertex_attributes,
             image_handles,
             materials,
             meshes,
@@ -133,18 +150,15 @@ fn create_mesh(
     Ok(ret)
 }
 
-#[allow(clippy::too_many_arguments)]
 fn create_mesh_for_submesh(
     model: &m2::M2Model,
     skin: &m2::skin::SkinFile,
     batch_index: usize,
-    positions: &[[f32; 3]],
-    normals: &[[f32; 3]],
-    tex_coords_0: &[[f32; 2]],
+    vertex_attributes: &VertexAttributes,
     image_handles: &[Handle<Image>],
     materials: &mut Assets<StandardMaterial>,
     meshes: &mut Assets<Mesh>,
-) -> Result<(Handle<Mesh>, Handle<StandardMaterial>, Transform)> {
+) -> Result<ModelBundle> {
     let batch = &skin.batches()[batch_index];
     let submesh = &skin.submeshes()[batch.skin_section_index as usize];
     let texture_index =
@@ -181,15 +195,19 @@ fn create_mesh_for_submesh(
         // The camera coordinate space is right-handed x-right, y-up, z-back. This means "forward" is -Z.
         // Meshes always rotate around their local [0, 0, 0] when a rotation is applied to their Transform.
         // By centering our mesh around the origin, rotating the mesh preserves its center of mass.
-        positions.to_vec(),
+        vertex_attributes.positions.clone(),
     )
-    .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, normals.to_vec())
-    .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, tex_coords_0.to_vec())
+    .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, vertex_attributes.normals.clone())
+    .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, vertex_attributes.tex_coords_0.clone())
     .with_inserted_indices(Indices::U16(submesh_indices));
 
     let mesh_handle = meshes.add(mesh);
 
-    Ok((mesh_handle, material_handle, Transform::default()))
+    Ok(ModelBundle {
+        mesh: Mesh3d(mesh_handle),
+        material: MeshMaterial3d(material_handle),
+        transform: Transform::default(),
+    })
 }
 
 fn blend_mode_to_alpha_mode(blend_mode: m2::chunks::material::M2BlendMode) -> AlphaMode {

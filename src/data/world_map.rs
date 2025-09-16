@@ -8,7 +8,7 @@ use bevy::prelude::*;
 use wow_adt as adt;
 use wow_mpq as mpq;
 
-use crate::data::{archive, model, world_model};
+use crate::data::{ModelBundle, archive, model, world_model};
 
 #[derive(Default, Clone)]
 pub struct WorldMapInfo {
@@ -95,7 +95,7 @@ pub fn create_meshes_from_world_map_path(
     images: &mut Assets<Image>,
     materials: &mut Assets<StandardMaterial>,
     meshes: &mut Assets<Mesh>,
-) -> Result<Vec<(Handle<Mesh>, Handle<StandardMaterial>, Transform)>> {
+) -> Result<Vec<ModelBundle>> {
     let mut bundles = Vec::new();
 
     let mut archive = file_archive_map.get_archive(world_map_path)?;
@@ -112,7 +112,7 @@ pub fn create_meshes_from_world_map_path(
         )?;
         if let Some(mddf) = &world_map.mddf {
             for placement in &mddf.doodads {
-                let transform = &mut model_bundles[placement.name_id as usize].2;
+                let transform = &mut model_bundles[placement.name_id as usize].transform;
                 transform.translation = Vec3::new(
                     placement.position[0],
                     placement.position[1],
@@ -134,7 +134,7 @@ pub fn create_meshes_from_world_map_path(
         )?;
         if let Some(modf) = &world_map.modf {
             for placement in &modf.models {
-                let transform = &mut world_model_bundles[placement.name_id as usize].2;
+                let transform = &mut world_model_bundles[placement.name_id as usize].transform;
                 transform.translation = Vec3::new(
                     placement.position[0],
                     placement.position[1],

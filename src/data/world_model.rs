@@ -13,7 +13,7 @@ use bevy::{
 use wow_mpq as mpq;
 use wow_wmo as wmo;
 
-use crate::data::{archive, normalize_vec3, texture};
+use crate::data::{ModelBundle, archive, normalize_vec3, texture};
 
 #[derive(Clone)]
 pub struct WmoInfo {
@@ -119,7 +119,7 @@ pub fn create_meshes_from_world_model_path(
     images: &mut Assets<Image>,
     standard_materials: &mut Assets<StandardMaterial>,
     meshes: &mut Assets<Mesh>,
-) -> Result<Vec<(Handle<Mesh>, Handle<StandardMaterial>, Transform)>> {
+) -> Result<Vec<ModelBundle>> {
     let mut archive = file_archive_map.get_archive(file_path)?;
     let file = archive.read_file(file_path)?;
     let mut reader = io::Cursor::new(&file);
@@ -211,7 +211,7 @@ fn create_mesh_from_group_path(
     default_material_handle: Handle<StandardMaterial>,
     material_handles: &[Handle<StandardMaterial>],
     meshes: &mut Assets<Mesh>,
-) -> Result<Vec<(Handle<Mesh>, Handle<StandardMaterial>, Transform)>> {
+) -> Result<Vec<ModelBundle>> {
     let wmo_group = read_group(file_path, archive, group_index)?;
     Ok(create_mesh_from_wmo_group(
         &wmo_group,
@@ -246,7 +246,7 @@ fn create_mesh_from_wmo_group(
     default_material_handle: Handle<StandardMaterial>,
     material_handles: &[Handle<StandardMaterial>],
     meshes: &mut Assets<Mesh>,
-) -> Vec<(Handle<Mesh>, Handle<StandardMaterial>, Transform)> {
+) -> Vec<ModelBundle> {
     let positions: Vec<_> = wmo.vertices.iter().map(|v| [v.x, v.y, v.z]).collect();
     let normals: Vec<_> = wmo
         .normals
@@ -309,7 +309,11 @@ fn create_mesh_from_wmo_group(
             default_material_handle.clone()
         };
 
-        ret.push((mesh_handle, material_handle, Transform::default()));
+        ret.push(ModelBundle {
+            mesh: Mesh3d(mesh_handle),
+            material: MeshMaterial3d(material_handle),
+            transform: Transform::default(),
+        });
     }
 
     ret
