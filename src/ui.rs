@@ -19,10 +19,11 @@ impl Plugin for UiPlugin {
         app.add_event::<FileSelected>()
             .insert_resource(ArchivesInfo::default())
             .add_systems(EguiPrimaryContextPass, data_info)
-            .add_systems(
-                Startup,
-                select_main_menu_model.run_if(resource_exists::<Settings>),
-            );
+            //.add_systems(
+            //    Startup,
+            //    select_main_menu_model.run_if(resource_exists::<Settings>),
+            //)
+            ;
     }
 }
 

@@ -2,22 +2,41 @@
 // Author: Nocthir <nocthir@proton.me>
 // SPDX-License-Identifier: MIT or Apache-2.0
 
-use std::io;
+use std::{
+    io,
+    path::{Path, PathBuf},
+};
 
 use bevy::{
     asset::RenderAssetUsages,
     prelude::*,
     render::mesh::{Indices, PrimitiveTopology},
+    tasks,
 };
 use wow_m2 as m2;
 use wow_mpq as mpq;
 
-use crate::data::{ModelBundle, archive, normalize_vec3, texture};
+use crate::data::{
+    ModelBundle, add_bundle,
+    archive::{self, FileInfo, FileInfoMap},
+    normalize_vec3, texture,
+};
 
 #[derive(Clone)]
 pub struct ModelInfo {
     pub model: m2::M2Model,
     pub data: Vec<u8>,
+}
+
+impl ModelInfo {
+    pub fn get_texture_paths(&self) -> Vec<String> {
+        self.model
+            .textures
+            .iter()
+            .filter(|t| t.texture_type == m2::chunks::M2TextureType::Hardcoded)
+            .map(|t| t.filename.string.to_string_lossy())
+            .collect()
+    }
 }
 
 pub fn is_model_extension(filename: &str) -> bool {
@@ -27,14 +46,179 @@ pub fn is_model_extension(filename: &str) -> bool {
         || lower_filename.ends_with(".mdl")
 }
 
-fn read_model(file_path: &str, archive: &mut mpq::Archive) -> Result<m2::M2Model> {
-    let file = archive
-        .read_file(file_path)
+#[derive(Resource, Default)]
+pub struct LoadFileTask {
+    tasks: Vec<tasks::Task<Result<FileInfo>>>,
+    completed: Vec<FileInfo>,
+}
+
+pub fn start_loading_model<P: AsRef<Path>>(
+    tasks: &mut LoadFileTask,
+    file_path: &str,
+    archive_path: P,
+) {
+    info!("Starting to load model: {}", file_path);
+    let task = tasks::IoTaskPool::get().spawn(load_model(
+        file_path.to_string(),
+        archive_path.as_ref().to_path_buf(),
+    ));
+    tasks.tasks.push(task);
+}
+
+async fn load_model(file_path: String, archive_path: PathBuf) -> Result<FileInfo> {
+    let mut archive = mpq::Archive::open(&archive_path)
+        .map_err(|e| format!("Failed to open archive {}: {}", archive_path.display(), e))?;
+    let data = archive
+        .read_file(&file_path)
         .map_err(|e| format!("Failed to read model file {}: {}", file_path, e))?;
-    let mut reader = io::Cursor::new(&file);
+    let mut reader = io::Cursor::new(&data);
     let model = m2::M2Model::parse(&mut reader)
         .map_err(|e| format!("Failed to parse model file {}: {}", file_path, e))?;
-    Ok(model)
+    let model_info = ModelInfo { model, data };
+    Ok(FileInfo::new_model(file_path, archive.path(), model_info))
+}
+
+// TODO: This function is getting quite large. Consider breaking it down.
+pub fn check_file_loading(
+    mut load_task: ResMut<LoadFileTask>,
+    mut file_info_map: ResMut<FileInfoMap>,
+    mut images: ResMut<Assets<Image>>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut commands: Commands,
+) -> Result<()> {
+    let mut tasks = Vec::new();
+    tasks.append(&mut load_task.tasks);
+
+    let mut new_tasks = Vec::new();
+
+    for mut current_task in tasks {
+        let poll_result = tasks::block_on(tasks::poll_once(&mut current_task));
+        if let Some(result) = poll_result {
+            match result {
+                Err(err) => {
+                    error!("Error loading file: {err}");
+                }
+                Ok(file) => {
+                    let file_path = file.path.clone();
+                    info!("Loaded file: {}", file_path);
+
+                    match &file.data_info {
+                        Some(archive::DataInfo::Model(model_info)) => {
+                            // At this point we have the model loaded, but textures may not be loaded yet.
+                            // We need to check the file info map for texture files and start loading them if necessary.
+                            for texture_path in model_info.get_texture_paths() {
+                                let texture_file_info =
+                                    file_info_map.get_file_info(&texture_path)?;
+                                if texture_file_info.is_unloaded() {
+                                    // Start loading the texture
+                                    let archive_path = file.archive_path.clone();
+                                    let new_task =
+                                        texture::loading_texture_task(&texture_path, &archive_path);
+                                    new_tasks.push(new_task);
+                                }
+                            }
+
+                            if !new_tasks.is_empty() {
+                                // Put the current task back to be processed later
+                                load_task.completed.push(file);
+                                continue;
+                            }
+
+                            // Update the file archive map
+                            let bundles = create_meshes_from_model_info(
+                                model_info,
+                                &file_info_map,
+                                &mut images,
+                                &mut materials,
+                                &mut meshes,
+                            )?;
+                            file_info_map.map.insert(file_path.clone(), file);
+                            if bundles.is_empty() {
+                                error!("No meshes loaded for file: {}", file_path);
+                                return Ok(());
+                            }
+
+                            for bundle in bundles {
+                                add_bundle(&mut commands, bundle);
+                            }
+
+                            info!("Added meshes from {}", file_path);
+                        }
+                        Some(archive::DataInfo::Texture(_)) => {
+                            // Texture loaded, update the file info map
+                            file_info_map.map.insert(file_path.clone(), file);
+                        }
+                        _ => {
+                            error!("Loaded file type is not valid: {}", file.path);
+                            continue;
+                        }
+                    }
+                }
+            }
+        } else {
+            // Not ready yet, put it back
+            load_task.tasks.push(current_task);
+        }
+    }
+
+    load_task.tasks.extend(new_tasks);
+
+    let mut completed_tasks = Vec::new();
+    completed_tasks.append(&mut load_task.completed);
+
+    for file in completed_tasks {
+        let mut all_textures_loaded = true;
+
+        match &file.data_info {
+            Some(archive::DataInfo::Model(model_info)) => {
+                // At this point we have the model loaded, but textures may not be loaded yet.
+                // We need to check the file info map to see whether the loading has completed.
+                for texture_path in model_info.get_texture_paths() {
+                    let texture_file_info = file_info_map.get_file_info(&texture_path)?;
+                    if texture_file_info.is_unloaded() {
+                        // Put this task back to be processed later
+                        all_textures_loaded = false;
+                    }
+                }
+
+                if all_textures_loaded {
+                    // Update the file archive map
+                    let bundles = create_meshes_from_model_info(
+                        model_info,
+                        &file_info_map,
+                        &mut images,
+                        &mut materials,
+                        &mut meshes,
+                    )?;
+
+                    if bundles.is_empty() {
+                        error!("No meshes loaded for file: {}", file.path);
+                        return Ok(());
+                    }
+                    for bundle in bundles {
+                        add_bundle(&mut commands, bundle);
+                    }
+
+                    info!("Added meshes from {}", file.path);
+                }
+            }
+            _ => {
+                error!("Loaded file is not a model: {}", file.path);
+                continue;
+            }
+        }
+
+        if all_textures_loaded {
+            // All textures are loaded, update the file info map
+            file_info_map.map.insert(file.path.clone(), file);
+        } else {
+            // Put this task back to be processed later
+            load_task.completed.push(file);
+        }
+    }
+
+    Ok(())
 }
 
 pub fn create_meshes_from_model_path(

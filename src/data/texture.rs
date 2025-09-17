@@ -2,20 +2,52 @@
 // Author: Nocthir <nocthir@proton.me>
 // SPDX-License-Identifier: MIT or Apache-2.0
 
+use std::path::Path;
+
 use bevy::{
     asset::RenderAssetUsages,
     prelude::*,
     render::render_resource::{Extent3d, TextureDimension, TextureFormat},
+    tasks::{self, Task},
 };
 use wow_blp as blp;
 use wow_m2 as m2;
 use wow_wmo as wmo;
 
-use crate::data::archive;
+use crate::data::archive::{self, DataInfo, FileInfo};
 
 #[derive(Clone)]
 pub struct TextureInfo {
     image: blp::BlpImage,
+}
+
+pub fn load_texture_info(texture_path: &str, archive_path: &str) -> Result<DataInfo> {
+    let mut archive = archive::open_archive(archive_path)?;
+    let file = archive.read_file(texture_path)?;
+    let blp = blp::parser::load_blp_from_buf(&file)?;
+    Ok(DataInfo::Texture(TextureInfo { image: blp }))
+}
+
+pub fn loading_texture_task<P: AsRef<Path>>(
+    file_path: &str,
+    archive_path: P,
+) -> Task<Result<FileInfo>> {
+    info!("Starting to load texture: {}", file_path);
+    tasks::IoTaskPool::get().spawn(load_texture(
+        file_path.to_string(),
+        archive_path.as_ref().to_path_buf(),
+    ))
+}
+
+pub async fn load_texture(path: String, archive_path: std::path::PathBuf) -> Result<FileInfo> {
+    let mut archive = archive::open_archive(archive_path)?;
+    let file = archive.read_file(&path)?;
+    let blp = blp::parser::load_blp_from_buf(&file)?;
+    Ok(FileInfo::new_texture(
+        path,
+        archive.path(),
+        TextureInfo { image: blp },
+    ))
 }
 
 pub fn create_textures_from_wmo(
@@ -59,18 +91,6 @@ pub fn create_image_from_path(
     file_info_map: &archive::FileInfoMap,
     images: &mut Assets<Image>,
 ) -> Result<Handle<Image>> {
-    // Case insensitive texture filename.
-    //let texture_path = texture.path().to_lowercase();
-    //
-    //let archive_path = file_info_map
-    //    .map
-    //    .get(&texture_path)
-    //    .ok_or_else(|| format!("Texture {} not found in any loaded archive", texture_path))?;
-    //
-    //let mut archive = mpq::Archive::open(archive_path)
-    //    .map_err(|e| format!("Failed to open archive {}: {}", archive_path, e))?;
-    //let file = archive.read_file(&texture_path)?;
-    //let blp = blp::parser::load_blp_from_buf(&file)?;
     let texture = file_info_map.get_texture_info(texture_path)?;
     let dyn_image = blp::convert::blp_to_image(&texture.image, 0)?;
     let extent = Extent3d {

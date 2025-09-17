@@ -23,12 +23,13 @@ impl Plugin for DataPlugin {
     fn build(&self, app: &mut App) {
         app.add_event::<ArchiveLoaded>()
             .insert_resource(archive::FileInfoMap::default())
+            .insert_resource(model::LoadFileTask::default())
             .add_systems(Startup, archive::start_loading)
             .add_systems(
                 Update,
                 archive::check_archive_loading.run_if(resource_exists::<LoadArchiveTasks>),
             )
-            .add_systems(Update, load_selected_model);
+            .add_systems(Update, (load_selected_model, model::check_file_loading));
     }
 }
 
@@ -50,46 +51,17 @@ pub struct ModelBundle {
 fn load_selected_model(
     mut event_reader: EventReader<FileSelected>,
     query: Query<Entity, With<CurrentModel>>,
+    mut load_model_tasks: ResMut<model::LoadFileTask>,
     mut commands: Commands,
-    file_info_map: Res<archive::FileInfoMap>,
-    mut images: ResMut<Assets<Image>>,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut standard_materials: ResMut<Assets<StandardMaterial>>,
 ) -> Result {
     // Ignore all but the last event
     if let Some(event) = event_reader.read().last() {
-        match create_mesh_from_selected_file(
-            event,
-            &file_info_map,
-            &mut images,
-            &mut standard_materials,
-            &mut meshes,
-        ) {
-            Ok(bundles) => {
-                if bundles.is_empty() {
-                    error!("No meshes loaded for file: {}", event.file_path);
-                    return Ok(());
-                }
+        // Remove the previous model
+        query.into_iter().for_each(|entity| {
+            commands.entity(entity).despawn();
+        });
 
-                // Remove the previous model
-                query.into_iter().for_each(|entity| {
-                    commands.entity(entity).despawn();
-                });
-
-                for bundle in bundles {
-                    add_bundle(&mut commands, bundle);
-                }
-
-                info!("Loaded model from {}", event.file_path);
-            }
-            Err(err) => {
-                error!(
-                    "Error loading model {} from archive {}: {err}",
-                    event.file_path,
-                    event.archive_path.display()
-                );
-            }
-        }
+        model::start_loading_model(&mut load_model_tasks, &event.file_path, &event.archive_path);
     }
     Ok(())
 }
@@ -153,7 +125,7 @@ fn normalize_vec3(v: [f32; 3]) -> [f32; 3] {
     }
 }
 
-fn add_bundle(commands: &mut Commands, mut bundle: ModelBundle) {
+pub fn add_bundle(commands: &mut Commands, mut bundle: ModelBundle) {
     bundle.transform.rotate_local_x(-f32::consts::FRAC_PI_2);
     bundle.transform.rotate_local_z(-f32::consts::FRAC_PI_2);
     commands.spawn((CurrentModel, bundle));
