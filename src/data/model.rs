@@ -16,36 +16,8 @@ use crate::data::{ModelBundle, archive, normalize_vec3, texture};
 
 #[derive(Clone)]
 pub struct ModelInfo {
-    pub path: String,
-    pub vertex_count: usize,
-    pub textures: Vec<String>,
-    pub materials: usize,
-}
-
-pub fn read_models(archive: &mut mpq::Archive) -> Result<Vec<ModelInfo>> {
-    let mut infos = Vec::new();
-    for entry in archive.list()?.iter() {
-        if is_model_extension(&entry.name)
-            && let Ok(model) = read_model(&entry.name, archive)
-        {
-            let vertex_count = model.vertices.len();
-            let textures = model
-                .textures
-                .iter()
-                .map(|t| t.filename.string.to_string_lossy())
-                .collect();
-            let materials = model.materials.len();
-            let info = ModelInfo {
-                path: entry.name.clone(),
-                vertex_count,
-                textures,
-                materials,
-            };
-            infos.push(info);
-        }
-    }
-
-    Ok(infos)
+    pub model: m2::M2Model,
+    pub data: Vec<u8>,
 }
 
 pub fn is_model_extension(filename: &str) -> bool {
@@ -66,32 +38,36 @@ fn read_model(file_path: &str, archive: &mut mpq::Archive) -> Result<m2::M2Model
 }
 
 pub fn create_meshes_from_model_path(
-    file_path: &str,
-    file_archive_map: &archive::FileArchiveMap,
+    model_path: &str,
+    file_info_map: &archive::FileInfoMap,
     images: &mut Assets<Image>,
     materials: &mut Assets<StandardMaterial>,
     meshes: &mut Assets<Mesh>,
 ) -> Result<Vec<ModelBundle>> {
-    let mut archive = file_archive_map.get_archive(file_path)?;
-    let data = archive.read_file(file_path)?;
-    let mut reader = io::Cursor::new(&data);
+    let model_info = file_info_map.get_model_info(model_path)?;
+    create_meshes_from_model_info(model_info, file_info_map, images, materials, meshes)
+}
 
+pub fn create_meshes_from_model_info(
+    model_info: &ModelInfo,
+    file_info_map: &archive::FileInfoMap,
+    images: &mut Assets<Image>,
+    materials: &mut Assets<StandardMaterial>,
+    meshes: &mut Assets<Mesh>,
+) -> Result<Vec<ModelBundle>> {
     let mut ret = Vec::default();
 
-    if let Ok(model) = m2::M2Model::parse(&mut reader)
-        && !model.vertices.is_empty()
-    {
-        let image_handles = texture::create_textures_from_model(&model, file_archive_map, images)?;
-        if let Ok(res) = create_mesh(&model, &data, &image_handles, materials, meshes) {
-            ret.extend(res);
-        } else {
-            return Err(format!(
-                "Failed to create mesh for model {} from archive {}",
-                file_path,
-                archive.path().display(),
-            )
-            .into());
-        }
+    if !model_info.model.vertices.is_empty() {
+        let image_handles =
+            texture::create_textures_from_model(&model_info.model, file_info_map, images)?;
+        let res = create_mesh(
+            &model_info.model,
+            &model_info.data,
+            &image_handles,
+            materials,
+            meshes,
+        )?;
+        ret.extend(res);
     }
 
     Ok(ret)
@@ -232,19 +208,22 @@ fn blend_mode_to_alpha_mode(blend_mode: m2::chunks::material::M2BlendMode) -> Al
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{data::texture, *};
+    use crate::{
+        data::{archive::ArchiveInfo, texture},
+        *,
+    };
 
     #[test]
     fn main_menu() -> Result {
         let settings = settings::load_settings()?;
-        let file_archive_map = texture::test::default_file_archive_map(&settings)?;
+        let file_info_map = texture::test::default_file_info_map(&settings)?;
         let selected_model = ui::FileSelected::from(&settings.default_model);
         let mut images = Assets::<Image>::default();
         let mut standard_materials = Assets::<StandardMaterial>::default();
         let mut meshes = Assets::<Mesh>::default();
         data::create_mesh_from_selected_file(
             &selected_model,
-            &file_archive_map,
+            &file_info_map,
             &mut images,
             &mut standard_materials,
             &mut meshes,
@@ -255,14 +234,14 @@ mod test {
     #[test]
     fn city() -> Result {
         let settings = settings::load_settings()?;
-        let file_archive_map = texture::test::default_file_archive_map(&settings)?;
+        let file_info_map = texture::test::default_file_info_map(&settings)?;
         let selected_model = ui::FileSelected::from(&settings.city_model);
         let mut images = Assets::<Image>::default();
         let mut standard_materials = Assets::<StandardMaterial>::default();
         let mut meshes = Assets::<Mesh>::default();
         data::create_mesh_from_selected_file(
             &selected_model,
-            &file_archive_map,
+            &file_info_map,
             &mut images,
             &mut standard_materials,
             &mut meshes,
@@ -274,15 +253,16 @@ mod test {
     fn dwarf() -> Result {
         env_logger::init();
         let settings = settings::load_settings()?;
-        let mut file_archive_map = texture::test::default_file_archive_map(&settings)?;
-        file_archive_map.fill_models(&settings.model_archive_path)?;
+        let mut file_info_map = texture::test::default_file_info_map(&settings)?;
+        let mut archive_info = ArchiveInfo::new(&settings.model_archive_path)?;
+        file_info_map.fill(&mut archive_info)?;
         let selected_model = ui::FileSelected::from(&settings.test_model);
         let mut images = Assets::<Image>::default();
         let mut standard_materials = Assets::<StandardMaterial>::default();
         let mut meshes = Assets::<Mesh>::default();
         data::create_mesh_from_selected_file(
             &selected_model,
-            &file_archive_map,
+            &file_info_map,
             &mut images,
             &mut standard_materials,
             &mut meshes,

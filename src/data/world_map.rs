@@ -99,22 +99,29 @@ pub fn is_world_map_extension(filename: &str) -> bool {
 
 pub fn create_meshes_from_world_map_path(
     world_map_path: &str,
-    file_archive_map: &archive::FileArchiveMap,
+    file_info_map: &archive::FileInfoMap,
+    images: &mut Assets<Image>,
+    materials: &mut Assets<StandardMaterial>,
+    meshes: &mut Assets<Mesh>,
+) -> Result<Vec<ModelBundle>> {
+    let world_map_info = file_info_map.get_world_map_info(world_map_path)?;
+    create_meshes_from_world_map_info(world_map_info, file_info_map, images, materials, meshes)
+}
+
+pub fn create_meshes_from_world_map_info(
+    world_map_info: &WorldMapInfo,
+    file_info_map: &archive::FileInfoMap,
     images: &mut Assets<Image>,
     materials: &mut Assets<StandardMaterial>,
     meshes: &mut Assets<Mesh>,
 ) -> Result<Vec<ModelBundle>> {
     let mut bundles = Vec::new();
 
-    let mut archive = file_archive_map.get_archive(world_map_path)?;
-    let world_map = read_world_map(world_map_path, &mut archive)?;
-    let world_map_info = WorldMapInfo::new(world_map_path, world_map);
-
     let mut model_bundles = Vec::new();
     for model_path in &world_map_info.get_model_paths() {
         let bundles = model::create_meshes_from_model_path(
             model_path,
-            file_archive_map,
+            file_info_map,
             images,
             materials,
             meshes,
@@ -145,7 +152,7 @@ pub fn create_meshes_from_world_map_path(
     for world_model_path in &world_map_info.get_world_model_paths() {
         let bundles = world_model::create_meshes_from_world_model_path(
             world_model_path,
-            file_archive_map,
+            file_info_map,
             images,
             materials,
             meshes,
@@ -182,15 +189,18 @@ mod test {
     #[test]
     fn read_adt() -> Result<()> {
         let settings = settings::load_settings()?;
-        let mut file_archive_map = texture::test::default_file_archive_map(&settings)?;
-        file_archive_map.fill_models(&settings.model_archive_path)?;
-        file_archive_map.fill_world_map(&settings.world_map_path.archive_path)?;
+        let mut file_info_map = texture::test::default_file_info_map(&settings)?;
+        let mut model_archive_info = archive::ArchiveInfo::new(&settings.model_archive_path)?;
+        file_info_map.fill(&mut model_archive_info)?;
+        let mut world_map_archive_info =
+            archive::ArchiveInfo::new(&settings.world_map_path.archive_path)?;
+        file_info_map.fill(&mut world_map_archive_info)?;
         let mut images = Assets::<Image>::default();
         let mut materials = Assets::<StandardMaterial>::default();
         let mut meshes = Assets::<Mesh>::default();
         create_meshes_from_world_map_path(
             &settings.world_map_path.file_path,
-            &file_archive_map,
+            &file_info_map,
             &mut images,
             &mut materials,
             &mut meshes,

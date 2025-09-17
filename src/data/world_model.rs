@@ -2,7 +2,10 @@
 // Author: Nocthir <nocthir@proton.me>
 // SPDX-License-Identifier: MIT or Apache-2.0
 
-use std::{io, path::Path};
+use std::{
+    io,
+    path::{Path, PathBuf},
+};
 
 use bevy::{
     asset::RenderAssetUsages,
@@ -15,47 +18,11 @@ use wow_wmo as wmo;
 
 use crate::data::{ModelBundle, archive, normalize_vec3, texture};
 
-#[derive(Clone)]
-pub struct WmoInfo {
+pub struct WorldModelInfo {
     pub path: String,
-    pub groups: Vec<WmoGroupInfo>,
-    pub material_count: usize,
-    pub texture_count: usize,
-}
-
-#[derive(Clone)]
-pub struct WmoGroupInfo {
-    pub name: String,
-    pub vertex_count: usize,
-    pub index_count: usize,
-}
-
-pub fn read_world_models(archive: &mut mpq::Archive) -> Result<Vec<WmoInfo>> {
-    let mut infos = Vec::new();
-    for entry in archive.list()?.iter() {
-        if is_wmo_root_path(&entry.name)
-            && let Ok(model) = read_wmo(&entry.name, archive)
-        {
-            let groups = match read_groups(&entry.name, archive, &model) {
-                Ok(groups) => groups,
-                Err(err) => {
-                    error!("Failed to read WMO groups for {}: {}", entry.name, err);
-                    Vec::new()
-                }
-            };
-            let material_count = model.materials.len();
-            let texture_count = model.textures.len();
-            let info = WmoInfo {
-                path: entry.name.clone(),
-                groups,
-                material_count,
-                texture_count,
-            };
-            infos.push(info);
-        }
-    }
-
-    Ok(infos)
+    pub archive_path: PathBuf,
+    pub world_model: wmo::WmoRoot,
+    pub groups: Vec<wmo::WmoGroup>,
 }
 
 fn read_wmo(path: &str, archive: &mut mpq::Archive) -> Result<wmo::WmoRoot> {
@@ -96,67 +63,64 @@ fn read_groups(
     file_path: &str,
     archive: &mut mpq::Archive,
     wmo: &wmo::WmoRoot,
-) -> Result<Vec<WmoGroupInfo>> {
-    let mut infos = Vec::new();
-    for (group_index, wmo_group_info) in wmo.groups.iter().enumerate() {
+) -> Result<Vec<wmo::WmoGroup>> {
+    let mut groups = Vec::new();
+    for (group_index, _) in wmo.groups.iter().enumerate() {
         let wmo_group = read_group(file_path, archive, group_index)?;
-        let name = wmo_group_info.name.clone();
-        let vertex_count = wmo_group.vertices.len();
-        let index_count = wmo_group.indices.len();
-        let info = WmoGroupInfo {
-            name,
-            vertex_count,
-            index_count,
-        };
-        infos.push(info);
+        groups.push(wmo_group);
     }
-    Ok(infos)
+    Ok(groups)
 }
 
 pub fn create_meshes_from_world_model_path(
-    file_path: &str,
-    file_archive_map: &archive::FileArchiveMap,
+    world_model_path: &str,
+    file_info_map: &archive::FileInfoMap,
     images: &mut Assets<Image>,
     standard_materials: &mut Assets<StandardMaterial>,
     meshes: &mut Assets<Mesh>,
 ) -> Result<Vec<ModelBundle>> {
-    let mut archive = file_archive_map.get_archive(file_path)?;
-    let file = archive.read_file(file_path)?;
-    let mut reader = io::Cursor::new(&file);
+    let world_model_info = file_info_map.get_world_model_info(world_model_path)?;
+    create_meshes_from_world_model_info(
+        &world_model_info,
+        file_info_map,
+        images,
+        standard_materials,
+        meshes,
+    )
+}
 
+pub fn create_meshes_from_world_model_info(
+    world_model_info: &WorldModelInfo,
+    file_info_map: &archive::FileInfoMap,
+    images: &mut Assets<Image>,
+    standard_materials: &mut Assets<StandardMaterial>,
+    meshes: &mut Assets<Mesh>,
+) -> Result<Vec<ModelBundle>> {
     let mut ret = Vec::default();
 
-    if let Ok(wmo) = wmo::parse_wmo(&mut reader)
-        && !wmo.groups.is_empty()
-    {
-        let textures = texture::create_textures_from_wmo(&wmo, file_archive_map, images)?;
-        let materials = create_materials_from_wmo(&wmo, &textures);
-        let material_handles = materials
-            .into_iter()
-            .map(|mat| standard_materials.add(mat))
-            .collect::<Vec<_>>();
+    let wmo = &world_model_info.world_model;
+    let textures = texture::create_textures_from_wmo(wmo, file_info_map, images)?;
+    let materials = create_materials_from_wmo(wmo, &textures);
+    let material_handles = materials
+        .into_iter()
+        .map(|mat| standard_materials.add(mat))
+        .collect::<Vec<_>>();
 
-        let default_material_handle = standard_materials.add(StandardMaterial {
-            base_color: Color::WHITE,
-            perceptual_roughness: 1.0,
-            unlit: true,
-            ..Default::default()
-        });
+    let default_material_handle = standard_materials.add(StandardMaterial {
+        base_color: Color::WHITE,
+        perceptual_roughness: 1.0,
+        unlit: true,
+        ..Default::default()
+    });
 
-        for group_index in 0..wmo.groups.len() {
-            if let Ok(bundle) = create_mesh_from_group_path(
-                file_path,
-                &mut archive,
-                group_index,
-                default_material_handle.clone(),
-                &material_handles,
-                meshes,
-            ) {
-                ret.extend(bundle);
-            } else {
-                error!("Failed to create mesh for group {group_index}");
-            }
-        }
+    for group_index in 0..world_model_info.groups.len() {
+        let bundles = create_mesh_from_wmo_group(
+            &world_model_info.groups[group_index],
+            default_material_handle.clone(),
+            &material_handles,
+            meshes,
+        );
+        ret.extend(bundles);
     }
 
     Ok(ret)
@@ -329,13 +293,13 @@ mod test {
         env_logger::init();
         let settings = settings::load_settings()?;
         let selected_model = ui::FileSelected::from(&settings.test_world_model);
-        let file_archive_map = texture::test::default_file_archive_map(&settings)?;
+        let file_info_map = texture::test::default_file_info_map(&settings)?;
         let mut images = Assets::<Image>::default();
         let mut custom_materials = Assets::<StandardMaterial>::default();
         let mut meshes = Assets::<Mesh>::default();
         data::create_mesh_from_selected_file(
             &selected_model,
-            &file_archive_map,
+            &file_info_map,
             &mut images,
             &mut custom_materials,
             &mut meshes,

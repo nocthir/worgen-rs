@@ -13,7 +13,7 @@ use std::f32;
 use bevy::prelude::*;
 
 use crate::{
-    data::archive::{ArchiveInfo, ArchiveLoaded, LoadArchiveTasks},
+    data::archive::{ArchiveInfo, ArchiveLoaded, DataInfo, FileInfo, LoadArchiveTasks},
     ui::FileSelected,
 };
 
@@ -22,7 +22,7 @@ pub struct DataPlugin;
 impl Plugin for DataPlugin {
     fn build(&self, app: &mut App) {
         app.add_event::<ArchiveLoaded>()
-            .insert_resource(archive::FileArchiveMap::default())
+            .insert_resource(archive::FileInfoMap::default())
             .add_systems(Startup, archive::start_loading)
             .add_systems(
                 Update,
@@ -36,7 +36,7 @@ impl Plugin for DataPlugin {
 pub struct CurrentModel;
 
 #[derive(Default, Resource)]
-pub struct DataInfo {
+pub struct ArchivesInfo {
     pub archives: Vec<ArchiveInfo>,
 }
 
@@ -51,7 +51,7 @@ fn load_selected_model(
     mut event_reader: EventReader<FileSelected>,
     query: Query<Entity, With<CurrentModel>>,
     mut commands: Commands,
-    file_archive_map: Res<archive::FileArchiveMap>,
+    file_info_map: Res<archive::FileInfoMap>,
     mut images: ResMut<Assets<Image>>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut standard_materials: ResMut<Assets<StandardMaterial>>,
@@ -60,7 +60,7 @@ fn load_selected_model(
     if let Some(event) = event_reader.read().last() {
         match create_mesh_from_selected_file(
             event,
-            &file_archive_map,
+            &file_info_map,
             &mut images,
             &mut standard_materials,
             &mut meshes,
@@ -85,7 +85,8 @@ fn load_selected_model(
             Err(err) => {
                 error!(
                     "Error loading model {} from archive {}: {err}",
-                    event.file_path, event.archive_path
+                    event.file_path,
+                    event.archive_path.display()
                 );
             }
         }
@@ -95,47 +96,51 @@ fn load_selected_model(
 
 fn create_mesh_from_selected_file(
     file_info: &FileSelected,
-    file_archive_map: &archive::FileArchiveMap,
+    file_info_map: &archive::FileInfoMap,
     images: &mut Assets<Image>,
     materials: &mut Assets<StandardMaterial>,
     meshes: &mut Assets<Mesh>,
 ) -> Result<Vec<ModelBundle>> {
-    create_mesh_from_file_path(
-        &file_info.file_path,
-        file_archive_map,
-        images,
-        materials,
-        meshes,
-    )
+    let file_info = file_info_map.get_file_info(&file_info.file_path)?;
+    create_mesh_from_file_info(file_info, file_info_map, images, materials, meshes)
 }
 
-fn create_mesh_from_file_path(
-    file_path: &str,
-    file_archive_map: &archive::FileArchiveMap,
+fn create_mesh_from_file_info(
+    file_info: &FileInfo,
+    file_info_map: &archive::FileInfoMap,
     images: &mut Assets<Image>,
     materials: &mut Assets<StandardMaterial>,
     meshes: &mut Assets<Mesh>,
 ) -> Result<Vec<ModelBundle>> {
-    if model::is_model_extension(file_path) {
-        model::create_meshes_from_model_path(file_path, file_archive_map, images, materials, meshes)
-    } else if world_model::is_world_model_extension(file_path) {
-        world_model::create_meshes_from_world_model_path(
-            file_path,
-            file_archive_map,
+    match &file_info.data_info {
+        Some(DataInfo::Model(model_info)) => model::create_meshes_from_model_info(
+            model_info,
+            file_info_map,
             images,
             materials,
             meshes,
-        )
-    } else if world_map::is_world_map_extension(file_path) {
-        world_map::create_meshes_from_world_map_path(
-            file_path,
-            file_archive_map,
+        ),
+        Some(DataInfo::WorldModel(world_model_info)) => {
+            world_model::create_meshes_from_world_model_info(
+                world_model_info,
+                file_info_map,
+                images,
+                materials,
+                meshes,
+            )
+        }
+        Some(DataInfo::WorldMap(world_map_info)) => world_map::create_meshes_from_world_map_info(
+            world_map_info,
+            file_info_map,
             images,
             materials,
             meshes,
+        ),
+        _ => Err(format!(
+            "Unsupported or missing data info for file: {}",
+            file_info.path
         )
-    } else {
-        Err(format!("Unsupported model format: {}", file_path).into())
+        .into()),
     }
 }
 

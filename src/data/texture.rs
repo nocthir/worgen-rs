@@ -9,40 +9,25 @@ use bevy::{
 };
 use wow_blp as blp;
 use wow_m2 as m2;
-use wow_mpq as mpq;
 use wow_wmo as wmo;
 
 use crate::data::archive;
 
 #[derive(Clone)]
 pub struct TextureInfo {
-    pub path: String,
-}
-
-pub fn read_textures(archive: &mut mpq::Archive) -> Result<Vec<TextureInfo>> {
-    let mut infos = Vec::new();
-    for entry in archive.list()?.iter() {
-        let lowercase_name = entry.name.to_lowercase();
-        if lowercase_name.ends_with(".blp") {
-            let texture_info = TextureInfo {
-                path: entry.name.clone(),
-            };
-            infos.push(texture_info);
-        }
-    }
-    Ok(infos)
+    image: blp::BlpImage,
 }
 
 pub fn create_textures_from_wmo(
     wmo: &wmo::WmoRoot,
-    file_archive_map: &archive::FileArchiveMap,
+    file_info_map: &archive::FileInfoMap,
     images: &mut Assets<Image>,
 ) -> Result<Vec<Handle<Image>>> {
     let mut image_handles = Vec::new();
     for texture_path in &wmo.textures {
         // At this point we do not know which archive contains this texture.
         // But we have built a map of blp paths to their respective archives.
-        let image_handle = create_image_from_path(texture_path, file_archive_map, images)?;
+        let image_handle = create_image_from_path(texture_path, file_info_map, images)?;
         image_handles.push(image_handle);
     }
     Ok(image_handles)
@@ -50,7 +35,7 @@ pub fn create_textures_from_wmo(
 
 pub fn create_textures_from_model(
     model: &m2::M2Model,
-    file_archive_map: &archive::FileArchiveMap,
+    file_info_map: &archive::FileInfoMap,
     images: &mut Assets<Image>,
 ) -> Result<Vec<Handle<Image>>> {
     let mut handles = Vec::new();
@@ -59,7 +44,7 @@ pub fn create_textures_from_model(
         if texture.texture_type == m2::chunks::M2TextureType::Hardcoded {
             // Case insensitive texture filename.
             let texture_path = texture.filename.string.to_string_lossy();
-            let image_handle = create_image_from_path(&texture_path, file_archive_map, images)?;
+            let image_handle = create_image_from_path(&texture_path, file_info_map, images)?;
             handles.push(image_handle);
         } else {
             // Ignore non-hardcoded textures for now.
@@ -71,22 +56,23 @@ pub fn create_textures_from_model(
 
 pub fn create_image_from_path(
     texture_path: &str,
-    file_archive_map: &archive::FileArchiveMap,
+    file_info_map: &archive::FileInfoMap,
     images: &mut Assets<Image>,
 ) -> Result<Handle<Image>> {
     // Case insensitive texture filename.
-    let texture_path = texture_path.to_lowercase();
-
-    let archive_path = file_archive_map
-        .map
-        .get(&texture_path)
-        .ok_or_else(|| format!("Texture {} not found in any loaded archive", texture_path))?;
-
-    let mut archive = mpq::Archive::open(archive_path)
-        .map_err(|e| format!("Failed to open archive {}: {}", archive_path, e))?;
-    let file = archive.read_file(&texture_path)?;
-    let blp = blp::parser::load_blp_from_buf(&file)?;
-    let dyn_image = blp::convert::blp_to_image(&blp, 0)?;
+    //let texture_path = texture.path().to_lowercase();
+    //
+    //let archive_path = file_info_map
+    //    .map
+    //    .get(&texture_path)
+    //    .ok_or_else(|| format!("Texture {} not found in any loaded archive", texture_path))?;
+    //
+    //let mut archive = mpq::Archive::open(archive_path)
+    //    .map_err(|e| format!("Failed to open archive {}: {}", archive_path, e))?;
+    //let file = archive.read_file(&texture_path)?;
+    //let blp = blp::parser::load_blp_from_buf(&file)?;
+    let texture = file_info_map.get_texture_info(texture_path)?;
+    let dyn_image = blp::convert::blp_to_image(&texture.image, 0)?;
     let extent = Extent3d {
         width: dyn_image.width(),
         height: dyn_image.height(),
@@ -104,14 +90,14 @@ pub fn create_image_from_path(
 #[cfg(test)]
 pub mod test {
     use super::*;
-    use crate::*;
+    use crate::{data::archive::ArchiveInfo, *};
 
-    pub fn default_file_archive_map(
-        settings: &settings::Settings,
-    ) -> Result<archive::FileArchiveMap> {
-        let mut file_archive_map = archive::FileArchiveMap::default();
-        file_archive_map.fill_textures(&settings.interface_archive_path)?;
-        file_archive_map.fill_textures(&settings.texture_archive_path)?;
-        Ok(file_archive_map)
+    pub fn default_file_info_map(settings: &settings::Settings) -> Result<archive::FileInfoMap> {
+        let mut file_info_map = archive::FileInfoMap::default();
+        let mut archive_info = ArchiveInfo::new(&settings.interface_archive_path)?;
+        file_info_map.fill(&mut archive_info)?;
+        let mut archive_info = ArchiveInfo::new(&settings.texture_archive_path)?;
+        file_info_map.fill(&mut archive_info)?;
+        Ok(file_info_map)
     }
 }
