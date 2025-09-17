@@ -36,3 +36,8 @@ wow-blp = { path = "../warcraft-rs/file-formats/graphics/wow-blp" }
 
 [dev-dependencies]
 env_logger = "*"
+criterion = "*"
+
+[[bench]]
+name = "data"
+harness = false

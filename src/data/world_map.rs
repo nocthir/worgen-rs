@@ -2,7 +2,7 @@
 // Author: Nocthir <nocthir@proton.me>
 // SPDX-License-Identifier: MIT or Apache-2.0
 
-use std::{io, path::Path};
+use std::io;
 
 use bevy::prelude::*;
 use wow_adt as adt;
@@ -10,16 +10,64 @@ use wow_mpq as mpq;
 
 use crate::data::{ModelBundle, archive, model, world_model};
 
-#[derive(Default, Clone)]
+#[derive(Clone)]
 pub struct WorldMapInfo {
     pub path: String,
-    pub models: Vec<String>,
-    pub world_models: Vec<String>,
+    pub world_map: adt::Adt,
 }
 
 impl WorldMapInfo {
+    pub fn new<S: Into<String>>(path: S, mut world_map: adt::Adt) -> Self {
+        Self::fix_model_extensions(&mut world_map);
+        Self {
+            path: path.into(),
+            world_map,
+        }
+    }
+
+    fn fix_model_extensions(world_map: &mut adt::Adt) {
+        if let Some(mmdx) = &mut world_map.mmdx {
+            for filename in &mut mmdx.filenames {
+                if filename.ends_with(".mdx") {
+                    *filename = filename.replace(".mdx", ".m2");
+                }
+            }
+        }
+    }
+
     pub fn has_stuff(&self) -> bool {
-        !self.models.is_empty() || !self.world_models.is_empty()
+        self.world_map
+            .mmdx
+            .as_ref()
+            .is_some_and(|mmdx| !mmdx.filenames.is_empty())
+            || self
+                .world_map
+                .modf
+                .as_ref()
+                .is_some_and(|modf| !modf.models.is_empty())
+    }
+
+    pub fn get_model_paths(&self) -> Vec<&String> {
+        let mut models = Vec::new();
+        if let Some(mmdx) = &self.world_map.mmdx {
+            models.extend(mmdx.filenames.iter().filter(|&f| f.ends_with(".m2")));
+        }
+        models
+    }
+
+    pub fn get_world_model_paths(&self) -> Vec<&String> {
+        let mut world_models = Vec::new();
+        if let Some(modf) = &self.world_map.modf
+            && let Some(mwmo) = &self.world_map.mwmo
+        {
+            let filenames = &mwmo.filenames;
+            for model in &modf.models {
+                if let Some(filename) = filenames.get(model.name_id as usize) {
+                    world_models.push(filename);
+                }
+            }
+        }
+        world_models
     }
 }
 
@@ -31,51 +79,11 @@ pub fn read_world_maps(archive: &mut mpq::Archive) -> Result<Vec<WorldMapInfo>> 
             continue;
         }
         if let Ok(world_map) = read_world_map(&entry.name, archive) {
-            infos.push(get_world_map_info(&world_map, &entry.name));
+            infos.push(WorldMapInfo::new(entry.name.clone(), world_map));
         }
     }
 
     Ok(infos)
-}
-
-fn get_world_map_info(world_map: &adt::Adt, file_name: &str) -> WorldMapInfo {
-    let mut models = Vec::new();
-    if let Some(mmdx) = &world_map.mmdx {
-        for filename in &mmdx.filenames {
-            if filename.ends_with(".m2") {
-                models.push(filename.clone());
-            } else if filename.ends_with(".mdx") {
-                let file_path = Path::new(filename)
-                    .file_stem()
-                    .and_then(|s| s.to_str())
-                    .map(|s| format!("{s}.m2"))
-                    .unwrap();
-                models.push(file_path);
-            } else if filename.ends_with(".mdl") {
-                models.push(filename.clone());
-            }
-        }
-    }
-
-    let mut world_models = Vec::new();
-    if let Some(modf) = &world_map.modf {
-        let filenames = if let Some(mwmo) = &world_map.mwmo {
-            mwmo.filenames.clone()
-        } else {
-            Vec::new()
-        };
-        for model in &modf.models {
-            if let Some(filename) = filenames.get(model.name_id as usize) {
-                world_models.push(filename.clone());
-            }
-        }
-    }
-
-    WorldMapInfo {
-        path: file_name.to_string(),
-        models,
-        world_models,
-    }
 }
 
 pub fn read_world_map(path: &str, archive: &mut mpq::Archive) -> Result<adt::Adt> {
@@ -100,10 +108,10 @@ pub fn create_meshes_from_world_map_path(
 
     let mut archive = file_archive_map.get_archive(world_map_path)?;
     let world_map = read_world_map(world_map_path, &mut archive)?;
-    let world_map_info = get_world_map_info(&world_map, world_map_path);
+    let world_map_info = WorldMapInfo::new(world_map_path, world_map);
 
     let mut model_bundles = Vec::new();
-    for model_path in &world_map_info.models {
+    for model_path in &world_map_info.get_model_paths() {
         let bundles = model::create_meshes_from_model_path(
             model_path,
             file_archive_map,
@@ -114,7 +122,7 @@ pub fn create_meshes_from_world_map_path(
         model_bundles.push(bundles);
     }
 
-    if let Some(mddf) = &world_map.mddf {
+    if let Some(mddf) = &world_map_info.world_map.mddf {
         for placement in &mddf.doodads {
             let mut instantiated_bundles = model_bundles[placement.name_id as usize].clone();
             for bundle in &mut instantiated_bundles {
@@ -134,7 +142,7 @@ pub fn create_meshes_from_world_map_path(
     }
 
     let mut world_model_bundles = Vec::new();
-    for world_model_path in &world_map_info.world_models {
+    for world_model_path in &world_map_info.get_world_model_paths() {
         let bundles = world_model::create_meshes_from_world_model_path(
             world_model_path,
             file_archive_map,
@@ -145,7 +153,7 @@ pub fn create_meshes_from_world_map_path(
         world_model_bundles.push(bundles);
     }
 
-    if let Some(modf) = &world_map.modf {
+    if let Some(modf) = &world_map_info.world_map.modf {
         for placement in &modf.models {
             let mut instantiated_bundles = world_model_bundles[placement.name_id as usize].clone();
             for bundle in &mut instantiated_bundles {

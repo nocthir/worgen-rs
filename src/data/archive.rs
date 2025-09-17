@@ -52,6 +52,21 @@ impl ArchiveInfo {
             || !self.texture_infos.is_empty()
             || !self.world_map_infos.is_empty()
     }
+
+    pub fn from_archive_path<P: AsRef<Path>>(archive_path: P) -> Result<Self> {
+        let mut archive = mpq::Archive::open(archive_path.as_ref())?;
+        let texture_infos = texture::read_textures(&mut archive)?;
+        let model_infos = model::read_models(&mut archive)?;
+        let wmo_infos = world_model::read_world_models(&mut archive)?;
+        let world_map_infos = world_map::read_world_maps(&mut archive)?;
+        Ok(Self::new(
+            archive_path.as_ref().to_string_lossy(),
+            texture_infos,
+            model_infos,
+            wmo_infos,
+            world_map_infos,
+        ))
+    }
 }
 
 #[derive(Resource, Default)]
@@ -155,18 +170,7 @@ pub fn start_loading(mut commands: Commands, settings: Res<Settings>) -> Result<
 }
 
 async fn load_archive(archive_path: String) -> Result<ArchiveInfo> {
-    let mut archive = open_archive(&archive_path)?;
-    let texture_infos = texture::read_textures(&mut archive)?;
-    let model_infos = model::read_models(&mut archive)?;
-    let wmo_infos = world_model::read_world_models(&mut archive)?;
-    let world_map_infos = world_map::read_world_maps(&mut archive)?;
-    Ok(ArchiveInfo::new(
-        archive_path,
-        texture_infos,
-        model_infos,
-        wmo_infos,
-        world_map_infos,
-    ))
+    ArchiveInfo::from_archive_path(archive_path)
 }
 
 pub fn open_archive<P: AsRef<Path>>(archive_path: P) -> Result<mpq::Archive> {

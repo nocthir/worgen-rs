@@ -180,17 +180,20 @@ fn world_map_info(
     let header = egui::CollapsingHeader::new(&world_map.path)
         .enabled(world_map.has_stuff())
         .show(ui, |ui| {
+            let model_paths = world_map.get_model_paths();
             egui::CollapsingHeader::new("Models")
-                .enabled(!world_map.models.is_empty())
+                .enabled(!model_paths.is_empty())
                 .show(ui, |ui| {
-                    for model in &world_map.models {
+                    for model in model_paths {
                         ui.label(model);
                     }
                 });
+
+            let world_model_paths = world_map.get_world_model_paths();
             egui::CollapsingHeader::new("World Models")
-                .enabled(!world_map.world_models.is_empty())
+                .enabled(!world_model_paths.is_empty())
                 .show(ui, |ui| {
-                    for world in &world_map.world_models {
+                    for world in world_model_paths {
                         ui.label(world);
                     }
                 });
