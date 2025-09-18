@@ -7,7 +7,10 @@ use std::path::Path;
 use bevy::{
     asset::RenderAssetUsages,
     prelude::*,
-    render::render_resource::{Extent3d, TextureDimension, TextureFormat},
+    render::{
+        render_resource::{Extent3d, TextureDimension, TextureFormat},
+        texture,
+    },
     tasks::{self, Task},
 };
 use wow_blp as blp;
@@ -28,14 +31,11 @@ pub fn load_texture_info(texture_path: &str, archive_path: &str) -> Result<DataI
     Ok(DataInfo::Texture(TextureInfo { image: blp }))
 }
 
-pub fn loading_texture_task<P: AsRef<Path>>(
-    file_path: &str,
-    archive_path: P,
-) -> Task<Result<FileInfo>> {
-    info!("Starting to load texture: {}", file_path);
+pub fn loading_texture_task(texture_file_info: &FileInfo) -> Task<Result<FileInfo>> {
+    info!("Starting to load texture: {}", texture_file_info.path);
     tasks::IoTaskPool::get().spawn(load_texture(
-        file_path.to_string(),
-        archive_path.as_ref().to_path_buf(),
+        texture_file_info.path.clone(),
+        texture_file_info.archive_path.clone(),
     ))
 }
 

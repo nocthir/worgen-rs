@@ -112,42 +112,17 @@ pub fn check_file_loading(
                                     file_info_map.get_file_info(&texture_path)?;
                                 if texture_file_info.is_unloaded() {
                                     // Start loading the texture
-                                    let archive_path = file.archive_path.clone();
-                                    let new_task =
-                                        texture::loading_texture_task(&texture_path, &archive_path);
+                                    let new_task = texture::loading_texture_task(texture_file_info);
                                     new_tasks.push(new_task);
                                 }
                             }
 
-                            if !new_tasks.is_empty() {
-                                // Put the current task back to be processed later
-                                load_task.completed.push(file);
-                                continue;
-                            }
-
-                            // Update the file archive map
-                            let bundles = create_meshes_from_model_info(
-                                model_info,
-                                &file_info_map,
-                                &mut images,
-                                &mut materials,
-                                &mut meshes,
-                            )?;
-                            file_info_map.map.insert(file_path.clone(), file);
-                            if bundles.is_empty() {
-                                error!("No meshes loaded for file: {}", file_path);
-                                return Ok(());
-                            }
-
-                            for bundle in bundles {
-                                add_bundle(&mut commands, bundle);
-                            }
-
-                            info!("Added meshes from {}", file_path);
+                            // Put the current task back to be processed later
+                            load_task.completed.push(file);
                         }
                         Some(archive::DataInfo::Texture(_)) => {
                             // Texture loaded, update the file info map
-                            file_info_map.map.insert(file_path.clone(), file);
+                            file_info_map.insert(file);
                         }
                         _ => {
                             error!("Loaded file type is not valid: {}", file.path);
@@ -177,8 +152,10 @@ pub fn check_file_loading(
                 for texture_path in model_info.get_texture_paths() {
                     let texture_file_info = file_info_map.get_file_info(&texture_path)?;
                     if texture_file_info.is_unloaded() {
+                        warn!("Still waiting for texture: {}", texture_path);
                         // Put this task back to be processed later
                         all_textures_loaded = false;
+                        break;
                     }
                 }
 
@@ -201,20 +178,18 @@ pub fn check_file_loading(
                     }
 
                     info!("Added meshes from {}", file.path);
+
+                    // All textures are loaded, update the file info map
+                    file_info_map.insert(file);
+                } else {
+                    // Put this task back to be processed later
+                    load_task.completed.push(file);
                 }
             }
             _ => {
                 error!("Loaded file is not a model: {}", file.path);
                 continue;
             }
-        }
-
-        if all_textures_loaded {
-            // All textures are loaded, update the file info map
-            file_info_map.map.insert(file.path.clone(), file);
-        } else {
-            // Put this task back to be processed later
-            load_task.completed.push(file);
         }
     }
 

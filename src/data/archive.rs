@@ -192,10 +192,14 @@ pub enum DataInfo {
 
 #[derive(Resource, Default)]
 pub struct FileInfoMap {
-    pub map: HashMap<String, FileInfo>,
+    map: HashMap<String, FileInfo>,
 }
 
 impl FileInfoMap {
+    pub fn insert(&mut self, file_info: FileInfo) {
+        self.map.insert(file_info.path.to_lowercase(), file_info);
+    }
+
     pub fn get_file_info(&self, file_path: &str) -> Result<&FileInfo> {
         let lowercase_name = file_path.to_lowercase();
         self.map
@@ -257,11 +261,6 @@ impl FileInfoMap {
 
         Ok(())
     }
-}
-
-#[derive(Event)]
-pub struct ArchiveLoaded {
-    pub archive: Option<ArchiveInfo>,
 }
 
 #[derive(Resource, Default)]

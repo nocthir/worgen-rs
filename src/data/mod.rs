@@ -13,7 +13,7 @@ use std::f32;
 use bevy::prelude::*;
 
 use crate::{
-    data::archive::{ArchiveInfo, ArchiveLoaded, DataInfo, FileInfo, LoadArchiveTasks},
+    data::archive::{ArchiveInfo, DataInfo, FileInfo, LoadArchiveTasks},
     ui::FileSelected,
 };
 
@@ -21,8 +21,7 @@ pub struct DataPlugin;
 
 impl Plugin for DataPlugin {
     fn build(&self, app: &mut App) {
-        app.add_event::<ArchiveLoaded>()
-            .insert_resource(archive::FileInfoMap::default())
+        app.insert_resource(archive::FileInfoMap::default())
             .insert_resource(model::LoadFileTask::default())
             .add_systems(Startup, archive::start_loading)
             .add_systems(
