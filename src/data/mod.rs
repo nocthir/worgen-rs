@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: MIT or Apache-2.0
 
 pub mod archive;
+pub mod file;
 pub mod model;
 pub mod texture;
 pub mod world_map;
@@ -13,7 +14,10 @@ use std::f32;
 use bevy::prelude::*;
 
 use crate::{
-    data::archive::{ArchiveInfo, DataInfo, FileInfo, LoadArchiveTasks},
+    data::{
+        archive::{ArchiveInfo, LoadArchiveTasks},
+        file::{DataInfo, FileInfo, FileInfoMap},
+    },
     ui::FileSelected,
 };
 
@@ -21,14 +25,14 @@ pub struct DataPlugin;
 
 impl Plugin for DataPlugin {
     fn build(&self, app: &mut App) {
-        app.insert_resource(archive::FileInfoMap::default())
-            .insert_resource(model::LoadFileTask::default())
+        app.insert_resource(FileInfoMap::default())
+            .insert_resource(file::LoadFileTask::default())
             .add_systems(Startup, archive::start_loading)
             .add_systems(
                 Update,
                 archive::check_archive_loading.run_if(resource_exists::<LoadArchiveTasks>),
             )
-            .add_systems(Update, (load_selected_model, model::check_file_loading));
+            .add_systems(Update, (load_selected_model, file::check_file_loading));
     }
 }
 
@@ -50,7 +54,7 @@ pub struct ModelBundle {
 fn load_selected_model(
     mut event_reader: EventReader<FileSelected>,
     query: Query<Entity, With<CurrentModel>>,
-    mut load_model_tasks: ResMut<model::LoadFileTask>,
+    mut load_model_tasks: ResMut<file::LoadFileTask>,
     mut commands: Commands,
 ) -> Result {
     // Ignore all but the last event
@@ -67,7 +71,7 @@ fn load_selected_model(
 
 fn create_mesh_from_selected_file(
     file_info: &FileSelected,
-    file_info_map: &archive::FileInfoMap,
+    file_info_map: &FileInfoMap,
     images: &mut Assets<Image>,
     materials: &mut Assets<StandardMaterial>,
     meshes: &mut Assets<Mesh>,
@@ -78,7 +82,7 @@ fn create_mesh_from_selected_file(
 
 fn create_mesh_from_file_info(
     file_info: &FileInfo,
-    file_info_map: &archive::FileInfoMap,
+    file_info_map: &FileInfoMap,
     images: &mut Assets<Image>,
     materials: &mut Assets<StandardMaterial>,
     meshes: &mut Assets<Mesh>,

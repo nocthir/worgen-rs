@@ -2,22 +2,20 @@
 // Author: Nocthir <nocthir@proton.me>
 // SPDX-License-Identifier: MIT or Apache-2.0
 
-use std::path::Path;
-
 use bevy::{
     asset::RenderAssetUsages,
     prelude::*,
-    render::{
-        render_resource::{Extent3d, TextureDimension, TextureFormat},
-        texture,
-    },
+    render::render_resource::{Extent3d, TextureDimension, TextureFormat},
     tasks::{self, Task},
 };
 use wow_blp as blp;
 use wow_m2 as m2;
 use wow_wmo as wmo;
 
-use crate::data::archive::{self, DataInfo, FileInfo};
+use crate::data::{
+    archive,
+    file::{DataInfo, FileInfo, FileInfoMap},
+};
 
 #[derive(Clone)]
 pub struct TextureInfo {
@@ -52,7 +50,7 @@ pub async fn load_texture(path: String, archive_path: std::path::PathBuf) -> Res
 
 pub fn create_textures_from_wmo(
     wmo: &wmo::WmoRoot,
-    file_info_map: &archive::FileInfoMap,
+    file_info_map: &FileInfoMap,
     images: &mut Assets<Image>,
 ) -> Result<Vec<Handle<Image>>> {
     let mut image_handles = Vec::new();
@@ -67,7 +65,7 @@ pub fn create_textures_from_wmo(
 
 pub fn create_textures_from_model(
     model: &m2::M2Model,
-    file_info_map: &archive::FileInfoMap,
+    file_info_map: &FileInfoMap,
     images: &mut Assets<Image>,
 ) -> Result<Vec<Handle<Image>>> {
     let mut handles = Vec::new();
@@ -88,7 +86,7 @@ pub fn create_textures_from_model(
 
 pub fn create_image_from_path(
     texture_path: &str,
-    file_info_map: &archive::FileInfoMap,
+    file_info_map: &FileInfoMap,
     images: &mut Assets<Image>,
 ) -> Result<Handle<Image>> {
     let texture = file_info_map.get_texture_info(texture_path)?;
@@ -112,8 +110,8 @@ pub mod test {
     use super::*;
     use crate::{data::archive::ArchiveInfo, *};
 
-    pub fn default_file_info_map(settings: &settings::Settings) -> Result<archive::FileInfoMap> {
-        let mut file_info_map = archive::FileInfoMap::default();
+    pub fn default_file_info_map(settings: &settings::Settings) -> Result<FileInfoMap> {
+        let mut file_info_map = FileInfoMap::default();
         let mut archive_info = ArchiveInfo::new(&settings.interface_archive_path)?;
         file_info_map.fill(&mut archive_info)?;
         let mut archive_info = ArchiveInfo::new(&settings.texture_archive_path)?;

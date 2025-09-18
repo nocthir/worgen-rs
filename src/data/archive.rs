@@ -2,7 +2,6 @@
 // Author: Nocthir <nocthir@proton.me>
 // SPDX-License-Identifier: MIT or Apache-2.0
 
-use std::collections::HashMap;
 use std::path::Path;
 use std::path::PathBuf;
 
@@ -11,11 +10,10 @@ use bevy::tasks;
 use wow_mpq as mpq;
 
 use crate::data::ArchivesInfo;
-use crate::data::model::*;
-use crate::data::texture::TextureInfo;
-use crate::data::world_map::WorldMapInfo;
-use crate::data::world_map::is_world_map_extension;
-use crate::data::world_model::*;
+use crate::data::file::FileInfoMap;
+use crate::data::model;
+use crate::data::world_map;
+use crate::data::world_model;
 use crate::settings::Settings;
 
 pub struct ArchiveInfo {
@@ -64,7 +62,7 @@ impl ArchiveInfo {
     fn get_model_paths(archive: &mut mpq::Archive) -> Result<Vec<String>> {
         let mut models = Vec::new();
         archive.list()?.retain(|file| {
-            if is_model_extension(&file.name) {
+            if model::is_model_extension(&file.name) {
                 models.push(file.name.clone());
                 false
             } else {
@@ -77,7 +75,7 @@ impl ArchiveInfo {
     fn get_world_model_paths(archive: &mut mpq::Archive) -> Result<Vec<String>> {
         let mut world_models = Vec::new();
         archive.list()?.retain(|file| {
-            if is_world_model_extension(&file.name) {
+            if world_model::is_world_model_extension(&file.name) {
                 world_models.push(file.name.clone());
                 false
             } else {
@@ -90,7 +88,7 @@ impl ArchiveInfo {
     fn get_world_map_paths(archive: &mut mpq::Archive) -> Result<Vec<String>> {
         let mut world_maps = Vec::new();
         archive.list()?.retain(|file| {
-            if is_world_map_extension(&file.name) {
+            if world_map::is_world_map_extension(&file.name) {
                 world_maps.push(file.name.clone());
                 false
             } else {
@@ -98,168 +96,6 @@ impl ArchiveInfo {
             }
         });
         Ok(world_maps)
-    }
-}
-
-pub enum FileInfoState {
-    Unloaded,
-    Loading,
-    Loaded,
-    Error(String),
-}
-
-pub struct FileInfo {
-    pub path: String,
-    pub archive_path: PathBuf,
-    pub state: FileInfoState,
-    pub data_info: Option<DataInfo>,
-}
-
-impl FileInfo {
-    pub fn new<S: Into<String>, P: AsRef<Path>>(path: S, archive_path: P) -> Self {
-        Self {
-            path: path.into(),
-            archive_path: archive_path.as_ref().into(),
-            state: FileInfoState::Unloaded,
-            data_info: None,
-        }
-    }
-
-    pub fn new_with_data<S: Into<String>, P: AsRef<Path>>(
-        path: S,
-        archive_path: P,
-        data_info: DataInfo,
-    ) -> Self {
-        Self {
-            path: path.into(),
-            archive_path: archive_path.as_ref().into(),
-            state: FileInfoState::Loaded,
-            data_info: Some(data_info),
-        }
-    }
-
-    pub fn is_unloaded(&self) -> bool {
-        matches!(self.state, FileInfoState::Unloaded)
-    }
-
-    pub fn new_texture<S: Into<String>, P: AsRef<Path>>(
-        path: S,
-        archive_path: P,
-        texture_info: TextureInfo,
-    ) -> Self {
-        Self::new_with_data(path, archive_path, DataInfo::Texture(texture_info))
-    }
-
-    pub fn new_model<S: Into<String>, P: AsRef<Path>>(
-        path: S,
-        archive_path: P,
-        model_info: ModelInfo,
-    ) -> Self {
-        Self::new_with_data(path, archive_path, DataInfo::Model(model_info))
-    }
-
-    pub fn new_world_model<S: Into<String>, P: AsRef<Path>>(
-        path: S,
-        archive_path: P,
-        wmo_info: WorldModelInfo,
-    ) -> Self {
-        Self::new_with_data(path, archive_path, DataInfo::WorldModel(wmo_info))
-    }
-
-    pub fn new_world_map<S: Into<String>, P: AsRef<Path>>(
-        path: S,
-        archive_path: P,
-        world_map_info: WorldMapInfo,
-    ) -> Self {
-        Self::new_with_data(path, archive_path, DataInfo::WorldMap(world_map_info))
-    }
-
-    pub fn get_model(&self) -> Result<&ModelInfo> {
-        if let Some(DataInfo::Model(model_info)) = &self.data_info {
-            Ok(model_info)
-        } else {
-            Err(format!("File {} is not a model", self.path).into())
-        }
-    }
-}
-
-pub enum DataInfo {
-    Texture(TextureInfo),
-    Model(ModelInfo),
-    WorldModel(WorldModelInfo),
-    WorldMap(WorldMapInfo),
-}
-
-#[derive(Resource, Default)]
-pub struct FileInfoMap {
-    map: HashMap<String, FileInfo>,
-}
-
-impl FileInfoMap {
-    pub fn insert(&mut self, file_info: FileInfo) {
-        self.map.insert(file_info.path.to_lowercase(), file_info);
-    }
-
-    pub fn get_file_info(&self, file_path: &str) -> Result<&FileInfo> {
-        let lowercase_name = file_path.to_lowercase();
-        self.map
-            .get(&lowercase_name)
-            .ok_or(format!("File {} not found", file_path).into())
-    }
-
-    pub fn get_file_info_mut(&mut self, file_path: &str) -> Result<&mut FileInfo> {
-        let lowercase_name = file_path.to_lowercase();
-        self.map
-            .get_mut(&lowercase_name)
-            .ok_or(format!("File {} not found", file_path).into())
-    }
-
-    pub fn get_texture_info(&self, file_path: &str) -> Result<&TextureInfo> {
-        let file_info = self.get_file_info(file_path)?;
-        if let Some(DataInfo::Texture(texture_info)) = &file_info.data_info {
-            Ok(texture_info)
-        } else {
-            Err(format!("Texture {} not found", file_path).into())
-        }
-    }
-
-    pub fn get_model_info(&self, file_path: &str) -> Result<&ModelInfo> {
-        let file_info = self.get_file_info(file_path)?;
-        if let Some(DataInfo::Model(model_info)) = &file_info.data_info {
-            Ok(model_info)
-        } else {
-            Err(format!("Model {} not found", file_path).into())
-        }
-    }
-
-    pub fn get_world_model_info(&self, file_path: &str) -> Result<&WorldModelInfo> {
-        let file_info = self.get_file_info(file_path)?;
-        if let Some(DataInfo::WorldModel(wmo_info)) = &file_info.data_info {
-            Ok(wmo_info)
-        } else {
-            Err(format!("World model {} not found", file_path).into())
-        }
-    }
-
-    pub fn get_world_map_info(&self, file_path: &str) -> Result<&WorldMapInfo> {
-        let file_info = self.get_file_info(file_path)?;
-        if let Some(DataInfo::WorldMap(world_map_info)) = &file_info.data_info {
-            Ok(world_map_info)
-        } else {
-            Err(format!("World map {} not found", file_path).into())
-        }
-    }
-
-    // Actually used in tests
-    #[allow(unused)]
-    pub fn fill(&mut self, archive_info: &mut ArchiveInfo) -> Result<()> {
-        for file_path in archive_info.archive.list()? {
-            let file_path = file_path.name;
-            let texture_info = FileInfo::new(file_path.clone(), &archive_info.path);
-            self.map.insert(file_path.to_lowercase(), texture_info);
-        }
-
-        Ok(())
     }
 }
 

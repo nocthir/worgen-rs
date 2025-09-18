@@ -17,8 +17,8 @@ use wow_m2 as m2;
 use wow_mpq as mpq;
 
 use crate::data::{
-    ModelBundle, add_bundle,
-    archive::{self, FileInfo, FileInfoMap},
+    ModelBundle,
+    file::{FileInfo, FileInfoMap, LoadFileTask},
     normalize_vec3, texture,
 };
 
@@ -44,12 +44,6 @@ pub fn is_model_extension(filename: &str) -> bool {
     lower_filename.ends_with(".m2")
         || lower_filename.ends_with(".mdx")
         || lower_filename.ends_with(".mdl")
-}
-
-#[derive(Resource, Default)]
-pub struct LoadFileTask {
-    tasks: Vec<tasks::Task<Result<FileInfo>>>,
-    completed: Vec<FileInfo>,
 }
 
 pub fn start_loading_model<P: AsRef<Path>>(
@@ -78,127 +72,9 @@ async fn load_model(file_path: String, archive_path: PathBuf) -> Result<FileInfo
     Ok(FileInfo::new_model(file_path, archive.path(), model_info))
 }
 
-// TODO: This function is getting quite large. Consider breaking it down.
-pub fn check_file_loading(
-    mut load_task: ResMut<LoadFileTask>,
-    mut file_info_map: ResMut<FileInfoMap>,
-    mut images: ResMut<Assets<Image>>,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
-    mut commands: Commands,
-) -> Result<()> {
-    let mut tasks = Vec::new();
-    tasks.append(&mut load_task.tasks);
-
-    let mut new_tasks = Vec::new();
-
-    for mut current_task in tasks {
-        let poll_result = tasks::block_on(tasks::poll_once(&mut current_task));
-        if let Some(result) = poll_result {
-            match result {
-                Err(err) => {
-                    error!("Error loading file: {err}");
-                }
-                Ok(file) => {
-                    let file_path = file.path.clone();
-                    info!("Loaded file: {}", file_path);
-
-                    match &file.data_info {
-                        Some(archive::DataInfo::Model(model_info)) => {
-                            // At this point we have the model loaded, but textures may not be loaded yet.
-                            // We need to check the file info map for texture files and start loading them if necessary.
-                            for texture_path in model_info.get_texture_paths() {
-                                let texture_file_info =
-                                    file_info_map.get_file_info(&texture_path)?;
-                                if texture_file_info.is_unloaded() {
-                                    // Start loading the texture
-                                    let new_task = texture::loading_texture_task(texture_file_info);
-                                    new_tasks.push(new_task);
-                                }
-                            }
-
-                            // Put the current task back to be processed later
-                            load_task.completed.push(file);
-                        }
-                        Some(archive::DataInfo::Texture(_)) => {
-                            // Texture loaded, update the file info map
-                            file_info_map.insert(file);
-                        }
-                        _ => {
-                            error!("Loaded file type is not valid: {}", file.path);
-                            continue;
-                        }
-                    }
-                }
-            }
-        } else {
-            // Not ready yet, put it back
-            load_task.tasks.push(current_task);
-        }
-    }
-
-    load_task.tasks.extend(new_tasks);
-
-    let mut completed_tasks = Vec::new();
-    completed_tasks.append(&mut load_task.completed);
-
-    for file in completed_tasks {
-        let mut all_textures_loaded = true;
-
-        match &file.data_info {
-            Some(archive::DataInfo::Model(model_info)) => {
-                // At this point we have the model loaded, but textures may not be loaded yet.
-                // We need to check the file info map to see whether the loading has completed.
-                for texture_path in model_info.get_texture_paths() {
-                    let texture_file_info = file_info_map.get_file_info(&texture_path)?;
-                    if texture_file_info.is_unloaded() {
-                        warn!("Still waiting for texture: {}", texture_path);
-                        // Put this task back to be processed later
-                        all_textures_loaded = false;
-                        break;
-                    }
-                }
-
-                if all_textures_loaded {
-                    // Update the file archive map
-                    let bundles = create_meshes_from_model_info(
-                        model_info,
-                        &file_info_map,
-                        &mut images,
-                        &mut materials,
-                        &mut meshes,
-                    )?;
-
-                    if bundles.is_empty() {
-                        error!("No meshes loaded for file: {}", file.path);
-                        return Ok(());
-                    }
-                    for bundle in bundles {
-                        add_bundle(&mut commands, bundle);
-                    }
-
-                    info!("Added meshes from {}", file.path);
-
-                    // All textures are loaded, update the file info map
-                    file_info_map.insert(file);
-                } else {
-                    // Put this task back to be processed later
-                    load_task.completed.push(file);
-                }
-            }
-            _ => {
-                error!("Loaded file is not a model: {}", file.path);
-                continue;
-            }
-        }
-    }
-
-    Ok(())
-}
-
 pub fn create_meshes_from_model_path(
     model_path: &str,
-    file_info_map: &archive::FileInfoMap,
+    file_info_map: &FileInfoMap,
     images: &mut Assets<Image>,
     materials: &mut Assets<StandardMaterial>,
     meshes: &mut Assets<Mesh>,
@@ -209,7 +85,7 @@ pub fn create_meshes_from_model_path(
 
 pub fn create_meshes_from_model_info(
     model_info: &ModelInfo,
-    file_info_map: &archive::FileInfoMap,
+    file_info_map: &FileInfoMap,
     images: &mut Assets<Image>,
     materials: &mut Assets<StandardMaterial>,
     meshes: &mut Assets<Mesh>,

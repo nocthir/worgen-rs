@@ -16,7 +16,7 @@ use bevy::{
 use wow_mpq as mpq;
 use wow_wmo as wmo;
 
-use crate::data::{ModelBundle, archive, normalize_vec3, texture};
+use crate::data::{ModelBundle, file, normalize_vec3, texture};
 
 pub struct WorldModelInfo {
     pub path: String,
@@ -74,7 +74,7 @@ fn read_groups(
 
 pub fn create_meshes_from_world_model_path(
     world_model_path: &str,
-    file_info_map: &archive::FileInfoMap,
+    file_info_map: &file::FileInfoMap,
     images: &mut Assets<Image>,
     standard_materials: &mut Assets<StandardMaterial>,
     meshes: &mut Assets<Mesh>,
@@ -91,7 +91,7 @@ pub fn create_meshes_from_world_model_path(
 
 pub fn create_meshes_from_world_model_info(
     world_model_info: &WorldModelInfo,
-    file_info_map: &archive::FileInfoMap,
+    file_info_map: &file::FileInfoMap,
     images: &mut Assets<Image>,
     standard_materials: &mut Assets<StandardMaterial>,
     meshes: &mut Assets<Mesh>,
