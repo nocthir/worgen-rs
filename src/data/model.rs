@@ -2,10 +2,7 @@
 // Author: Nocthir <nocthir@proton.me>
 // SPDX-License-Identifier: MIT or Apache-2.0
 
-use std::{
-    io,
-    path::{Path, PathBuf},
-};
+use std::{io, path::PathBuf};
 
 use bevy::{
     asset::RenderAssetUsages,
@@ -46,15 +43,11 @@ pub fn is_model_extension(filename: &str) -> bool {
         || lower_filename.ends_with(".mdl")
 }
 
-pub fn start_loading_model<P: AsRef<Path>>(
-    tasks: &mut LoadFileTask,
-    file_path: &str,
-    archive_path: P,
-) {
-    info!("Starting to load model: {}", file_path);
+pub fn start_loading_model(tasks: &mut LoadFileTask, file_info: &FileInfo) {
+    info!("Starting to load model: {}", file_info.path);
     let task = tasks::IoTaskPool::get().spawn(load_model(
-        file_path.to_string(),
-        archive_path.as_ref().to_path_buf(),
+        file_info.path.to_string(),
+        file_info.archive_path.clone(),
     ));
     tasks.tasks.push(task);
 }

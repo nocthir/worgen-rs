@@ -54,6 +54,7 @@ pub struct ModelBundle {
 fn load_selected_model(
     mut event_reader: EventReader<FileSelected>,
     query: Query<Entity, With<CurrentModel>>,
+    mut file_info_map: ResMut<FileInfoMap>,
     mut load_model_tasks: ResMut<file::LoadFileTask>,
     mut commands: Commands,
 ) -> Result {
@@ -64,7 +65,11 @@ fn load_selected_model(
             commands.entity(entity).despawn();
         });
 
-        model::start_loading_model(&mut load_model_tasks, &event.file_path, &event.archive_path);
+        let file_info = file_info_map.get_file_info_mut(&event.file_path)?;
+        if file_info.is_unloaded() {
+            file_info.state = file::FileInfoState::Loading;
+            model::start_loading_model(&mut load_model_tasks, file_info);
+        }
     }
     Ok(())
 }
