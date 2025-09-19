@@ -14,12 +14,18 @@ use wow_wmo as wmo;
 
 use crate::data::{
     archive,
-    file::{DataInfo, FileInfo, FileInfoMap},
+    file::{self, DataInfo, FileInfo, FileInfoMap},
 };
 
 #[derive(Clone)]
 pub struct TextureInfo {
     image: blp::BlpImage,
+}
+
+impl TextureInfo {
+    pub fn new(image: blp::BlpImage) -> Self {
+        Self { image }
+    }
 }
 
 pub fn load_texture_info(texture_path: &str, archive_path: &str) -> Result<DataInfo> {
@@ -31,21 +37,28 @@ pub fn load_texture_info(texture_path: &str, archive_path: &str) -> Result<DataI
 
 pub fn loading_texture_task(texture_file_info: &FileInfo) -> Task<Result<FileInfo>> {
     info!("Starting to load texture: {}", texture_file_info.path);
-    tasks::IoTaskPool::get().spawn(load_texture(
-        texture_file_info.path.clone(),
-        texture_file_info.archive_path.clone(),
-    ))
+    tasks::IoTaskPool::get().spawn(load_texture(texture_file_info.shallow_clone()))
 }
 
-pub async fn load_texture(path: String, archive_path: std::path::PathBuf) -> Result<FileInfo> {
-    let mut archive = archive::open_archive(archive_path)?;
-    let file = archive.read_file(&path)?;
-    let blp = blp::parser::load_blp_from_buf(&file)?;
-    Ok(FileInfo::new_texture(
-        path,
-        archive.path(),
-        TextureInfo { image: blp },
-    ))
+pub async fn load_texture(mut file_info: FileInfo) -> Result<FileInfo> {
+    match load_texture_impl(&file_info) {
+        Ok(image) => {
+            file_info.set_texture(image);
+            info!("Loaded texture: {}", file_info.path);
+            Ok(file_info)
+        }
+        Err(e) => {
+            error!("Failed to load texture {}: {}", file_info.path, e);
+            file_info.state = file::FileInfoState::Error(e.to_string());
+            Ok(file_info)
+        }
+    }
+}
+
+fn load_texture_impl(file_info: &FileInfo) -> Result<TextureInfo> {
+    let mut archive = archive::open_archive(&file_info.archive_path)?;
+    let file = archive.read_file(&file_info.path)?;
+    Ok(TextureInfo::new(blp::parser::load_blp_from_buf(&file)?))
 }
 
 pub fn create_textures_from_wmo(

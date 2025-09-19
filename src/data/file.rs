@@ -56,6 +56,18 @@ impl FileInfo {
         }
     }
 
+    /// Creates a shallow clone of the `FileInfo`, without cloning the `data_info`.
+    /// This is useful when you want to create a new `FileInfo` with the same `path` and `archive_path`,
+    /// but without loading the data again.
+    pub fn shallow_clone(&self) -> Self {
+        Self {
+            path: self.path.clone(),
+            archive_path: self.archive_path.clone(),
+            state: self.state.clone(),
+            data_info: None,
+        }
+    }
+
     pub fn is_unloaded(&self) -> bool {
         matches!(self.state, FileInfoState::Unloaded)
     }
@@ -106,6 +118,11 @@ impl FileInfo {
         } else {
             Err(format!("File {} is not a model", self.path).into())
         }
+    }
+
+    pub fn set_texture(&mut self, texture: TextureInfo) {
+        self.data_info = Some(DataInfo::Texture(texture));
+        self.state = FileInfoState::Loaded;
     }
 }
 
@@ -217,8 +234,10 @@ pub fn check_file_loading(
                     error!("Error loading file: {err}");
                 }
                 Ok(file) => {
-                    let file_path = file.path.clone();
-                    info!("Loaded file: {}", file_path);
+                    if let FileInfoState::Error(_) = &file.state {
+                        file_info_map.insert(file);
+                        continue;
+                    }
 
                     match &file.data_info {
                         Some(DataInfo::Model(model_info)) => {
@@ -226,9 +245,10 @@ pub fn check_file_loading(
                             // We need to check the file info map for texture files and start loading them if necessary.
                             for texture_path in model_info.get_texture_paths() {
                                 let texture_file_info =
-                                    file_info_map.get_file_info(&texture_path)?;
+                                    file_info_map.get_file_info_mut(&texture_path)?;
                                 if texture_file_info.is_unloaded() {
                                     // Start loading the texture
+                                    texture_file_info.state = FileInfoState::Loading;
                                     let new_task = texture::loading_texture_task(texture_file_info);
                                     new_tasks.push(new_task);
                                 }
@@ -261,6 +281,7 @@ pub fn check_file_loading(
 
     for mut file in completed_tasks {
         let mut all_textures_loaded = true;
+        let mut state = file.state.clone();
 
         match &file.data_info {
             Some(DataInfo::Model(model_info)) => {
@@ -268,15 +289,26 @@ pub fn check_file_loading(
                 // We need to check the file info map to see whether the loading has completed.
                 for texture_path in model_info.get_texture_paths() {
                     let texture_file_info = file_info_map.get_file_info(&texture_path)?;
-                    if texture_file_info.is_unloaded() {
-                        warn!("Still waiting for texture: {}", texture_path);
-                        // Put this task back to be processed later
-                        all_textures_loaded = false;
-                        break;
+                    match &texture_file_info.state {
+                        FileInfoState::Loading => {
+                            warn!("Still waiting for texture: {}", texture_path);
+                            // Put this task back to be processed later
+                            all_textures_loaded = false;
+                        }
+                        FileInfoState::Error(err) => {
+                            state = FileInfoState::Error(format!(
+                                "Failed to load texture {}: {}",
+                                texture_path, err
+                            ));
+                        }
+                        _ => (), // Texture is loaded
                     }
                 }
 
-                if all_textures_loaded {
+                if let FileInfoState::Error(_) = state {
+                    file.state = state;
+                    file_info_map.insert(file);
+                } else if all_textures_loaded {
                     // Update the file archive map
                     let bundles = model::create_meshes_from_model_info(
                         model_info,
