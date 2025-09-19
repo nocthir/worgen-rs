@@ -2,7 +2,7 @@
 // Author: Nocthir <nocthir@proton.me>
 // SPDX-License-Identifier: MIT or Apache-2.0
 
-use std::io;
+use std::{io, path::Path};
 
 use bevy::{prelude::*, tasks};
 use wow_adt as adt;
@@ -22,7 +22,13 @@ pub struct WorldMapInfo {
 }
 
 impl WorldMapInfo {
-    pub fn new(mut world_map: adt::Adt) -> Self {
+    pub fn new<P: AsRef<Path>>(file_path: &str, archive_path: P) -> Result<Self> {
+        let mut archive = mpq::Archive::open(archive_path)?;
+        let world_map = read_world_map(file_path, &mut archive)?;
+        Ok(Self::from_adt(world_map))
+    }
+
+    pub fn from_adt(mut world_map: adt::Adt) -> Self {
         Self::fix_model_extensions(&mut world_map);
         let model_paths = Self::get_model_paths(&world_map);
         let world_model_paths = Self::get_world_model_paths(&world_map);
@@ -89,7 +95,7 @@ pub fn loading_world_map_task(task: file::LoadFileTask) -> tasks::Task<file::Loa
 }
 
 async fn load_world_map(mut task: file::LoadFileTask) -> file::LoadFileTask {
-    match load_world_map_impl(&task.file) {
+    match WorldMapInfo::new(&task.file.path, &task.file.archive_path) {
         Ok(world_map_info) => {
             task.file.set_world_map(world_map_info);
             info!("Loaded world map: {}", task.file.path);
@@ -100,12 +106,6 @@ async fn load_world_map(mut task: file::LoadFileTask) -> file::LoadFileTask {
         }
     }
     task
-}
-
-fn load_world_map_impl(file_info: &file::FileInfo) -> Result<WorldMapInfo> {
-    let mut archive = mpq::Archive::open(&file_info.archive_path)?;
-    let world_map = read_world_map(&file_info.path, &mut archive)?;
-    Ok(WorldMapInfo::new(world_map))
 }
 
 // Actually used in tests
@@ -202,7 +202,9 @@ mod test {
     #[test]
     fn read_world_map() -> Result<()> {
         let settings = settings::load_settings()?;
-        let file_info_map = file::test::default_file_info_map(&settings)?;
+        let mut file_info_map = file::test::default_file_info_map(&settings)?;
+        file_info_map.load_file_and_dependencies(&settings.world_map_path.file_path)?;
+
         let mut images = Assets::<Image>::default();
         let mut materials = Assets::<StandardMaterial>::default();
         let mut meshes = Assets::<Mesh>::default();

@@ -22,6 +22,16 @@ pub struct WorldModelInfo {
 }
 
 impl WorldModelInfo {
+    pub fn new<P: AsRef<Path>>(file_path: &str, archive_path: P) -> Result<Self> {
+        let mut archive = mpq::Archive::open(archive_path)?;
+        let world_model = read_wmo(file_path, &mut archive)?;
+        let groups = read_groups(file_path, &mut archive, &world_model)?;
+        Ok(Self {
+            world_model,
+            groups,
+        })
+    }
+
     pub fn get_texture_paths(&self) -> &[String] {
         &self.world_model.textures
     }
@@ -80,7 +90,7 @@ pub fn loading_world_model_task(task: file::LoadFileTask) -> tasks::Task<file::L
 }
 
 async fn load_world_model(mut task: file::LoadFileTask) -> file::LoadFileTask {
-    match load_world_model_impl(&task.file) {
+    match WorldModelInfo::new(&task.file.path, &task.file.archive_path) {
         Ok(world_model_info) => {
             task.file.set_world_model(world_model_info);
             info!("Loaded world model: {}", task.file.path);
@@ -91,16 +101,6 @@ async fn load_world_model(mut task: file::LoadFileTask) -> file::LoadFileTask {
         }
     }
     task
-}
-
-fn load_world_model_impl(file_info: &file::FileInfo) -> Result<WorldModelInfo> {
-    let mut archive = mpq::Archive::open(&file_info.archive_path)?;
-    let world_model = read_wmo(&file_info.path, &mut archive)?;
-    let groups = read_groups(&file_info.path, &mut archive, &world_model)?;
-    Ok(WorldModelInfo {
-        world_model,
-        groups,
-    })
 }
 
 pub fn create_meshes_from_world_model_path(
@@ -299,15 +299,15 @@ mod test {
     use crate::*;
 
     #[test]
-    fn altar() -> Result {
+    fn world_map() -> Result {
         let settings = settings::load_settings()?;
-        let selected_model = ui::FileSelected::from(&settings.test_world_model);
-        let file_info_map = file::test::default_file_info_map(&settings)?;
+        let mut file_info_map = file::test::default_file_info_map(&settings)?;
+        file_info_map.load_file_and_dependencies(&settings.world_map_path.file_path)?;
         let mut images = Assets::<Image>::default();
         let mut custom_materials = Assets::<StandardMaterial>::default();
         let mut meshes = Assets::<Mesh>::default();
-        data::create_mesh_from_selected_file(
-            &selected_model,
+        data::create_mesh_from_file_path(
+            &settings.world_map_path.file_path,
             &file_info_map,
             &mut images,
             &mut custom_materials,

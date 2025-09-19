@@ -113,14 +113,14 @@ fn load_selected_file(
 
 // Actually used in tests
 #[allow(unused)]
-fn create_mesh_from_selected_file(
-    file_info: &FileSelected,
+fn create_mesh_from_file_path(
+    file_path: &str,
     file_info_map: &FileInfoMap,
     images: &mut Assets<Image>,
     materials: &mut Assets<StandardMaterial>,
     meshes: &mut Assets<Mesh>,
 ) -> Result<Vec<ModelBundle>> {
-    let file_info = file_info_map.get_file_info(&file_info.file_path)?;
+    let file_info = file_info_map.get_file_info(file_path)?;
     create_mesh_from_file_info(file_info, file_info_map, images, materials, meshes)
 }
 

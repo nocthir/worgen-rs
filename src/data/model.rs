@@ -2,7 +2,7 @@
 // Author: Nocthir <nocthir@proton.me>
 // SPDX-License-Identifier: MIT or Apache-2.0
 
-use std::io;
+use std::{io, path::Path};
 
 use bevy::{
     asset::RenderAssetUsages,
@@ -22,6 +22,14 @@ pub struct ModelInfo {
 }
 
 impl ModelInfo {
+    pub fn new<P: AsRef<Path>>(file_path: &str, archive_path: P) -> Result<Self> {
+        let mut archive = mpq::Archive::open(archive_path)?;
+        let data = archive.read_file(file_path)?;
+        let mut reader = io::Cursor::new(&data);
+        let model = m2::M2Model::parse(&mut reader)?;
+        Ok(Self { model, data })
+    }
+
     pub fn get_texture_paths(&self) -> Vec<String> {
         self.model
             .textures
@@ -45,7 +53,7 @@ pub fn loading_model_task(task: file::LoadFileTask) -> Task<file::LoadFileTask> 
 }
 
 async fn load_model(mut task: file::LoadFileTask) -> file::LoadFileTask {
-    match load_model_impl(&task.file) {
+    match ModelInfo::new(&task.file.path, &task.file.archive_path) {
         Ok(model_info) => {
             task.file.set_model(model_info);
             info!("Loaded model: {}", task.file.path);
@@ -56,14 +64,6 @@ async fn load_model(mut task: file::LoadFileTask) -> file::LoadFileTask {
         }
     }
     task
-}
-
-fn load_model_impl(file_info: &file::FileInfo) -> Result<ModelInfo> {
-    let mut archive = mpq::Archive::open(&file_info.archive_path)?;
-    let data = archive.read_file(&file_info.path)?;
-    let mut reader = io::Cursor::new(&data);
-    let model = m2::M2Model::parse(&mut reader)?;
-    Ok(ModelInfo { model, data })
 }
 
 pub fn create_meshes_from_model_path(
@@ -242,13 +242,14 @@ mod test {
     #[test]
     fn main_menu() -> Result {
         let settings = settings::load_settings()?;
-        let file_info_map = file::test::default_file_info_map(&settings)?;
-        let selected_model = ui::FileSelected::from(&settings.default_model);
+        let mut file_info_map = file::test::default_file_info_map(&settings)?;
+        file_info_map.load_file_and_dependencies(&settings.default_model.file_path)?;
         let mut images = Assets::<Image>::default();
         let mut standard_materials = Assets::<StandardMaterial>::default();
         let mut meshes = Assets::<Mesh>::default();
-        data::create_mesh_from_selected_file(
-            &selected_model,
+
+        data::create_mesh_from_file_path(
+            &settings.default_model.file_path,
             &file_info_map,
             &mut images,
             &mut standard_materials,
@@ -260,13 +261,13 @@ mod test {
     #[test]
     fn city() -> Result {
         let settings = settings::load_settings()?;
-        let file_info_map = file::test::default_file_info_map(&settings)?;
-        let selected_model = ui::FileSelected::from(&settings.city_model);
+        let mut file_info_map = file::test::default_file_info_map(&settings)?;
+        file_info_map.load_file_and_dependencies(&settings.city_model.file_path)?;
         let mut images = Assets::<Image>::default();
         let mut standard_materials = Assets::<StandardMaterial>::default();
         let mut meshes = Assets::<Mesh>::default();
-        data::create_mesh_from_selected_file(
-            &selected_model,
+        data::create_mesh_from_file_path(
+            &settings.city_model.file_path,
             &file_info_map,
             &mut images,
             &mut standard_materials,
@@ -278,13 +279,13 @@ mod test {
     #[test]
     fn dwarf() -> Result {
         let settings = settings::load_settings()?;
-        let file_info_map = file::test::default_file_info_map(&settings)?;
-        let selected_model = ui::FileSelected::from(&settings.test_model);
+        let mut file_info_map = file::test::default_file_info_map(&settings)?;
+        file_info_map.load_file_and_dependencies(&settings.test_model.file_path)?;
         let mut images = Assets::<Image>::default();
         let mut standard_materials = Assets::<StandardMaterial>::default();
         let mut meshes = Assets::<Mesh>::default();
-        data::create_mesh_from_selected_file(
-            &selected_model,
+        data::create_mesh_from_file_path(
+            &settings.test_model.file_path,
             &file_info_map,
             &mut images,
             &mut standard_materials,

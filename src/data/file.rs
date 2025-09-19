@@ -95,6 +95,40 @@ impl FileInfo {
         self.data_info = Some(DataInfo::WorldMap(Box::new(world_map)));
         self.state = FileInfoState::Loaded;
     }
+
+    #[allow(unused)]
+    pub fn get_dependencies(&self) -> Vec<String> {
+        self.data_info
+            .as_ref()
+            .map(|data_info| data_info.get_dependencies())
+            .unwrap_or_default()
+    }
+
+    #[allow(unused)]
+    pub fn load(&mut self) -> Result<()> {
+        if self.state == FileInfoState::Unloaded {
+            self.state = FileInfoState::Loading;
+            match self.data_type {
+                DataType::Texture => {
+                    self.set_texture(texture::TextureInfo::new(&self.path, &self.archive_path)?);
+                }
+                DataType::Model => {
+                    self.set_model(model::ModelInfo::new(&self.path, &self.archive_path)?)
+                }
+                DataType::WorldModel => self.set_world_model(world_model::WorldModelInfo::new(
+                    &self.path,
+                    &self.archive_path,
+                )?),
+                DataType::WorldMap => self.set_world_map(world_map::WorldMapInfo::new(
+                    &self.path,
+                    &self.archive_path,
+                )?),
+                DataType::Unknown => unreachable!("Cannot load unknown file type"),
+            }
+            self.state = FileInfoState::Loaded;
+        }
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -128,6 +162,22 @@ pub enum DataInfo {
     Model(Box<model::ModelInfo>),
     WorldModel(Box<world_model::WorldModelInfo>),
     WorldMap(Box<world_map::WorldMapInfo>),
+}
+
+impl DataInfo {
+    pub fn get_dependencies(&self) -> Vec<String> {
+        match self {
+            DataInfo::Texture(_) => Vec::new(),
+            DataInfo::Model(model_info) => model_info.get_texture_paths(),
+            DataInfo::WorldModel(world_model_info) => world_model_info.get_texture_paths().to_vec(),
+            DataInfo::WorldMap(world_map_info) => {
+                let mut deps = Vec::new();
+                deps.extend(world_map_info.model_paths.iter().cloned());
+                deps.extend(world_map_info.world_model_paths.iter().cloned());
+                deps
+            }
+        }
+    }
 }
 
 #[derive(Resource, Default)]
@@ -199,6 +249,23 @@ impl FileInfoMap {
             self.map.insert(file_path.to_lowercase(), texture_info);
         }
 
+        Ok(())
+    }
+
+    #[allow(unused)]
+    pub fn load_file_and_dependencies(&mut self, file_path: &str) -> Result<()> {
+        let file_info = self.get_file_info_mut(file_path)?;
+        if file_info.state == FileInfoState::Unloaded {
+            // Start loading the file
+            file_info.load()?;
+            assert_eq!(file_info.state, FileInfoState::Loaded);
+            assert!(file_info.data_info.is_some());
+            // Load dependencies
+            let dependencies = file_info.get_dependencies();
+            for dep in dependencies {
+                self.load_file_and_dependencies(&dep)?;
+            }
+        }
         Ok(())
     }
 }
