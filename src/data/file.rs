@@ -77,22 +77,22 @@ impl FileInfo {
     }
 
     pub fn set_texture(&mut self, texture: texture::TextureInfo) {
-        self.data_info = Some(DataInfo::Texture(texture));
+        self.data_info = Some(DataInfo::Texture(Box::new(texture)));
         self.state = FileInfoState::Loaded;
     }
 
     pub fn set_model(&mut self, model: model::ModelInfo) {
-        self.data_info = Some(DataInfo::Model(model));
+        self.data_info = Some(DataInfo::Model(Box::new(model)));
         self.state = FileInfoState::Loaded;
     }
 
     pub fn set_world_model(&mut self, wmo: world_model::WorldModelInfo) {
-        self.data_info = Some(DataInfo::WorldModel(wmo));
+        self.data_info = Some(DataInfo::WorldModel(Box::new(wmo)));
         self.state = FileInfoState::Loaded;
     }
 
     pub fn set_world_map(&mut self, world_map: world_map::WorldMapInfo) {
-        self.data_info = Some(DataInfo::WorldMap(world_map));
+        self.data_info = Some(DataInfo::WorldMap(Box::new(world_map)));
         self.state = FileInfoState::Loaded;
     }
 }
@@ -124,10 +124,10 @@ impl<S: Into<String>> From<S> for DataType {
 }
 
 pub enum DataInfo {
-    Texture(texture::TextureInfo),
-    Model(model::ModelInfo),
-    WorldModel(world_model::WorldModelInfo),
-    WorldMap(world_map::WorldMapInfo),
+    Texture(Box<texture::TextureInfo>),
+    Model(Box<model::ModelInfo>),
+    WorldModel(Box<world_model::WorldModelInfo>),
+    WorldMap(Box<world_map::WorldMapInfo>),
 }
 
 #[derive(Resource, Default)]
