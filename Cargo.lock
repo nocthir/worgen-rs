@@ -7166,7 +7166,7 @@ dependencies = [
 [[package]]
 name = "wow-adt"
 version = "0.4.0"
-source = "git+https://github.com/wowemulation-dev/warcraft-rs#3efb54bfe1effca47357b00918844eb755ae1b75"
+source = "git+https://github.com/wowemulation-dev/warcraft-rs?rev=3efb54bfe1effca47357b00918844eb755ae1b75#3efb54bfe1effca47357b00918844eb755ae1b75"
 dependencies = [
  "log",
  "thiserror 2.0.16",
@@ -7175,7 +7175,7 @@ dependencies = [
 [[package]]
 name = "wow-blp"
 version = "0.4.0"
-source = "git+https://github.com/wowemulation-dev/warcraft-rs#3efb54bfe1effca47357b00918844eb755ae1b75"
+source = "git+https://github.com/wowemulation-dev/warcraft-rs?rev=3efb54bfe1effca47357b00918844eb755ae1b75#3efb54bfe1effca47357b00918844eb755ae1b75"
 dependencies = [
  "bytes",
  "color_quant",
@@ -7188,7 +7188,7 @@ dependencies = [
 [[package]]
 name = "wow-m2"
 version = "0.4.0"
-source = "git+https://github.com/wowemulation-dev/warcraft-rs#3efb54bfe1effca47357b00918844eb755ae1b75"
+source = "git+https://github.com/wowemulation-dev/warcraft-rs?rev=3efb54bfe1effca47357b00918844eb755ae1b75#3efb54bfe1effca47357b00918844eb755ae1b75"
 dependencies = [
  "anyhow",
  "bitflags 2.9.4",
@@ -7203,7 +7203,7 @@ dependencies = [
 [[package]]
 name = "wow-mpq"
 version = "0.4.0"
-source = "git+https://github.com/wowemulation-dev/warcraft-rs#3efb54bfe1effca47357b00918844eb755ae1b75"
+source = "git+https://github.com/wowemulation-dev/warcraft-rs?rev=3efb54bfe1effca47357b00918844eb755ae1b75#3efb54bfe1effca47357b00918844eb755ae1b75"
 dependencies = [
  "adler2",
  "byteorder",
@@ -7235,7 +7235,7 @@ dependencies = [
 [[package]]
 name = "wow-wmo"
 version = "0.4.0"
-source = "git+https://github.com/wowemulation-dev/warcraft-rs#3efb54bfe1effca47357b00918844eb755ae1b75"
+source = "git+https://github.com/wowemulation-dev/warcraft-rs?rev=3efb54bfe1effca47357b00918844eb755ae1b75#3efb54bfe1effca47357b00918844eb755ae1b75"
 dependencies = [
  "bitflags 2.9.4",
  "thiserror 2.0.16",
