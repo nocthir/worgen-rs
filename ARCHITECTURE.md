@@ -28,7 +28,7 @@ Startup:
 
 Update:
 - `archive::check_archive_loading` (in `DataPlugin`) – Polls `LoadArchiveTasks` and emits `ArchiveLoaded` for each finished archive; on error, logs and requests `AppExit::error`.
-- `data::load_selected_model` – Consumes the most recent `FileSelected` event per frame, despawns any `CurrentModel`, loads the selected asset from the chosen archive, and spawns new mesh/material entities. Supports models, world models (including grouped/batched), and world maps (referencing models/world models with placements).
+- `data::load_selected_file` – Consumes the most recent `FileSelected` event per frame, despawns any `CurrentFile`, loads the selected asset from the chosen archive, and spawns new mesh/material entities. Supports models, world models (including grouped/batched), and world maps (referencing models/world models with placements).
 - `PanOrbitCameraPlugin::pan_orbit_camera` – Orbit/pan/zoom input; ignores input while egui wants the pointer (prevents interaction conflicts).
 
 Egui pass (`EguiPrimaryContextPass`):
@@ -46,11 +46,11 @@ Flow overview:
 3. `archive::check_archive_loading` polls tasks each frame and emits `ArchiveLoaded { archive: ArchiveInfo }` as they complete; on failure, it logs and triggers `AppExit::error`. It also updates a File→Archive map for models, textures, world models, and world maps.
 4. `UiPlugin::data_info` ingests `ArchiveLoaded` events and updates `DataInfo.archives`, rendering a hierarchical view (Archive → textures/models/world models/world maps). Clicking emits `FileSelected`.
 5. `UiPlugin::select_main_menu_model` emits a `FileSelected` using `settings.default_model` to drive an initial load.
-6. `data::load_selected_model` reads only the last `FileSelected` per frame, opens the selected archive, and loads using internal loaders by type:
+6. `data::load_selected_file` reads only the last `FileSelected` per frame, opens the selected archive, and loads using internal loaders by type:
     - Models → spawns one entity per submesh batch.
     - World models → loads the asset and its groups, creates materials/textures, spawns one entity per batch per group.
     - World maps → discovers referenced models/world models and spawns them with placements (translation/scale; rotation when available).
-    Each spawned entity is tagged `CurrentModel`. Previous `CurrentModel` entities are despawned first.
+    Each spawned entity is tagged `CurrentFile`. Previous `CurrentFile` entities are despawned first.
 7. Camera controls update every frame; input is skipped when egui has pointer focus.
 
 ## Mermaid Diagram
@@ -74,7 +74,7 @@ flowchart TD
 
     subgraph Update
         D[DataPlugin::archive::check_archive_loading<br/>Poll tasks -> ArchiveLoaded or AppExit::error<br/>Update File-Archive map]
-        F[DataPlugin::load_selected_model<br/>Despawn previous, then spawn CurrentModels<br/>Type: model, world model, world map]
+        F[DataPlugin::load_selected_file<br/>Despawn previous, then spawn CurrentFiles<br/>Type: model, world model, world map]
         G[PanOrbitCameraPlugin::pan_orbit_camera]
     end
 
@@ -88,7 +88,7 @@ flowchart TD
     H -->|User clicks| MS[Event: FileSelected]
     E --> MS
     MS --> F
-    F --> CM[(CurrentModel)]
+    F --> CM[(CurrentFile)]
     CM --> G
     Input[[Mouse & Keyboard]] --> G
     H -. pointer focus .-> G
@@ -98,7 +98,7 @@ flowchart TD
 
 - Archive discovery and parsing run on async tasks; the main thread remains responsive while tasks complete in the background.
 - The UI receives `ArchiveLoaded` incrementally and updates the browser immediately.
-- `load_selected_model` only processes the most recent selection per frame to avoid redundant loads within the same frame.
+- `load_selected_file` only processes the most recent selection per frame to avoid redundant loads within the same frame.
 - Camera input is disabled while egui wants the pointer to prevent conflicting interactions.
 - Spawned meshes use `StandardMaterial`. The `CustomMaterialPlugin` is currently unused by loaders and reserved for future experiments.
 - Spawned models are reoriented on spawn to the app’s convention: rotate −90° around X and −90° around Z.

@@ -291,7 +291,7 @@ pub fn check_file_loading(
                         return Ok(());
                     }
                     for bundle in bundles {
-                        add_bundle(&mut commands, bundle);
+                        add_bundle(&mut commands, bundle, &file.path);
                     }
 
                     info!("Added meshes from {}", file.path);

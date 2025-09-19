@@ -32,12 +32,14 @@ impl Plugin for DataPlugin {
                 Update,
                 archive::check_archive_loading.run_if(resource_exists::<LoadArchiveTasks>),
             )
-            .add_systems(Update, (load_selected_model, file::check_file_loading));
+            .add_systems(Update, (load_selected_file, file::check_file_loading));
     }
 }
 
 #[derive(Component)]
-pub struct CurrentModel;
+pub struct CurrentFile {
+    path: String,
+}
 
 #[derive(Default, Resource)]
 pub struct ArchivesInfo {
@@ -51,24 +53,31 @@ pub struct ModelBundle {
     pub transform: Transform,
 }
 
-fn load_selected_model(
+fn load_selected_file(
     mut event_reader: EventReader<FileSelected>,
-    query: Query<Entity, With<CurrentModel>>,
+    current_query: Query<&CurrentFile>,
+    entity_query: Query<Entity, With<CurrentFile>>,
     mut file_info_map: ResMut<FileInfoMap>,
-    mut load_model_tasks: ResMut<file::LoadFileTask>,
+    mut load_file_tasks: ResMut<file::LoadFileTask>,
     mut commands: Commands,
 ) -> Result {
     // Ignore all but the last event
     if let Some(event) = event_reader.read().last() {
-        // Remove the previous model
-        query.into_iter().for_each(|entity| {
+        for entity in entity_query.into_iter() {
+            let current_file = current_query.get(entity)?;
+            if current_file.path == event.file_path {
+                return Ok(());
+            }
+            // Remove the previous model
+            file_info_map.get_file_info_mut(&current_file.path)?.state =
+                file::FileInfoState::Unloaded;
             commands.entity(entity).despawn();
-        });
+        }
 
         let file_info = file_info_map.get_file_info_mut(&event.file_path)?;
         if file_info.is_unloaded() {
             file_info.state = file::FileInfoState::Loading;
-            model::start_loading_model(&mut load_model_tasks, file_info);
+            model::start_loading_model(&mut load_file_tasks, file_info);
         }
     }
     Ok(())
@@ -133,8 +142,8 @@ fn normalize_vec3(v: [f32; 3]) -> [f32; 3] {
     }
 }
 
-pub fn add_bundle(commands: &mut Commands, mut bundle: ModelBundle) {
+pub fn add_bundle<S: Into<String>>(commands: &mut Commands, mut bundle: ModelBundle, path: S) {
     bundle.transform.rotate_local_x(-f32::consts::FRAC_PI_2);
     bundle.transform.rotate_local_z(-f32::consts::FRAC_PI_2);
-    commands.spawn((CurrentModel, bundle));
+    commands.spawn((CurrentFile { path: path.into() }, bundle));
 }
