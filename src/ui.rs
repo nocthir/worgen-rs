@@ -7,7 +7,7 @@ use bevy_egui::*;
 
 use crate::{
     data::{ArchivesInfo, archive::ArchiveInfo, file},
-    settings::{FileSettings, Settings},
+    settings::FileSettings,
 };
 
 pub struct UiPlugin;
@@ -16,12 +16,7 @@ impl Plugin for UiPlugin {
     fn build(&self, app: &mut App) {
         app.add_event::<FileSelected>()
             .insert_resource(ArchivesInfo::default())
-            .add_systems(EguiPrimaryContextPass, data_info)
-            //.add_systems(
-            //    Startup,
-            //    select_main_menu_model.run_if(resource_exists::<Settings>),
-            //)
-            ;
+            .add_systems(EguiPrimaryContextPass, data_info);
     }
 }
 
@@ -36,10 +31,6 @@ impl From<&FileSettings> for FileSelected {
             file_path: settings.file_path.clone(),
         }
     }
-}
-
-fn select_main_menu_model(mut event_writer: EventWriter<FileSelected>, settings: Res<Settings>) {
-    event_writer.write(FileSelected::from(&settings.default_model));
 }
 
 fn data_info(
