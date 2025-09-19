@@ -18,15 +18,18 @@ use crate::data::{
 pub struct WorldMapInfo {
     pub world_map: adt::Adt,
     pub model_paths: Vec<String>,
+    pub world_model_paths: Vec<String>,
 }
 
 impl WorldMapInfo {
     pub fn new(mut world_map: adt::Adt) -> Self {
         Self::fix_model_extensions(&mut world_map);
         let model_paths = Self::get_model_paths(&world_map);
+        let world_model_paths = Self::get_world_model_paths(&world_map);
         Self {
             world_map,
             model_paths,
+            world_model_paths,
         }
     }
 
@@ -65,15 +68,15 @@ impl WorldMapInfo {
         models
     }
 
-    pub fn get_world_model_paths(&self) -> Vec<&String> {
+    pub fn get_world_model_paths(world_map: &adt::Adt) -> Vec<String> {
         let mut world_models = Vec::new();
-        if let Some(modf) = &self.world_map.modf
-            && let Some(mwmo) = &self.world_map.mwmo
+        if let Some(modf) = &world_map.modf
+            && let Some(mwmo) = &world_map.mwmo
         {
             let filenames = &mwmo.filenames;
             for model in &modf.models {
                 if let Some(filename) = filenames.get(model.name_id as usize) {
-                    world_models.push(filename);
+                    world_models.push(filename.clone());
                 }
             }
         }
@@ -107,10 +110,9 @@ pub fn is_world_map_extension(filename: &str) -> bool {
     lower_filename.ends_with(".adt")
 }
 
-pub fn start_loading_world_map(tasks: &mut file::LoadFileTask, file_info: &file::FileInfo) {
+pub fn loading_world_map_task(file_info: &file::FileInfo) -> tasks::Task<Result<file::FileInfo>> {
     info!("Starting to load world map: {}", file_info.path);
-    let task = tasks::IoTaskPool::get().spawn(load_world_map(file_info.shallow_clone()));
-    tasks.tasks.push(task);
+    tasks::IoTaskPool::get().spawn(load_world_map(file_info.shallow_clone()))
 }
 
 async fn load_world_map(mut file_info: file::FileInfo) -> Result<file::FileInfo> {
@@ -186,7 +188,7 @@ pub fn create_meshes_from_world_map_info(
     }
 
     let mut world_model_bundles = Vec::new();
-    for world_model_path in &world_map_info.get_world_model_paths() {
+    for world_model_path in &world_map_info.world_model_paths {
         let bundles = world_model::create_meshes_from_world_model_path(
             world_model_path,
             file_info_map,

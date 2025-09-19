@@ -79,13 +79,19 @@ fn load_selected_file(
             file_info.state = file::FileInfoState::Loading;
             match file_info.data_type {
                 file::DataType::Model => {
-                    model::start_loading_model(&mut load_file_tasks, file_info)
+                    load_file_tasks
+                        .tasks
+                        .push(model::loading_model_task(file_info));
                 }
                 file::DataType::WorldModel => {
-                    world_model::start_loading_world_model(&mut load_file_tasks, file_info)
+                    load_file_tasks
+                        .tasks
+                        .push(world_model::loading_world_model_task(file_info));
                 }
                 file::DataType::WorldMap => {
-                    world_map::start_loading_world_map(&mut load_file_tasks, file_info)
+                    load_file_tasks
+                        .tasks
+                        .push(world_map::loading_world_map_task(file_info));
                 }
                 file::DataType::Texture => {
                     // Textures are loaded as part of model/world model/world map loading

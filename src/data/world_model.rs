@@ -74,10 +74,9 @@ fn read_groups(
     Ok(groups)
 }
 
-pub fn start_loading_world_model(tasks: &mut file::LoadFileTask, file_info: &file::FileInfo) {
+pub fn loading_world_model_task(file_info: &file::FileInfo) -> tasks::Task<Result<file::FileInfo>> {
     info!("Starting to load world model: {}", file_info.path);
-    let task = tasks::IoTaskPool::get().spawn(load_world_model(file_info.shallow_clone()));
-    tasks.tasks.push(task);
+    tasks::IoTaskPool::get().spawn(load_world_model(file_info.shallow_clone()))
 }
 
 async fn load_world_model(mut file_info: file::FileInfo) -> Result<file::FileInfo> {

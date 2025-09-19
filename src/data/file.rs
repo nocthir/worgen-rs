@@ -269,6 +269,16 @@ fn process_loaded_file(
     load_task: &mut LoadFileTask,
 ) -> Result<()> {
     match &file.data_info {
+        Some(DataInfo::WorldMap(world_map_info)) => {
+            load_unloaded_models(&world_map_info.model_paths, file_info_map, new_tasks)?;
+            load_unloaded_world_models(
+                &world_map_info.world_model_paths,
+                file_info_map,
+                new_tasks,
+            )?;
+            // Put the current task back to be processed later
+            load_task.completed.push(file);
+        }
         Some(DataInfo::WorldModel(world_model_info)) => {
             load_unloaded_textures(
                 world_model_info.get_texture_paths(),
@@ -307,6 +317,42 @@ fn load_unloaded_textures(
             // Start loading the texture
             texture_file_info.state = FileInfoState::Loading;
             let new_task = texture::loading_texture_task(texture_file_info);
+            new_tasks.push(new_task);
+        }
+    }
+    Ok(())
+}
+
+/// Checks the file info map for model files and starts loading them if necessary.
+fn load_unloaded_models(
+    model_paths: &[String],
+    file_info_map: &mut FileInfoMap,
+    new_tasks: &mut Vec<tasks::Task<Result<FileInfo>>>,
+) -> Result<()> {
+    for model_path in model_paths {
+        let model_file_info = file_info_map.get_file_info_mut(model_path)?;
+        if model_file_info.state == FileInfoState::Unloaded {
+            // Start loading the model
+            model_file_info.state = FileInfoState::Loading;
+            let new_task = model::loading_model_task(model_file_info);
+            new_tasks.push(new_task);
+        }
+    }
+    Ok(())
+}
+
+/// Checks the file info map for world model files and starts loading them if necessary.
+fn load_unloaded_world_models(
+    world_model_paths: &[String],
+    file_info_map: &mut FileInfoMap,
+    new_tasks: &mut Vec<tasks::Task<Result<FileInfo>>>,
+) -> Result<()> {
+    for world_model_path in world_model_paths {
+        let world_model_file_info = file_info_map.get_file_info_mut(world_model_path)?;
+        if world_model_file_info.state == FileInfoState::Unloaded {
+            // Start loading the world model
+            world_model_file_info.state = FileInfoState::Loading;
+            let new_task = world_model::loading_world_model_task(world_model_file_info);
             new_tasks.push(new_task);
         }
     }
@@ -382,7 +428,7 @@ fn check_loaded_model(
 
     // At this point we have the model loaded, but textures may not be loaded yet.
     // We need to check the file info map to see whether the loading has completed.
-    let textures_state = check_files_state(&model_info.get_texture_paths(), file_info_map);
+    let textures_state = check_files_state(model_info.get_texture_paths().iter(), file_info_map);
 
     match textures_state {
         FileInfoState::Loaded => {
@@ -433,7 +479,8 @@ fn check_loaded_world_model(
 
     // At this point we have the world model loaded, but textures may not be loaded yet.
     // We need to check the file info map to see whether the loading has completed.
-    let textures_state = check_files_state(world_model_info.get_texture_paths(), file_info_map);
+    let textures_state =
+        check_files_state(world_model_info.get_texture_paths().iter(), file_info_map);
 
     match textures_state {
         FileInfoState::Loaded => {
@@ -484,7 +531,12 @@ fn check_loaded_world_map(
 
     // At this point we have the world map loaded, but models and textures may not be loaded yet.
     // We need to check the file info map to see whether the loading has completed.
-    let models_state = check_files_state(&world_map_info.model_paths, file_info_map);
+    let all_model_paths = world_map_info
+        .model_paths
+        .iter()
+        .chain(world_map_info.world_model_paths.iter());
+
+    let models_state = check_files_state(all_model_paths, file_info_map);
 
     match models_state {
         FileInfoState::Loaded => {
@@ -528,7 +580,10 @@ fn check_loaded_world_map(
 /// If any file is `Loading`, returns `Loading`.
 /// If any file is `Unloaded`, returns `Unloaded`.
 /// If `paths` is empty, returns `Loaded`.
-fn check_files_state(paths: &[String], file_info_map: &FileInfoMap) -> FileInfoState {
+fn check_files_state<'s, I: Iterator<Item = &'s String>>(
+    paths: I,
+    file_info_map: &FileInfoMap,
+) -> FileInfoState {
     let state = FileInfoState::Loaded;
     for path in paths {
         let file_info = match file_info_map.get_file_info(path) {

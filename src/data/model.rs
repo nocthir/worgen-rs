@@ -8,7 +8,7 @@ use bevy::{
     asset::RenderAssetUsages,
     prelude::*,
     render::mesh::{Indices, PrimitiveTopology},
-    tasks,
+    tasks::{self, Task},
 };
 use wow_m2 as m2;
 use wow_mpq as mpq;
@@ -44,9 +44,12 @@ pub fn is_model_extension(filename: &str) -> bool {
 }
 
 pub fn start_loading_model(tasks: &mut LoadFileTask, file_info: &FileInfo) {
-    info!("Starting to load model: {}", file_info.path);
-    let task = tasks::IoTaskPool::get().spawn(load_model(file_info.shallow_clone()));
-    tasks.tasks.push(task);
+    tasks.tasks.push(loading_model_task(file_info));
+}
+
+pub fn loading_model_task(model_file_info: &FileInfo) -> Task<Result<FileInfo>> {
+    info!("Starting to load model: {}", model_file_info.path);
+    tasks::IoTaskPool::get().spawn(load_model(model_file_info.shallow_clone()))
 }
 
 async fn load_model(mut file_info: FileInfo) -> Result<FileInfo> {
