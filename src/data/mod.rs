@@ -4,6 +4,7 @@
 
 pub mod archive;
 pub mod file;
+pub mod material;
 pub mod model;
 pub mod texture;
 pub mod world_map;

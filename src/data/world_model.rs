@@ -14,7 +14,7 @@ use bevy::{
 use wow_mpq as mpq;
 use wow_wmo as wmo;
 
-use crate::data::{ModelBundle, file, normalize_vec3, texture};
+use crate::data::{ModelBundle, file, material, normalize_vec3, texture};
 
 pub struct WorldModelInfo {
     pub world_model: wmo::WmoRoot,
@@ -180,6 +180,8 @@ fn create_materials_from_wmo(
             Some(Face::Back)
         };
 
+        let alpha_mode = material::alpha_mode_from_world_model_blend_mode(material.blend_mode);
+
         let material = StandardMaterial {
             base_color,
             emissive,
@@ -187,6 +189,7 @@ fn create_materials_from_wmo(
             base_color_texture: Some(image_handle),
             unlit,
             cull_mode,
+            alpha_mode,
             ..Default::default()
         };
         materials.push(material);

@@ -13,7 +13,7 @@ use bevy::{
 use wow_m2 as m2;
 use wow_mpq as mpq;
 
-use crate::data::{ModelBundle, file, normalize_vec3, texture};
+use crate::data::{ModelBundle, file, material, normalize_vec3, texture};
 
 #[derive(Clone)]
 pub struct ModelInfo {
@@ -177,7 +177,7 @@ fn create_mesh_for_submesh(
     // Determine alpha mode from material blend mode.
     // Note that multiple batches can share the same material.
     let model_material = &model.materials[batch.material_index as usize];
-    let alpha_mode = blend_mode_to_alpha_mode(model_material.blend_mode);
+    let alpha_mode = material::alpha_mode_from_model_blend_mode(model_material.blend_mode);
 
     let material_handle = materials.add(StandardMaterial {
         base_color_texture: Some(texture.clone()),
@@ -217,21 +217,6 @@ fn create_mesh_for_submesh(
         material: MeshMaterial3d(material_handle),
         transform: Transform::default(),
     })
-}
-
-fn blend_mode_to_alpha_mode(blend_mode: m2::chunks::material::M2BlendMode) -> AlphaMode {
-    use m2::chunks::material::M2BlendMode as BM;
-    if blend_mode.intersects(BM::ALPHA_KEY | BM::NO_ALPHA_ADD) {
-        AlphaMode::AlphaToCoverage
-    } else if blend_mode.intersects(BM::ADD | BM::BLEND_ADD) {
-        AlphaMode::Add
-    } else if blend_mode.intersects(BM::MOD | BM::MOD2X) {
-        AlphaMode::Multiply
-    } else if blend_mode.intersects(BM::ALPHA) {
-        AlphaMode::Blend
-    } else {
-        AlphaMode::Opaque
-    }
 }
 
 #[cfg(test)]
