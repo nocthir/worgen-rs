@@ -2,15 +2,13 @@
 // Author: Nocthir <nocthir@proton.me>
 // SPDX-License-Identifier: MIT or Apache-2.0
 
-use std::{
-    io,
-    path::{Path, PathBuf},
-};
+use std::{io, path::Path};
 
 use bevy::{
     asset::RenderAssetUsages,
     prelude::*,
     render::{mesh::*, render_resource::Face},
+    tasks,
 };
 
 use wow_mpq as mpq;
@@ -19,10 +17,14 @@ use wow_wmo as wmo;
 use crate::data::{ModelBundle, file, normalize_vec3, texture};
 
 pub struct WorldModelInfo {
-    pub path: String,
-    pub archive_path: PathBuf,
     pub world_model: wmo::WmoRoot,
     pub groups: Vec<wmo::WmoGroup>,
+}
+
+impl WorldModelInfo {
+    pub fn get_texture_paths(&self) -> &[String] {
+        &self.world_model.textures
+    }
 }
 
 fn read_wmo(path: &str, archive: &mut mpq::Archive) -> Result<wmo::WmoRoot> {
@@ -31,14 +33,14 @@ fn read_wmo(path: &str, archive: &mut mpq::Archive) -> Result<wmo::WmoRoot> {
     Ok(wmo::parse_wmo(&mut reader)?)
 }
 
-fn is_wmo_root_path(file_path: &str) -> bool {
+pub fn is_world_model_root_path(file_path: &str) -> bool {
     if !is_world_model_extension(file_path) {
         return false;
     }
-    !is_wmo_group_path(file_path)
+    !is_world_model_group_path(file_path)
 }
 
-fn is_wmo_group_path(file_path: &str) -> bool {
+fn is_world_model_group_path(file_path: &str) -> bool {
     if !is_world_model_extension(file_path) {
         return false;
     }
@@ -54,7 +56,7 @@ fn is_wmo_group_path(file_path: &str) -> bool {
         .is_some_and(|s| s.len() == 3 && s.chars().all(|c| c.is_ascii_digit()))
 }
 
-pub fn is_world_model_extension(file_path: &str) -> bool {
+fn is_world_model_extension(file_path: &str) -> bool {
     let lower = file_path.to_lowercase();
     lower.ends_with(".wmo")
 }
@@ -70,6 +72,37 @@ fn read_groups(
         groups.push(wmo_group);
     }
     Ok(groups)
+}
+
+pub fn start_loading_world_model(tasks: &mut file::LoadFileTask, file_info: &file::FileInfo) {
+    info!("Starting to load world model: {}", file_info.path);
+    let task = tasks::IoTaskPool::get().spawn(load_world_model(file_info.shallow_clone()));
+    tasks.tasks.push(task);
+}
+
+async fn load_world_model(mut file_info: file::FileInfo) -> Result<file::FileInfo> {
+    match load_world_model_impl(&file_info) {
+        Ok(world_model_info) => {
+            file_info.set_world_model(world_model_info);
+            info!("Loaded world model: {}", file_info.path);
+            Ok(file_info)
+        }
+        Err(e) => {
+            error!("Failed to load world model {}: {}", file_info.path, e);
+            file_info.state = file::FileInfoState::Error(e.to_string());
+            Ok(file_info)
+        }
+    }
+}
+
+fn load_world_model_impl(file_info: &file::FileInfo) -> Result<WorldModelInfo> {
+    let mut archive = mpq::Archive::open(&file_info.archive_path)?;
+    let world_model = read_wmo(&file_info.path, &mut archive)?;
+    let groups = read_groups(&file_info.path, &mut archive, &world_model)?;
+    Ok(WorldModelInfo {
+        world_model,
+        groups,
+    })
 }
 
 pub fn create_meshes_from_world_model_path(

@@ -2,7 +2,7 @@
 // Author: Nocthir <nocthir@proton.me>
 // SPDX-License-Identifier: MIT or Apache-2.0
 
-use std::{io, path::PathBuf};
+use std::io;
 
 use bevy::{
     asset::RenderAssetUsages,
@@ -15,7 +15,7 @@ use wow_mpq as mpq;
 
 use crate::data::{
     ModelBundle,
-    file::{FileInfo, FileInfoMap, LoadFileTask},
+    file::{self, FileInfo, FileInfoMap, LoadFileTask},
     normalize_vec3, texture,
 };
 
@@ -45,24 +45,31 @@ pub fn is_model_extension(filename: &str) -> bool {
 
 pub fn start_loading_model(tasks: &mut LoadFileTask, file_info: &FileInfo) {
     info!("Starting to load model: {}", file_info.path);
-    let task = tasks::IoTaskPool::get().spawn(load_model(
-        file_info.path.to_string(),
-        file_info.archive_path.clone(),
-    ));
+    let task = tasks::IoTaskPool::get().spawn(load_model(file_info.shallow_clone()));
     tasks.tasks.push(task);
 }
 
-async fn load_model(file_path: String, archive_path: PathBuf) -> Result<FileInfo> {
-    let mut archive = mpq::Archive::open(&archive_path)
-        .map_err(|e| format!("Failed to open archive {}: {}", archive_path.display(), e))?;
-    let data = archive
-        .read_file(&file_path)
-        .map_err(|e| format!("Failed to read model file {}: {}", file_path, e))?;
+async fn load_model(mut file_info: FileInfo) -> Result<FileInfo> {
+    match load_model_impl(&file_info) {
+        Ok(model_info) => {
+            file_info.set_model(model_info);
+            info!("Loaded model: {}", file_info.path);
+            Ok(file_info)
+        }
+        Err(e) => {
+            error!("Failed to load model {}: {}", file_info.path, e);
+            file_info.state = file::FileInfoState::Error(e.to_string());
+            Ok(file_info)
+        }
+    }
+}
+
+fn load_model_impl(file_info: &file::FileInfo) -> Result<ModelInfo> {
+    let mut archive = mpq::Archive::open(&file_info.archive_path)?;
+    let data = archive.read_file(&file_info.path)?;
     let mut reader = io::Cursor::new(&data);
-    let model = m2::M2Model::parse(&mut reader)
-        .map_err(|e| format!("Failed to parse model file {}: {}", file_path, e))?;
-    let model_info = ModelInfo { model, data };
-    Ok(FileInfo::new_model(file_path, archive.path(), model_info))
+    let model = m2::M2Model::parse(&mut reader)?;
+    Ok(ModelInfo { model, data })
 }
 
 pub fn create_meshes_from_model_path(

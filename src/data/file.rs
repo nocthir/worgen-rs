@@ -14,8 +14,8 @@ use crate::data::{
     archive::ArchiveInfo,
     model::{self, ModelInfo},
     texture::{self, TextureInfo},
-    world_map::WorldMapInfo,
-    world_model::WorldModelInfo,
+    world_map::{self, WorldMapInfo},
+    world_model::{self, WorldModelInfo},
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -30,29 +30,19 @@ pub struct FileInfo {
     pub path: String,
     pub archive_path: PathBuf,
     pub state: FileInfoState,
+    pub data_type: DataType,
     pub data_info: Option<DataInfo>,
 }
 
 impl FileInfo {
     pub fn new<S: Into<String>, P: AsRef<Path>>(path: S, archive_path: P) -> Self {
+        let path = path.into();
         Self {
-            path: path.into(),
+            path: path.clone(),
             archive_path: archive_path.as_ref().into(),
             state: FileInfoState::Unloaded,
+            data_type: DataType::from(path),
             data_info: None,
-        }
-    }
-
-    pub fn new_with_data<S: Into<String>, P: AsRef<Path>>(
-        path: S,
-        archive_path: P,
-        data_info: DataInfo,
-    ) -> Self {
-        Self {
-            path: path.into(),
-            archive_path: archive_path.as_ref().into(),
-            state: FileInfoState::Loaded,
-            data_info: Some(data_info),
         }
     }
 
@@ -64,40 +54,9 @@ impl FileInfo {
             path: self.path.clone(),
             archive_path: self.archive_path.clone(),
             state: self.state.clone(),
+            data_type: self.data_type.clone(),
             data_info: None,
         }
-    }
-
-    pub fn new_texture<S: Into<String>, P: AsRef<Path>>(
-        path: S,
-        archive_path: P,
-        texture_info: TextureInfo,
-    ) -> Self {
-        Self::new_with_data(path, archive_path, DataInfo::Texture(texture_info))
-    }
-
-    pub fn new_model<S: Into<String>, P: AsRef<Path>>(
-        path: S,
-        archive_path: P,
-        model_info: ModelInfo,
-    ) -> Self {
-        Self::new_with_data(path, archive_path, DataInfo::Model(model_info))
-    }
-
-    pub fn new_world_model<S: Into<String>, P: AsRef<Path>>(
-        path: S,
-        archive_path: P,
-        wmo_info: WorldModelInfo,
-    ) -> Self {
-        Self::new_with_data(path, archive_path, DataInfo::WorldModel(wmo_info))
-    }
-
-    pub fn new_world_map<S: Into<String>, P: AsRef<Path>>(
-        path: S,
-        archive_path: P,
-        world_map_info: WorldMapInfo,
-    ) -> Self {
-        Self::new_with_data(path, archive_path, DataInfo::WorldMap(world_map_info))
     }
 
     pub fn get_model(&self) -> Result<&ModelInfo> {
@@ -108,9 +67,66 @@ impl FileInfo {
         }
     }
 
+    pub fn get_world_model(&self) -> Result<&WorldModelInfo> {
+        if let Some(DataInfo::WorldModel(world_model_info)) = &self.data_info {
+            Ok(world_model_info)
+        } else {
+            Err(format!("File {} is not a world model", self.path).into())
+        }
+    }
+
+    pub fn get_world_map(&self) -> Result<&WorldMapInfo> {
+        if let Some(DataInfo::WorldMap(world_map_info)) = &self.data_info {
+            Ok(world_map_info)
+        } else {
+            Err(format!("File {} is not a world map", self.path).into())
+        }
+    }
+
     pub fn set_texture(&mut self, texture: TextureInfo) {
         self.data_info = Some(DataInfo::Texture(texture));
         self.state = FileInfoState::Loaded;
+    }
+
+    pub fn set_model(&mut self, model: ModelInfo) {
+        self.data_info = Some(DataInfo::Model(model));
+        self.state = FileInfoState::Loaded;
+    }
+
+    pub fn set_world_model(&mut self, wmo: WorldModelInfo) {
+        self.data_info = Some(DataInfo::WorldModel(wmo));
+        self.state = FileInfoState::Loaded;
+    }
+
+    pub fn set_world_map(&mut self, world_map: WorldMapInfo) {
+        self.data_info = Some(DataInfo::WorldMap(world_map));
+        self.state = FileInfoState::Loaded;
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DataType {
+    Texture,
+    Model,
+    WorldModel,
+    WorldMap,
+    Unknown,
+}
+
+impl<S: Into<String>> From<S> for DataType {
+    fn from(file_path: S) -> Self {
+        let lowercase = file_path.into().to_lowercase();
+        if lowercase.ends_with(".blp") {
+            DataType::Texture
+        } else if lowercase.ends_with(".m2") {
+            DataType::Model
+        } else if lowercase.ends_with(".wmo") {
+            DataType::WorldModel
+        } else if lowercase.ends_with(".adt") {
+            DataType::WorldMap
+        } else {
+            DataType::Unknown
+        }
     }
 }
 
@@ -253,19 +269,17 @@ fn process_loaded_file(
     load_task: &mut LoadFileTask,
 ) -> Result<()> {
     match &file.data_info {
+        Some(DataInfo::WorldModel(world_model_info)) => {
+            load_unloaded_textures(
+                world_model_info.get_texture_paths(),
+                file_info_map,
+                new_tasks,
+            )?;
+            // Put the current task back to be processed later
+            load_task.completed.push(file);
+        }
         Some(DataInfo::Model(model_info)) => {
-            // At this point we have the model loaded, but textures may not be loaded yet.
-            // We need to check the file info map for texture files and start loading them if necessary.
-            for texture_path in model_info.get_texture_paths() {
-                let texture_file_info = file_info_map.get_file_info_mut(&texture_path)?;
-                if texture_file_info.state == FileInfoState::Unloaded {
-                    // Start loading the texture
-                    texture_file_info.state = FileInfoState::Loading;
-                    let new_task = texture::loading_texture_task(texture_file_info);
-                    new_tasks.push(new_task);
-                }
-            }
-
+            load_unloaded_textures(&model_info.get_texture_paths(), file_info_map, new_tasks)?;
             // Put the current task back to be processed later
             load_task.completed.push(file);
         }
@@ -276,6 +290,24 @@ fn process_loaded_file(
         _ => {
             file.state = FileInfoState::Error("Loaded file type is not supported".to_string());
             file_info_map.insert(file);
+        }
+    }
+    Ok(())
+}
+
+/// Checks the file info map for texture files and starts loading them if necessary.
+fn load_unloaded_textures(
+    texture_paths: &[String],
+    file_info_map: &mut FileInfoMap,
+    new_tasks: &mut Vec<tasks::Task<Result<FileInfo>>>,
+) -> Result<()> {
+    for texture_path in texture_paths {
+        let texture_file_info = file_info_map.get_file_info_mut(texture_path)?;
+        if texture_file_info.state == FileInfoState::Unloaded {
+            // Start loading the texture
+            texture_file_info.state = FileInfoState::Loading;
+            let new_task = texture::loading_texture_task(texture_file_info);
+            new_tasks.push(new_task);
         }
     }
     Ok(())
@@ -293,50 +325,197 @@ fn process_completed_tasks(
     completed_tasks.append(&mut load_task.completed);
 
     for mut file in completed_tasks {
-        match &file.data_info {
-            Some(DataInfo::Model(model_info)) => {
-                // At this point we have the model loaded, but textures may not be loaded yet.
-                // We need to check the file info map to see whether the loading has completed.
-                let textures_state =
-                    check_files_state(&model_info.get_texture_paths(), file_info_map);
-
-                match textures_state {
-                    FileInfoState::Loaded => {
-                        // All textures are loaded, we can create the meshes
-                        let bundles = model::create_meshes_from_model_info(
-                            model_info,
-                            file_info_map,
-                            images,
-                            materials,
-                            meshes,
-                        )?;
-
-                        if bundles.is_empty() {
-                            file.state = FileInfoState::Error("No meshes".to_string());
-                        } else {
-                            for bundle in bundles {
-                                add_bundle(commands, bundle, &file.path);
-                            }
-                            info!("Added meshes from {}", file.path);
-                            file.state = FileInfoState::Loaded;
-                        }
-                        // Update the file archive map
-                        file_info_map.insert(file);
-                    }
-                    FileInfoState::Error(_) => {
-                        file.state = textures_state.clone();
-                        file_info_map.insert(file);
-                    }
-                    _ => {
-                        // Put this task back to be processed later
-                        load_task.completed.push(file);
-                    }
-                }
+        match file.data_type {
+            DataType::Model => {
+                check_loaded_model(
+                    file,
+                    file_info_map,
+                    images,
+                    materials,
+                    meshes,
+                    commands,
+                    load_task,
+                )?;
+            }
+            DataType::WorldModel => {
+                check_loaded_world_model(
+                    file,
+                    file_info_map,
+                    images,
+                    materials,
+                    meshes,
+                    commands,
+                    load_task,
+                )?;
+            }
+            DataType::WorldMap => {
+                check_loaded_world_map(
+                    file,
+                    file_info_map,
+                    images,
+                    materials,
+                    meshes,
+                    commands,
+                    load_task,
+                )?;
             }
             _ => {
                 file.state = FileInfoState::Error("No data".to_string());
                 file_info_map.insert(file);
             }
+        }
+    }
+
+    Ok(())
+}
+
+fn check_loaded_model(
+    mut file: FileInfo,
+    file_info_map: &mut FileInfoMap,
+    images: &mut Assets<Image>,
+    materials: &mut Assets<StandardMaterial>,
+    meshes: &mut Assets<Mesh>,
+    commands: &mut Commands,
+    load_task: &mut LoadFileTask,
+) -> Result<()> {
+    let model_info = file.get_model()?;
+
+    // At this point we have the model loaded, but textures may not be loaded yet.
+    // We need to check the file info map to see whether the loading has completed.
+    let textures_state = check_files_state(&model_info.get_texture_paths(), file_info_map);
+
+    match textures_state {
+        FileInfoState::Loaded => {
+            // All textures are loaded, we can create the meshes
+            let bundles = model::create_meshes_from_model_info(
+                model_info,
+                file_info_map,
+                images,
+                materials,
+                meshes,
+            )?;
+
+            if bundles.is_empty() {
+                file.state = FileInfoState::Error("No meshes".to_string());
+            } else {
+                for bundle in bundles {
+                    add_bundle(commands, bundle, &file.path);
+                }
+                info!("Added meshes from {}", file.path);
+                file.state = FileInfoState::Loaded;
+            }
+            // Update the file archive map
+            file_info_map.insert(file);
+        }
+        FileInfoState::Error(_) => {
+            file.state = textures_state.clone();
+            file_info_map.insert(file);
+        }
+        _ => {
+            // Put this task back to be processed later
+            load_task.completed.push(file);
+        }
+    }
+
+    Ok(())
+}
+
+fn check_loaded_world_model(
+    mut file: FileInfo,
+    file_info_map: &mut FileInfoMap,
+    images: &mut Assets<Image>,
+    materials: &mut Assets<StandardMaterial>,
+    meshes: &mut Assets<Mesh>,
+    commands: &mut Commands,
+    load_task: &mut LoadFileTask,
+) -> Result<()> {
+    let world_model_info = file.get_world_model()?;
+
+    // At this point we have the world model loaded, but textures may not be loaded yet.
+    // We need to check the file info map to see whether the loading has completed.
+    let textures_state = check_files_state(world_model_info.get_texture_paths(), file_info_map);
+
+    match textures_state {
+        FileInfoState::Loaded => {
+            // All textures are loaded, we can create the meshes
+            let bundles = world_model::create_meshes_from_world_model_info(
+                world_model_info,
+                file_info_map,
+                images,
+                materials,
+                meshes,
+            )?;
+
+            if bundles.is_empty() {
+                file.state = FileInfoState::Error("No meshes".to_string());
+            } else {
+                for bundle in bundles {
+                    add_bundle(commands, bundle, &file.path);
+                }
+                info!("Added meshes from {}", file.path);
+                file.state = FileInfoState::Loaded;
+            }
+            // Update the file archive map
+            file_info_map.insert(file);
+        }
+        FileInfoState::Error(_) => {
+            file.state = textures_state.clone();
+            file_info_map.insert(file);
+        }
+        _ => {
+            // Put this task back to be processed later
+            load_task.completed.push(file);
+        }
+    }
+
+    Ok(())
+}
+
+fn check_loaded_world_map(
+    mut file: FileInfo,
+    file_info_map: &mut FileInfoMap,
+    images: &mut Assets<Image>,
+    materials: &mut Assets<StandardMaterial>,
+    meshes: &mut Assets<Mesh>,
+    commands: &mut Commands,
+    load_task: &mut LoadFileTask,
+) -> Result<()> {
+    let world_map_info = file.get_world_map()?;
+
+    // At this point we have the world map loaded, but models and textures may not be loaded yet.
+    // We need to check the file info map to see whether the loading has completed.
+    let models_state = check_files_state(&world_map_info.model_paths, file_info_map);
+
+    match models_state {
+        FileInfoState::Loaded => {
+            // All models are loaded, we can create the meshes
+            let bundles = world_map::create_meshes_from_world_map_info(
+                world_map_info,
+                file_info_map,
+                images,
+                materials,
+                meshes,
+            )?;
+
+            if bundles.is_empty() {
+                file.state = FileInfoState::Error("No meshes".to_string());
+            } else {
+                for bundle in bundles {
+                    add_bundle(commands, bundle, &file.path);
+                }
+                info!("Added meshes from {}", file.path);
+                file.state = FileInfoState::Loaded;
+            }
+            // Update the file archive map
+            file_info_map.insert(file);
+        }
+        FileInfoState::Error(_) => {
+            file.state = models_state.clone();
+            file_info_map.insert(file);
+        }
+        _ => {
+            // Put this task back to be processed later
+            load_task.completed.push(file);
         }
     }
 

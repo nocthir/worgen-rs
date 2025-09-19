@@ -75,7 +75,8 @@ impl ArchiveInfo {
     fn get_world_model_paths(archive: &mut mpq::Archive) -> Result<Vec<String>> {
         let mut world_models = Vec::new();
         archive.list()?.retain(|file| {
-            if world_model::is_world_model_extension(&file.name) {
+            // We only want the root .wmo files, not the group files
+            if world_model::is_world_model_root_path(&file.name) {
                 world_models.push(file.name.clone());
                 false
             } else {

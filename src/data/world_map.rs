@@ -4,24 +4,29 @@
 
 use std::io;
 
-use bevy::prelude::*;
+use bevy::{prelude::*, tasks};
 use wow_adt as adt;
 use wow_mpq as mpq;
 
-use crate::data::{ModelBundle, file::FileInfoMap, model, world_model};
+use crate::data::{
+    ModelBundle,
+    file::{self, FileInfoMap},
+    model, world_model,
+};
 
 #[derive(Clone)]
 pub struct WorldMapInfo {
-    pub path: String,
     pub world_map: adt::Adt,
+    pub model_paths: Vec<String>,
 }
 
 impl WorldMapInfo {
-    pub fn new<S: Into<String>>(path: S, mut world_map: adt::Adt) -> Self {
+    pub fn new(mut world_map: adt::Adt) -> Self {
         Self::fix_model_extensions(&mut world_map);
+        let model_paths = Self::get_model_paths(&world_map);
         Self {
-            path: path.into(),
             world_map,
+            model_paths,
         }
     }
 
@@ -47,10 +52,15 @@ impl WorldMapInfo {
                 .is_some_and(|modf| !modf.models.is_empty())
     }
 
-    pub fn get_model_paths(&self) -> Vec<&String> {
+    fn get_model_paths(world_map: &adt::Adt) -> Vec<String> {
         let mut models = Vec::new();
-        if let Some(mmdx) = &self.world_map.mmdx {
-            models.extend(mmdx.filenames.iter().filter(|&f| f.ends_with(".m2")));
+        if let Some(mmdx) = &world_map.mmdx {
+            models.extend(
+                mmdx.filenames
+                    .iter()
+                    .filter(|&f| f.ends_with(".m2"))
+                    .cloned(),
+            );
         }
         models
     }
@@ -79,7 +89,7 @@ pub fn read_world_maps(archive: &mut mpq::Archive) -> Result<Vec<WorldMapInfo>> 
             continue;
         }
         if let Ok(world_map) = read_world_map(&entry.name, archive) {
-            infos.push(WorldMapInfo::new(entry.name.clone(), world_map));
+            infos.push(WorldMapInfo::new(world_map));
         }
     }
 
@@ -95,6 +105,33 @@ pub fn read_world_map(path: &str, archive: &mut mpq::Archive) -> Result<adt::Adt
 pub fn is_world_map_extension(filename: &str) -> bool {
     let lower_filename = filename.to_lowercase();
     lower_filename.ends_with(".adt")
+}
+
+pub fn start_loading_world_map(tasks: &mut file::LoadFileTask, file_info: &file::FileInfo) {
+    info!("Starting to load world map: {}", file_info.path);
+    let task = tasks::IoTaskPool::get().spawn(load_world_map(file_info.shallow_clone()));
+    tasks.tasks.push(task);
+}
+
+async fn load_world_map(mut file_info: file::FileInfo) -> Result<file::FileInfo> {
+    match load_world_map_impl(&file_info) {
+        Ok(world_map_info) => {
+            file_info.set_world_map(world_map_info);
+            info!("Loaded world map: {}", file_info.path);
+            Ok(file_info)
+        }
+        Err(e) => {
+            error!("Failed to load world map {}: {}", file_info.path, e);
+            file_info.state = file::FileInfoState::Error(e.to_string());
+            Ok(file_info)
+        }
+    }
+}
+
+fn load_world_map_impl(file_info: &file::FileInfo) -> Result<WorldMapInfo> {
+    let mut archive = mpq::Archive::open(&file_info.archive_path)?;
+    let world_map = read_world_map(&file_info.path, &mut archive)?;
+    Ok(WorldMapInfo::new(world_map))
 }
 
 pub fn create_meshes_from_world_map_path(
@@ -118,7 +155,7 @@ pub fn create_meshes_from_world_map_info(
     let mut bundles = Vec::new();
 
     let mut model_bundles = Vec::new();
-    for model_path in &world_map_info.get_model_paths() {
+    for model_path in &world_map_info.model_paths {
         let bundles = model::create_meshes_from_model_path(
             model_path,
             file_info_map,
