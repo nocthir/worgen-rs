@@ -43,18 +43,6 @@ impl WorldMapInfo {
         }
     }
 
-    pub fn has_stuff(&self) -> bool {
-        self.world_map
-            .mmdx
-            .as_ref()
-            .is_some_and(|mmdx| !mmdx.filenames.is_empty())
-            || self
-                .world_map
-                .modf
-                .as_ref()
-                .is_some_and(|modf| !modf.models.is_empty())
-    }
-
     fn get_model_paths(world_map: &adt::Adt) -> Vec<String> {
         let mut models = Vec::new();
         if let Some(mmdx) = &world_map.mmdx {
@@ -120,6 +108,8 @@ fn load_world_map_impl(file_info: &file::FileInfo) -> Result<WorldMapInfo> {
     Ok(WorldMapInfo::new(world_map))
 }
 
+// Actually used in tests
+#[allow(unused)]
 pub fn create_meshes_from_world_map_path(
     world_map_path: &str,
     file_info_map: &FileInfoMap,

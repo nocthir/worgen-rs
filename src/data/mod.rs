@@ -111,6 +111,8 @@ fn load_selected_file(
     Ok(())
 }
 
+// Actually used in tests
+#[allow(unused)]
 fn create_mesh_from_selected_file(
     file_info: &FileSelected,
     file_info_map: &FileInfoMap,
@@ -122,6 +124,8 @@ fn create_mesh_from_selected_file(
     create_mesh_from_file_info(file_info, file_info_map, images, materials, meshes)
 }
 
+// Actually used in tests
+#[allow(unused)]
 fn create_mesh_from_file_info(
     file_info: &FileInfo,
     file_info_map: &FileInfoMap,
