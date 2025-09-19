@@ -149,12 +149,12 @@ fn file_info_header(
     ui: &mut egui::Ui,
 ) -> egui::collapsing_header::CollapsingResponse<()> {
     let file_state = file_info.state.clone();
-    let mut name = file_info.path.clone();
+    let mut error_message = None;
     if let file::FileInfoState::Error(err) = &file_info.state {
-        name.extend(format!(" ({})", err).chars());
+        error_message.replace(err.clone());
     }
 
-    egui::CollapsingHeader::new(&name)
+    egui::CollapsingHeader::new(&file_info.path)
         .icon(move |ui, _, response| {
             let pos = response.rect.center();
             let anchor = egui::Align2::CENTER_CENTER;
@@ -177,5 +177,9 @@ fn file_info_header(
                 }
             };
         })
-        .show(ui, |_| {})
+        .show(ui, |ui| {
+            if let Some(msg) = error_message {
+                ui.colored_label(egui::Color32::RED, msg);
+            }
+        })
 }

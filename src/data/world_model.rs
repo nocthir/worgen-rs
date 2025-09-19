@@ -205,13 +205,9 @@ fn read_group(
     group_index: usize,
 ) -> Result<wmo::WmoGroup> {
     let group_filename = get_wmo_group_filename(file_path, group_index);
-    let file = archive
-        .read_file(&group_filename)
-        .map_err(|e| format!("Failed to read WMO group file {}: {}", group_filename, e))?;
+    let file = archive.read_file(&group_filename)?;
     let mut reader = io::Cursor::new(&file);
-    let wmo_group = wmo::parse_wmo_group(&mut reader, group_index as _)
-        .map_err(|e| format!("Failed to parse WMO group file {}: {}", group_filename, e))?;
-    Ok(wmo_group)
+    Ok(wmo::parse_wmo_group(&mut reader, group_index as _)?)
 }
 
 fn get_wmo_group_filename<P: AsRef<Path>>(wmo_path: P, group_index: usize) -> String {
