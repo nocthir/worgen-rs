@@ -131,7 +131,7 @@ pub fn create_meshes_from_world_model_info(
 
     let wmo = &world_model_info.world_model;
     let textures = texture::create_textures_from_wmo(wmo, file_info_map, images)?;
-    let materials = create_materials_from_wmo(wmo, &textures);
+    let materials = create_materials_from_wmo(wmo, &textures, images);
     let material_handles = materials
         .into_iter()
         .map(|mat| standard_materials.add(mat))
@@ -160,6 +160,7 @@ pub fn create_meshes_from_world_model_info(
 fn create_materials_from_wmo(
     wmo: &wmo::WmoRoot,
     images: &[Handle<Image>],
+    image_assets: &mut Assets<Image>,
 ) -> Vec<StandardMaterial> {
     let mut materials = Vec::new();
 
@@ -168,7 +169,10 @@ fn create_materials_from_wmo(
         let emissive = create_color_from_wmo(material.emissive_color).to_linear();
 
         let texture_index = material.get_texture1_index(&wmo.texture_offset_index_map);
-        let image = images[texture_index as usize].clone();
+        let image_handle = images[texture_index as usize].clone();
+        let image = image_assets.get_mut(&image_handle).unwrap();
+        image.sampler = sampler_from_wmo_material_flags(material.flags);
+
         let unlit = material.flags.contains(wmo::WmoMaterialFlags::UNLIT);
         let cull_mode = if material.flags.contains(wmo::WmoMaterialFlags::TWO_SIDED) {
             None
@@ -180,7 +184,7 @@ fn create_materials_from_wmo(
             base_color,
             emissive,
             perceptual_roughness: 1.0,
-            base_color_texture: Some(image),
+            base_color_texture: Some(image_handle),
             unlit,
             cull_mode,
             ..Default::default()
@@ -188,6 +192,26 @@ fn create_materials_from_wmo(
         materials.push(material);
     }
     materials
+}
+
+fn sampler_from_wmo_material_flags(flags: wmo::WmoMaterialFlags) -> bevy::image::ImageSampler {
+    use bevy::image::*;
+    let address_mode_u = if flags.contains(wmo::WmoMaterialFlags::CLAMP_S) {
+        ImageAddressMode::ClampToEdge
+    } else {
+        ImageAddressMode::Repeat
+    };
+    let address_mode_v = if flags.contains(wmo::WmoMaterialFlags::CLAMP_T) {
+        ImageAddressMode::ClampToEdge
+    } else {
+        ImageAddressMode::Repeat
+    };
+    let descriptor = ImageSamplerDescriptor {
+        address_mode_u,
+        address_mode_v,
+        ..Default::default()
+    };
+    ImageSampler::Descriptor(descriptor)
 }
 
 fn create_color_from_wmo(color: wmo::types::Color) -> Color {
