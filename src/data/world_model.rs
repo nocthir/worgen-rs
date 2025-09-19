@@ -299,15 +299,27 @@ mod test {
     use crate::*;
 
     #[test]
-    fn world_map() -> Result {
+    fn list_world_model_paths() -> Result {
+        let settings = settings::load_settings()?;
+        let mut archive = mpq::Archive::open(&settings.world_model_archive_path)?;
+        for file_path in archive.list()? {
+            if is_world_model_extension(&file_path.name) {
+                println!("{}", file_path.name);
+            }
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn load_world_model() -> Result {
         let settings = settings::load_settings()?;
         let mut file_info_map = file::test::default_file_info_map(&settings)?;
-        file_info_map.load_file_and_dependencies(&settings.world_map_path.file_path)?;
+        file_info_map.load_file_and_dependencies(&settings.test_world_model.file_path)?;
         let mut images = Assets::<Image>::default();
         let mut custom_materials = Assets::<StandardMaterial>::default();
         let mut meshes = Assets::<Mesh>::default();
         data::create_mesh_from_file_path(
-            &settings.world_map_path.file_path,
+            &settings.test_world_model.file_path,
             &file_info_map,
             &mut images,
             &mut custom_materials,

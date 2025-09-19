@@ -7,6 +7,10 @@ license = "MIT OR Apache-2.0"
 description = "An interactive 3D application for exploring immersive virtual environments."
 repository = "https://github.com/nocthir/worgen-rs"
 
+[[bin]]
+name = "worgen-rs"
+test = false
+
 # Enable a small amount of optimization in the dev profile.
 #[profile.dev]
 #opt-level = 1
@@ -22,17 +26,17 @@ bevy-inspector-egui = "0.33.*"
 bevy_egui = "0.36.*"
 serde = "1.0.*"
 serde_json = "1.0.*"
-wow-adt = { git = "https://github.com/wowemulation-dev/warcraft-rs", rev = "3efb54bfe1effca47357b00918844eb755ae1b75" }
-wow-m2 = { git = "https://github.com/wowemulation-dev/warcraft-rs", rev = "3efb54bfe1effca47357b00918844eb755ae1b75" }
-wow-mpq = { git = "https://github.com/wowemulation-dev/warcraft-rs", rev = "3efb54bfe1effca47357b00918844eb755ae1b75" }
-wow-wmo = { git = "https://github.com/wowemulation-dev/warcraft-rs", rev = "3efb54bfe1effca47357b00918844eb755ae1b75" }
-wow-blp = { git = "https://github.com/wowemulation-dev/warcraft-rs", rev = "3efb54bfe1effca47357b00918844eb755ae1b75" }
+#wow-adt = { git = "https://github.com/wowemulation-dev/warcraft-rs", rev = "3efb54bfe1effca47357b00918844eb755ae1b75" }
+#wow-m2 = { git = "https://github.com/wowemulation-dev/warcraft-rs", rev = "3efb54bfe1effca47357b00918844eb755ae1b75" }
+#wow-mpq = { git = "https://github.com/wowemulation-dev/warcraft-rs", rev = "3efb54bfe1effca47357b00918844eb755ae1b75" }
+#wow-wmo = { git = "https://github.com/wowemulation-dev/warcraft-rs", rev = "3efb54bfe1effca47357b00918844eb755ae1b75" }
+#wow-blp = { git = "https://github.com/wowemulation-dev/warcraft-rs", rev = "3efb54bfe1effca47357b00918844eb755ae1b75" }
 
-#wow-adt = { path = "../warcraft-rs/file-formats/world-data/wow-adt" }
-#wow-m2 = { path = "../warcraft-rs/file-formats/graphics/wow-m2" }
-#wow-mpq = { path = "../warcraft-rs/file-formats/archives/wow-mpq" }
-#wow-wmo = { path = "../warcraft-rs/file-formats/graphics/wow-wmo" }
-#wow-blp = { path = "../warcraft-rs/file-formats/graphics/wow-blp" }
+wow-adt = { path = "../warcraft-rs/file-formats/world-data/wow-adt" }
+wow-m2 = { path = "../warcraft-rs/file-formats/graphics/wow-m2" }
+wow-mpq = { path = "../warcraft-rs/file-formats/archives/wow-mpq" }
+wow-wmo = { path = "../warcraft-rs/file-formats/graphics/wow-wmo" }
+wow-blp = { path = "../warcraft-rs/file-formats/graphics/wow-blp" }
 
 [dev-dependencies]
 env_logger = "*"

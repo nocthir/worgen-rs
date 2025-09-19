@@ -28,7 +28,7 @@ impl WorldMapInfo {
         Ok(Self::from_adt(world_map))
     }
 
-    pub fn from_adt(mut world_map: adt::Adt) -> Self {
+    fn from_adt(mut world_map: adt::Adt) -> Self {
         Self::fix_model_extensions(&mut world_map);
         let model_paths = Self::get_model_paths(&world_map);
         let world_model_paths = Self::get_world_model_paths(&world_map);
@@ -200,7 +200,7 @@ mod test {
     use crate::*;
 
     #[test]
-    fn read_world_map() -> Result<()> {
+    fn load_world_map() -> Result<()> {
         let settings = settings::load_settings()?;
         let mut file_info_map = file::test::default_file_info_map(&settings)?;
         file_info_map.load_file_and_dependencies(&settings.world_map_path.file_path)?;

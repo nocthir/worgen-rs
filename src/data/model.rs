@@ -240,7 +240,7 @@ mod test {
     use crate::*;
 
     #[test]
-    fn main_menu() -> Result {
+    fn load_main_menu() -> Result {
         let settings = settings::load_settings()?;
         let mut file_info_map = file::test::default_file_info_map(&settings)?;
         file_info_map.load_file_and_dependencies(&settings.default_model.file_path)?;
@@ -259,7 +259,7 @@ mod test {
     }
 
     #[test]
-    fn city() -> Result {
+    fn load_city() -> Result {
         let settings = settings::load_settings()?;
         let mut file_info_map = file::test::default_file_info_map(&settings)?;
         file_info_map.load_file_and_dependencies(&settings.city_model.file_path)?;
@@ -277,7 +277,7 @@ mod test {
     }
 
     #[test]
-    fn dwarf() -> Result {
+    fn load_dwarf() -> Result {
         let settings = settings::load_settings()?;
         let mut file_info_map = file::test::default_file_info_map(&settings)?;
         file_info_map.load_file_and_dependencies(&settings.test_model.file_path)?;
