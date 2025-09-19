@@ -259,7 +259,7 @@ pub fn check_file_loading(
     let mut completed_tasks = Vec::new();
     completed_tasks.append(&mut load_task.completed);
 
-    for file in completed_tasks {
+    for mut file in completed_tasks {
         let mut all_textures_loaded = true;
 
         match &file.data_info {
@@ -287,14 +287,13 @@ pub fn check_file_loading(
                     )?;
 
                     if bundles.is_empty() {
-                        error!("No meshes loaded for file: {}", file.path);
-                        return Ok(());
+                        file.state = FileInfoState::Error("No meshes".to_string());
+                    } else {
+                        for bundle in bundles {
+                            add_bundle(&mut commands, bundle, &file.path);
+                        }
+                        info!("Added meshes from {}", file.path);
                     }
-                    for bundle in bundles {
-                        add_bundle(&mut commands, bundle, &file.path);
-                    }
-
-                    info!("Added meshes from {}", file.path);
 
                     // All textures are loaded, update the file info map
                     file_info_map.insert(file);

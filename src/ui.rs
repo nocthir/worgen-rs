@@ -158,8 +158,12 @@ fn file_info_header(
     ui: &mut egui::Ui,
 ) -> egui::collapsing_header::CollapsingResponse<()> {
     let file_state = file_info.state.clone();
+    let mut name = file_info.path.clone();
+    if let file::FileInfoState::Error(err) = &file_info.state {
+        name.extend(format!(" ({})", err).chars());
+    }
 
-    egui::CollapsingHeader::new(&file_info.path)
+    egui::CollapsingHeader::new(&name)
         .icon(move |ui, _, response| {
             let pos = response.rect.center();
             let anchor = egui::Align2::CENTER_CENTER;
@@ -173,10 +177,12 @@ fn file_info_header(
                     ui.painter().text(pos, anchor, "⏳", font_id, text_color);
                 }
                 file::FileInfoState::Loaded => {
-                    ui.painter().text(pos, anchor, "✔", font_id, text_color);
+                    ui.painter()
+                        .text(pos, anchor, "✔", font_id, egui::Color32::CYAN);
                 }
-                file::FileInfoState::Error(e) => {
-                    ui.painter().error(pos, e);
+                file::FileInfoState::Error(_) => {
+                    ui.painter()
+                        .text(pos, anchor, "✖", font_id, egui::Color32::RED);
                 }
             };
         })
