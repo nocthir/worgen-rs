@@ -109,9 +109,9 @@ pub fn start_loading(mut commands: Commands, settings: Res<Settings>) -> Result<
 
     for file in data_path.read_dir()? {
         let file = file?;
-        if file.file_name().to_string_lossy().ends_with(".MPQ") {
-            let mpq_path = file.path().to_string_lossy().to_string();
-            let task = tasks::IoTaskPool::get().spawn(load_archive(mpq_path));
+        let file_path = file.path();
+        if is_archive_extension(&file_path) {
+            let task = tasks::IoTaskPool::get().spawn(load_archive(file_path));
             tasks.tasks.push(task);
         }
     }
@@ -121,7 +121,13 @@ pub fn start_loading(mut commands: Commands, settings: Res<Settings>) -> Result<
     Ok(())
 }
 
-async fn load_archive(archive_path: String) -> Result<ArchiveInfo> {
+pub fn is_archive_extension<P: AsRef<Path>>(path: P) -> bool {
+    path.as_ref()
+        .extension()
+        .is_some_and(|ext| ext.to_string_lossy().eq_ignore_ascii_case("mpq"))
+}
+
+async fn load_archive(archive_path: PathBuf) -> Result<ArchiveInfo> {
     ArchiveInfo::new(archive_path)
 }
 

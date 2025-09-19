@@ -622,3 +622,27 @@ fn check_files_state<'s, I: Iterator<Item = &'s String>>(
     }
     state
 }
+
+#[cfg(test)]
+pub mod test {
+    use std::{fs, path::Path};
+
+    use super::*;
+    use crate::{data::archive, settings};
+
+    pub fn default_file_info_map(settings: &settings::Settings) -> Result<FileInfoMap> {
+        let mut file_info_map = FileInfoMap::default();
+        let data_dir = Path::new(&settings.game_path).join("Data");
+        for entry in fs::read_dir(&data_dir)? {
+            let entry = entry?;
+            let path = entry.path();
+            if !archive::is_archive_extension(&path) {
+                continue;
+            }
+            let mut archive_info = archive::ArchiveInfo::new(&path)?;
+            file_info_map.fill(&mut archive_info)?;
+        }
+        assert!(!file_info_map.map.is_empty());
+        Ok(file_info_map)
+    }
+}

@@ -296,14 +296,13 @@ fn create_mesh_from_wmo_group(
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{data::texture, *};
+    use crate::*;
 
     #[test]
     fn altar() -> Result {
-        env_logger::init();
         let settings = settings::load_settings()?;
         let selected_model = ui::FileSelected::from(&settings.test_world_model);
-        let file_info_map = texture::test::default_file_info_map(&settings)?;
+        let file_info_map = file::test::default_file_info_map(&settings)?;
         let mut images = Assets::<Image>::default();
         let mut custom_materials = Assets::<StandardMaterial>::default();
         let mut meshes = Assets::<Mesh>::default();

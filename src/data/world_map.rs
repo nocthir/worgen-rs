@@ -197,20 +197,12 @@ pub fn create_meshes_from_world_map_info(
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{
-        data::{archive, texture},
-        *,
-    };
+    use crate::*;
 
     #[test]
-    fn read_adt() -> Result<()> {
+    fn read_world_map() -> Result<()> {
         let settings = settings::load_settings()?;
-        let mut file_info_map = texture::test::default_file_info_map(&settings)?;
-        let mut model_archive_info = archive::ArchiveInfo::new(&settings.model_archive_path)?;
-        file_info_map.fill(&mut model_archive_info)?;
-        let mut world_map_archive_info =
-            archive::ArchiveInfo::new(&settings.world_map_path.archive_path)?;
-        file_info_map.fill(&mut world_map_archive_info)?;
+        let file_info_map = file::test::default_file_info_map(&settings)?;
         let mut images = Assets::<Image>::default();
         let mut materials = Assets::<StandardMaterial>::default();
         let mut meshes = Assets::<Mesh>::default();

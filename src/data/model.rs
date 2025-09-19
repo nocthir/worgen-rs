@@ -237,15 +237,12 @@ fn blend_mode_to_alpha_mode(blend_mode: m2::chunks::material::M2BlendMode) -> Al
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{
-        data::{archive::ArchiveInfo, texture},
-        *,
-    };
+    use crate::*;
 
     #[test]
     fn main_menu() -> Result {
         let settings = settings::load_settings()?;
-        let file_info_map = texture::test::default_file_info_map(&settings)?;
+        let file_info_map = file::test::default_file_info_map(&settings)?;
         let selected_model = ui::FileSelected::from(&settings.default_model);
         let mut images = Assets::<Image>::default();
         let mut standard_materials = Assets::<StandardMaterial>::default();
@@ -263,7 +260,7 @@ mod test {
     #[test]
     fn city() -> Result {
         let settings = settings::load_settings()?;
-        let file_info_map = texture::test::default_file_info_map(&settings)?;
+        let file_info_map = file::test::default_file_info_map(&settings)?;
         let selected_model = ui::FileSelected::from(&settings.city_model);
         let mut images = Assets::<Image>::default();
         let mut standard_materials = Assets::<StandardMaterial>::default();
@@ -280,11 +277,8 @@ mod test {
 
     #[test]
     fn dwarf() -> Result {
-        env_logger::init();
         let settings = settings::load_settings()?;
-        let mut file_info_map = texture::test::default_file_info_map(&settings)?;
-        let mut archive_info = ArchiveInfo::new(&settings.model_archive_path)?;
-        file_info_map.fill(&mut archive_info)?;
+        let file_info_map = file::test::default_file_info_map(&settings)?;
         let selected_model = ui::FileSelected::from(&settings.test_model);
         let mut images = Assets::<Image>::default();
         let mut standard_materials = Assets::<StandardMaterial>::default();

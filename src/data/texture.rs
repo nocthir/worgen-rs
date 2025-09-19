@@ -106,18 +106,3 @@ pub fn create_image_from_path(
     let image_handle = images.add(image);
     Ok(image_handle)
 }
-
-#[cfg(test)]
-pub mod test {
-    use super::*;
-    use crate::{data::archive::ArchiveInfo, *};
-
-    pub fn default_file_info_map(settings: &settings::Settings) -> Result<file::FileInfoMap> {
-        let mut file_info_map = file::FileInfoMap::default();
-        let mut archive_info = ArchiveInfo::new(&settings.interface_archive_path)?;
-        file_info_map.fill(&mut archive_info)?;
-        let mut archive_info = ArchiveInfo::new(&settings.texture_archive_path)?;
-        file_info_map.fill(&mut archive_info)?;
-        Ok(file_info_map)
-    }
-}
