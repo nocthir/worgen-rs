@@ -78,12 +78,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "adler"
-version = "1.0.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f26201604c87b1e01bd3d98f8d5d9a8fcbb815e8cedb41ffccbeb4bf593a35fe"
-
-[[package]]
 name = "adler2"
 version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7152,7 +7146,7 @@ checksum = "5c573471f125075647d03df72e026074b7203790d41351cd6edc96f46bcccd36"
 
 [[package]]
 name = "worgen-rs"
-version = "0.1.6"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "bevy",
@@ -7172,6 +7166,7 @@ dependencies = [
 [[package]]
 name = "wow-adt"
 version = "0.4.0"
+source = "git+https://github.com/wowemulation-dev/warcraft-rs#3efb54bfe1effca47357b00918844eb755ae1b75"
 dependencies = [
  "log",
  "thiserror 2.0.16",
@@ -7180,6 +7175,7 @@ dependencies = [
 [[package]]
 name = "wow-blp"
 version = "0.4.0"
+source = "git+https://github.com/wowemulation-dev/warcraft-rs#3efb54bfe1effca47357b00918844eb755ae1b75"
 dependencies = [
  "bytes",
  "color_quant",
@@ -7192,6 +7188,7 @@ dependencies = [
 [[package]]
 name = "wow-m2"
 version = "0.4.0"
+source = "git+https://github.com/wowemulation-dev/warcraft-rs#3efb54bfe1effca47357b00918844eb755ae1b75"
 dependencies = [
  "anyhow",
  "bitflags 2.9.4",
@@ -7206,8 +7203,9 @@ dependencies = [
 [[package]]
 name = "wow-mpq"
 version = "0.4.0"
+source = "git+https://github.com/wowemulation-dev/warcraft-rs#3efb54bfe1effca47357b00918844eb755ae1b75"
 dependencies = [
- "adler",
+ "adler2",
  "byteorder",
  "bytes",
  "bzip2",
@@ -7237,6 +7235,7 @@ dependencies = [
 [[package]]
 name = "wow-wmo"
 version = "0.4.0"
+source = "git+https://github.com/wowemulation-dev/warcraft-rs#3efb54bfe1effca47357b00918844eb755ae1b75"
 dependencies = [
  "bitflags 2.9.4",
  "thiserror 2.0.16",
