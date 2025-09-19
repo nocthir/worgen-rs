@@ -2,13 +2,11 @@
 // Author: Nocthir <nocthir@proton.me>
 // SPDX-License-Identifier: MIT or Apache-2.0
 
-use std::path::PathBuf;
-
 use bevy::prelude::*;
 use bevy_egui::*;
 
 use crate::{
-    data::{ArchivesInfo, archive::ArchiveInfo},
+    data::{ArchivesInfo, archive::ArchiveInfo, file},
     settings::{FileSettings, Settings},
 };
 
@@ -29,14 +27,12 @@ impl Plugin for UiPlugin {
 
 #[derive(Event)]
 pub struct FileSelected {
-    pub archive_path: PathBuf,
     pub file_path: String,
 }
 
 impl From<&FileSettings> for FileSelected {
     fn from(settings: &FileSettings) -> Self {
         Self {
-            archive_path: settings.archive_path.clone().into(),
             file_path: settings.file_path.clone(),
         }
     }
@@ -48,24 +44,27 @@ fn select_main_menu_model(mut event_writer: EventWriter<FileSelected>, settings:
 
 fn data_info(
     mut contexts: EguiContexts,
-    mut data_info: ResMut<ArchivesInfo>,
+    data_info: Res<ArchivesInfo>,
+    file_info_map: Res<file::FileInfoMap>,
     mut event_writer: EventWriter<FileSelected>,
 ) -> Result<()> {
     egui::Window::new("Info")
         .scroll([false, true])
         .show(contexts.ctx_mut()?, |ui| {
-            for archive in &mut data_info.archives {
-                archive_info(archive, ui, &mut event_writer);
+            for archive in &data_info.archives {
+                archive_info(archive, &file_info_map, ui, &mut event_writer)?;
             }
+            Ok::<(), BevyError>(())
         });
     Ok(())
 }
 
 fn archive_info(
-    archive: &mut ArchiveInfo,
+    archive: &ArchiveInfo,
+    file_info_map: &file::FileInfoMap,
     ui: &mut egui::Ui,
     event_writer: &mut EventWriter<FileSelected>,
-) {
+) -> Result<()> {
     let texture_paths = &archive.texture_paths;
     let model_paths = &archive.model_paths;
     let world_model_paths = &archive.world_model_paths;
@@ -78,74 +77,108 @@ fn archive_info(
                 .enabled(!texture_paths.is_empty())
                 .show(ui, |ui| {
                     for path in texture_paths {
-                        ui.label(path);
+                        let file_info = file_info_map.get_file_info(path)?;
+                        file_info_header(file_info, ui);
                     }
+                    Ok::<(), BevyError>(())
                 });
             egui::CollapsingHeader::new("Models")
                 .enabled(!model_paths.is_empty())
                 .show(ui, |ui| {
                     for path in model_paths {
-                        model_info(archive, path, ui, event_writer);
+                        let file_info = file_info_map.get_file_info(path)?;
+                        model_info(file_info, ui, event_writer);
                     }
+                    Ok::<(), BevyError>(())
                 });
             egui::CollapsingHeader::new("World Models")
                 .enabled(!world_model_paths.is_empty())
                 .show(ui, |ui| {
                     for path in world_model_paths {
-                        world_model_info(archive, path, ui, event_writer);
+                        let file_info = file_info_map.get_file_info(path)?;
+                        world_model_info(file_info, ui, event_writer);
                     }
+                    Ok::<(), BevyError>(())
                 });
             egui::CollapsingHeader::new("World Maps")
                 .enabled(!world_map_paths.is_empty())
                 .show(ui, |ui| {
                     for path in world_map_paths {
-                        world_map_info(archive, path, ui, event_writer);
+                        let file_info = file_info_map.get_file_info(path)?;
+                        world_map_info(file_info, ui, event_writer);
                     }
+                    Ok::<(), BevyError>(())
                 });
         });
+
+    Ok(())
 }
 
 fn model_info(
-    archive: &ArchiveInfo,
-    path: &str,
+    file_info: &file::FileInfo,
     ui: &mut egui::Ui,
     event_writer: &mut EventWriter<FileSelected>,
 ) {
-    let header = egui::CollapsingHeader::new(path).show(ui, |_| {});
+    let header = file_info_header(file_info, ui);
     if header.header_response.clicked() && !header.header_response.is_tooltip_open() {
         event_writer.write(FileSelected {
-            archive_path: archive.path.clone(),
-            file_path: path.to_owned(),
+            file_path: file_info.path.to_owned(),
         });
     }
 }
 
 fn world_model_info(
-    archive: &ArchiveInfo,
-    world_model_path: &str,
+    file_info: &file::FileInfo,
     ui: &mut egui::Ui,
     event_writer: &mut EventWriter<FileSelected>,
 ) {
-    let header = egui::CollapsingHeader::new(world_model_path).show(ui, |_| {});
+    let header = file_info_header(file_info, ui);
     if header.header_response.clicked() && !header.header_response.is_tooltip_open() {
         event_writer.write(FileSelected {
-            archive_path: archive.path.clone(),
-            file_path: world_model_path.to_owned(),
+            file_path: file_info.path.to_owned(),
         });
     }
 }
 
 fn world_map_info(
-    archive: &ArchiveInfo,
-    world_map_path: &str,
+    file_info: &file::FileInfo,
     ui: &mut egui::Ui,
     event_writer: &mut EventWriter<FileSelected>,
 ) {
-    let header = egui::CollapsingHeader::new(world_map_path).show(ui, |_| {});
+    let header = file_info_header(file_info, ui);
     if header.header_response.clicked() && !header.header_response.is_tooltip_open() {
         event_writer.write(FileSelected {
-            archive_path: archive.path.clone(),
-            file_path: world_map_path.to_owned(),
+            file_path: file_info.path.to_owned(),
         });
     }
+}
+
+fn file_info_header(
+    file_info: &file::FileInfo,
+    ui: &mut egui::Ui,
+) -> egui::collapsing_header::CollapsingResponse<()> {
+    let file_state = file_info.state.clone();
+
+    egui::CollapsingHeader::new(&file_info.path)
+        .icon(move |ui, _, response| {
+            let pos = response.rect.center();
+            let anchor = egui::Align2::CENTER_CENTER;
+            let font_id = egui::TextStyle::Button.resolve(ui.style());
+            let text_color = ui.style().visuals.text_color();
+            match file_state {
+                file::FileInfoState::Unloaded => {
+                    ui.painter().text(pos, anchor, "▶", font_id, text_color);
+                }
+                file::FileInfoState::Loading => {
+                    ui.painter().text(pos, anchor, "⏳", font_id, text_color);
+                }
+                file::FileInfoState::Loaded => {
+                    ui.painter().text(pos, anchor, "✔", font_id, text_color);
+                }
+                file::FileInfoState::Error(e) => {
+                    ui.painter().error(pos, e);
+                }
+            };
+        })
+        .show(ui, |_| {})
 }

@@ -18,6 +18,7 @@ use crate::data::{
     world_model::WorldModelInfo,
 };
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FileInfoState {
     Unloaded,
     Loading,
@@ -57,6 +58,14 @@ impl FileInfo {
 
     pub fn is_unloaded(&self) -> bool {
         matches!(self.state, FileInfoState::Unloaded)
+    }
+
+    pub fn is_loading(&self) -> bool {
+        matches!(self.state, FileInfoState::Loading)
+    }
+
+    pub fn is_loaded(&self) -> bool {
+        matches!(self.state, FileInfoState::Loaded)
     }
 
     pub fn new_texture<S: Into<String>, P: AsRef<Path>>(
