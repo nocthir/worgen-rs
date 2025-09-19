@@ -173,7 +173,11 @@ fn create_materials_from_wmo(
         let image = image_assets.get_mut(&image_handle).unwrap();
         image.sampler = sampler_from_wmo_material_flags(material.flags);
 
-        let unlit = material.flags.contains(wmo::WmoMaterialFlags::UNLIT);
+        let unlit = material.flags.intersects(
+            wmo::WmoMaterialFlags::UNLIT
+                | wmo::WmoMaterialFlags::EXTERIOR_LIGHT
+                | wmo::WmoMaterialFlags::WINDOW_LIGHT,
+        );
         let cull_mode = if material.flags.contains(wmo::WmoMaterialFlags::TWO_SIDED) {
             None
         } else {
