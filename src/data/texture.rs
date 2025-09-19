@@ -12,10 +12,7 @@ use wow_blp as blp;
 use wow_m2 as m2;
 use wow_wmo as wmo;
 
-use crate::data::{
-    archive,
-    file::{self, DataInfo, FileInfo, FileInfoMap},
-};
+use crate::data::{archive, file};
 
 #[derive(Clone)]
 pub struct TextureInfo {
@@ -28,34 +25,26 @@ impl TextureInfo {
     }
 }
 
-pub fn load_texture_info(texture_path: &str, archive_path: &str) -> Result<DataInfo> {
-    let mut archive = archive::open_archive(archive_path)?;
-    let file = archive.read_file(texture_path)?;
-    let blp = blp::parser::load_blp_from_buf(&file)?;
-    Ok(DataInfo::Texture(TextureInfo { image: blp }))
+pub fn loading_texture_task(task: file::LoadFileTask) -> Task<file::LoadFileTask> {
+    info!("Starting to load texture: {}", task.file.path);
+    tasks::IoTaskPool::get().spawn(load_texture(task))
 }
 
-pub fn loading_texture_task(texture_file_info: &FileInfo) -> Task<Result<FileInfo>> {
-    info!("Starting to load texture: {}", texture_file_info.path);
-    tasks::IoTaskPool::get().spawn(load_texture(texture_file_info.shallow_clone()))
-}
-
-pub async fn load_texture(mut file_info: FileInfo) -> Result<FileInfo> {
-    match load_texture_impl(&file_info) {
+pub async fn load_texture(mut task: file::LoadFileTask) -> file::LoadFileTask {
+    match load_texture_impl(&task.file) {
         Ok(image) => {
-            file_info.set_texture(image);
-            info!("Loaded texture: {}", file_info.path);
-            Ok(file_info)
+            task.file.set_texture(image);
+            info!("Loaded texture: {}", task.file.path);
         }
         Err(e) => {
-            error!("Failed to load texture {}: {}", file_info.path, e);
-            file_info.state = file::FileInfoState::Error(e.to_string());
-            Ok(file_info)
+            error!("Failed to load texture {}: {}", task.file.path, e);
+            task.file.state = file::FileInfoState::Error(e.to_string());
         }
     }
+    task
 }
 
-fn load_texture_impl(file_info: &FileInfo) -> Result<TextureInfo> {
+fn load_texture_impl(file_info: &file::FileInfo) -> Result<TextureInfo> {
     let mut archive = archive::open_archive(&file_info.archive_path)?;
     let file = archive.read_file(&file_info.path)?;
     Ok(TextureInfo::new(blp::parser::load_blp_from_buf(&file)?))
@@ -63,7 +52,7 @@ fn load_texture_impl(file_info: &FileInfo) -> Result<TextureInfo> {
 
 pub fn create_textures_from_wmo(
     wmo: &wmo::WmoRoot,
-    file_info_map: &FileInfoMap,
+    file_info_map: &file::FileInfoMap,
     images: &mut Assets<Image>,
 ) -> Result<Vec<Handle<Image>>> {
     let mut image_handles = Vec::new();
@@ -78,7 +67,7 @@ pub fn create_textures_from_wmo(
 
 pub fn create_textures_from_model(
     model: &m2::M2Model,
-    file_info_map: &FileInfoMap,
+    file_info_map: &file::FileInfoMap,
     images: &mut Assets<Image>,
 ) -> Result<Vec<Handle<Image>>> {
     let mut handles = Vec::new();
@@ -99,7 +88,7 @@ pub fn create_textures_from_model(
 
 pub fn create_image_from_path(
     texture_path: &str,
-    file_info_map: &FileInfoMap,
+    file_info_map: &file::FileInfoMap,
     images: &mut Assets<Image>,
 ) -> Result<Handle<Image>> {
     let texture = file_info_map.get_texture_info(texture_path)?;
@@ -123,8 +112,8 @@ pub mod test {
     use super::*;
     use crate::{data::archive::ArchiveInfo, *};
 
-    pub fn default_file_info_map(settings: &settings::Settings) -> Result<FileInfoMap> {
-        let mut file_info_map = FileInfoMap::default();
+    pub fn default_file_info_map(settings: &settings::Settings) -> Result<file::FileInfoMap> {
+        let mut file_info_map = file::FileInfoMap::default();
         let mut archive_info = ArchiveInfo::new(&settings.interface_archive_path)?;
         file_info_map.fill(&mut archive_info)?;
         let mut archive_info = ArchiveInfo::new(&settings.texture_archive_path)?;

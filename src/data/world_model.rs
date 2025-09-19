@@ -74,24 +74,23 @@ fn read_groups(
     Ok(groups)
 }
 
-pub fn loading_world_model_task(file_info: &file::FileInfo) -> tasks::Task<Result<file::FileInfo>> {
-    info!("Starting to load world model: {}", file_info.path);
-    tasks::IoTaskPool::get().spawn(load_world_model(file_info.shallow_clone()))
+pub fn loading_world_model_task(task: file::LoadFileTask) -> tasks::Task<file::LoadFileTask> {
+    info!("Starting to load world model: {}", task.file.path);
+    tasks::IoTaskPool::get().spawn(load_world_model(task))
 }
 
-async fn load_world_model(mut file_info: file::FileInfo) -> Result<file::FileInfo> {
-    match load_world_model_impl(&file_info) {
+async fn load_world_model(mut task: file::LoadFileTask) -> file::LoadFileTask {
+    match load_world_model_impl(&task.file) {
         Ok(world_model_info) => {
-            file_info.set_world_model(world_model_info);
-            info!("Loaded world model: {}", file_info.path);
-            Ok(file_info)
+            task.file.set_world_model(world_model_info);
+            info!("Loaded world model: {}", task.file.path);
         }
         Err(e) => {
-            error!("Failed to load world model {}: {}", file_info.path, e);
-            file_info.state = file::FileInfoState::Error(e.to_string());
-            Ok(file_info)
+            error!("Failed to load world model {}: {}", task.file.path, e);
+            task.file.state = file::FileInfoState::Error(e.to_string());
         }
     }
+    task
 }
 
 fn load_world_model_impl(file_info: &file::FileInfo) -> Result<WorldModelInfo> {
@@ -113,7 +112,7 @@ pub fn create_meshes_from_world_model_path(
 ) -> Result<Vec<ModelBundle>> {
     let world_model_info = file_info_map.get_world_model_info(world_model_path)?;
     create_meshes_from_world_model_info(
-        &world_model_info,
+        world_model_info,
         file_info_map,
         images,
         standard_materials,
@@ -198,23 +197,6 @@ fn create_color_from_wmo(color: wmo::types::Color) -> Color {
         color.b as f32 / 255.0,
         color.a as f32 / 255.0,
     )
-}
-
-fn create_mesh_from_group_path(
-    file_path: &str,
-    archive: &mut mpq::Archive,
-    group_index: usize,
-    default_material_handle: Handle<StandardMaterial>,
-    material_handles: &[Handle<StandardMaterial>],
-    meshes: &mut Assets<Mesh>,
-) -> Result<Vec<ModelBundle>> {
-    let wmo_group = read_group(file_path, archive, group_index)?;
-    Ok(create_mesh_from_wmo_group(
-        &wmo_group,
-        default_material_handle,
-        material_handles,
-        meshes,
-    ))
 }
 
 fn read_group(

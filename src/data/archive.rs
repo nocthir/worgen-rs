@@ -42,10 +42,6 @@ impl ArchiveInfo {
         })
     }
 
-    pub fn has_stuff(&mut self) -> bool {
-        self.archive.list().is_ok_and(|files| !files.is_empty())
-    }
-
     fn get_texture_paths(archive: &mut mpq::Archive) -> Result<Vec<String>> {
         let mut textures = Vec::new();
         archive.list()?.retain(|file| {

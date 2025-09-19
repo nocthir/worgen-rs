@@ -13,11 +13,7 @@ use bevy::{
 use wow_m2 as m2;
 use wow_mpq as mpq;
 
-use crate::data::{
-    ModelBundle,
-    file::{self, FileInfo, FileInfoMap, LoadFileTask},
-    normalize_vec3, texture,
-};
+use crate::data::{ModelBundle, file, normalize_vec3, texture};
 
 #[derive(Clone)]
 pub struct ModelInfo {
@@ -43,28 +39,23 @@ pub fn is_model_extension(filename: &str) -> bool {
         || lower_filename.ends_with(".mdl")
 }
 
-pub fn start_loading_model(tasks: &mut LoadFileTask, file_info: &FileInfo) {
-    tasks.tasks.push(loading_model_task(file_info));
+pub fn loading_model_task(task: file::LoadFileTask) -> Task<file::LoadFileTask> {
+    info!("Starting to load model: {}", task.file.path);
+    tasks::IoTaskPool::get().spawn(load_model(task))
 }
 
-pub fn loading_model_task(model_file_info: &FileInfo) -> Task<Result<FileInfo>> {
-    info!("Starting to load model: {}", model_file_info.path);
-    tasks::IoTaskPool::get().spawn(load_model(model_file_info.shallow_clone()))
-}
-
-async fn load_model(mut file_info: FileInfo) -> Result<FileInfo> {
-    match load_model_impl(&file_info) {
+async fn load_model(mut task: file::LoadFileTask) -> file::LoadFileTask {
+    match load_model_impl(&task.file) {
         Ok(model_info) => {
-            file_info.set_model(model_info);
-            info!("Loaded model: {}", file_info.path);
-            Ok(file_info)
+            task.file.set_model(model_info);
+            info!("Loaded model: {}", task.file.path);
         }
         Err(e) => {
-            error!("Failed to load model {}: {}", file_info.path, e);
-            file_info.state = file::FileInfoState::Error(e.to_string());
-            Ok(file_info)
+            error!("Failed to load model {}: {}", task.file.path, e);
+            task.file.state = file::FileInfoState::Error(e.to_string());
         }
     }
+    task
 }
 
 fn load_model_impl(file_info: &file::FileInfo) -> Result<ModelInfo> {
@@ -77,7 +68,7 @@ fn load_model_impl(file_info: &file::FileInfo) -> Result<ModelInfo> {
 
 pub fn create_meshes_from_model_path(
     model_path: &str,
-    file_info_map: &FileInfoMap,
+    file_info_map: &file::FileInfoMap,
     images: &mut Assets<Image>,
     materials: &mut Assets<StandardMaterial>,
     meshes: &mut Assets<Mesh>,
@@ -88,7 +79,7 @@ pub fn create_meshes_from_model_path(
 
 pub fn create_meshes_from_model_info(
     model_info: &ModelInfo,
-    file_info_map: &FileInfoMap,
+    file_info_map: &file::FileInfoMap,
     images: &mut Assets<Image>,
     materials: &mut Assets<StandardMaterial>,
     meshes: &mut Assets<Mesh>,

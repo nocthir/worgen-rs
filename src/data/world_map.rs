@@ -84,21 +84,6 @@ impl WorldMapInfo {
     }
 }
 
-pub fn read_world_maps(archive: &mut mpq::Archive) -> Result<Vec<WorldMapInfo>> {
-    let mut infos = Vec::new();
-    for entry in archive.list()?.iter() {
-        let lowercase_name = entry.name.to_lowercase();
-        if !lowercase_name.ends_with(".adt") {
-            continue;
-        }
-        if let Ok(world_map) = read_world_map(&entry.name, archive) {
-            infos.push(WorldMapInfo::new(world_map));
-        }
-    }
-
-    Ok(infos)
-}
-
 pub fn read_world_map(path: &str, archive: &mut mpq::Archive) -> Result<adt::Adt> {
     let file = archive.read_file(path)?;
     let mut reader = io::Cursor::new(file);
@@ -110,24 +95,23 @@ pub fn is_world_map_extension(filename: &str) -> bool {
     lower_filename.ends_with(".adt")
 }
 
-pub fn loading_world_map_task(file_info: &file::FileInfo) -> tasks::Task<Result<file::FileInfo>> {
-    info!("Starting to load world map: {}", file_info.path);
-    tasks::IoTaskPool::get().spawn(load_world_map(file_info.shallow_clone()))
+pub fn loading_world_map_task(task: file::LoadFileTask) -> tasks::Task<file::LoadFileTask> {
+    info!("Starting to load world map: {}", task.file.path);
+    tasks::IoTaskPool::get().spawn(load_world_map(task))
 }
 
-async fn load_world_map(mut file_info: file::FileInfo) -> Result<file::FileInfo> {
-    match load_world_map_impl(&file_info) {
+async fn load_world_map(mut task: file::LoadFileTask) -> file::LoadFileTask {
+    match load_world_map_impl(&task.file) {
         Ok(world_map_info) => {
-            file_info.set_world_map(world_map_info);
-            info!("Loaded world map: {}", file_info.path);
-            Ok(file_info)
+            task.file.set_world_map(world_map_info);
+            info!("Loaded world map: {}", task.file.path);
         }
         Err(e) => {
-            error!("Failed to load world map {}: {}", file_info.path, e);
-            file_info.state = file::FileInfoState::Error(e.to_string());
-            Ok(file_info)
+            error!("Failed to load world map {}: {}", task.file.path, e);
+            task.file.state = file::FileInfoState::Error(e.to_string());
         }
     }
+    task
 }
 
 fn load_world_map_impl(file_info: &file::FileInfo) -> Result<WorldMapInfo> {

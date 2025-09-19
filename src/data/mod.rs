@@ -26,7 +26,7 @@ pub struct DataPlugin;
 impl Plugin for DataPlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(FileInfoMap::default())
-            .insert_resource(file::LoadFileTask::default())
+            .insert_resource(file::LoadingFileTasks::default())
             .add_systems(Startup, archive::start_loading)
             .add_systems(
                 Update,
@@ -58,7 +58,7 @@ fn load_selected_file(
     current_query: Query<&CurrentFile>,
     entity_query: Query<Entity, With<CurrentFile>>,
     mut file_info_map: ResMut<FileInfoMap>,
-    mut load_file_tasks: ResMut<file::LoadFileTask>,
+    mut load_file_tasks: ResMut<file::LoadingFileTasks>,
     mut commands: Commands,
 ) -> Result {
     // Ignore all but the last event
@@ -81,17 +81,23 @@ fn load_selected_file(
                 file::DataType::Model => {
                     load_file_tasks
                         .tasks
-                        .push(model::loading_model_task(file_info));
+                        .push(model::loading_model_task(file::LoadFileTask::new(
+                            file_info, true,
+                        )));
                 }
                 file::DataType::WorldModel => {
                     load_file_tasks
                         .tasks
-                        .push(world_model::loading_world_model_task(file_info));
+                        .push(world_model::loading_world_model_task(
+                            file::LoadFileTask::new(file_info, true),
+                        ));
                 }
                 file::DataType::WorldMap => {
                     load_file_tasks
                         .tasks
-                        .push(world_map::loading_world_map_task(file_info));
+                        .push(world_map::loading_world_map_task(file::LoadFileTask::new(
+                            file_info, true,
+                        )));
                 }
                 file::DataType::Texture => {
                     // Textures are loaded as part of model/world model/world map loading
