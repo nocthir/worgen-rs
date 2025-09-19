@@ -201,7 +201,7 @@ mod test {
 
     #[test]
     fn load_world_map() -> Result<()> {
-        let settings = settings::load_settings()?;
+        let settings = settings::TestSettings::load()?;
         let mut file_info_map = file::test::default_file_info_map(&settings)?;
         file_info_map.load_file_and_dependencies(&settings.world_map_path.file_path)?;
 

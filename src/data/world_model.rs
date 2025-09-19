@@ -300,7 +300,7 @@ mod test {
 
     #[test]
     fn list_world_model_paths() -> Result {
-        let settings = settings::load_settings()?;
+        let settings = settings::TestSettings::load()?;
         let mut archive = mpq::Archive::open(&settings.world_model_archive_path)?;
         for file_path in archive.list()? {
             if is_world_model_extension(&file_path.name) {
@@ -312,7 +312,7 @@ mod test {
 
     #[test]
     fn load_world_model() -> Result {
-        let settings = settings::load_settings()?;
+        let settings = settings::TestSettings::load()?;
         let mut file_info_map = file::test::default_file_info_map(&settings)?;
         file_info_map.load_file_and_dependencies(&settings.test_world_model.file_path)?;
         let mut images = Assets::<Image>::default();

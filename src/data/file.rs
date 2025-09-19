@@ -697,7 +697,7 @@ pub mod test {
     use super::*;
     use crate::{data::archive, settings};
 
-    pub fn default_file_info_map(settings: &settings::Settings) -> Result<FileInfoMap> {
+    pub fn default_file_info_map(settings: &settings::TestSettings) -> Result<FileInfoMap> {
         let mut file_info_map = FileInfoMap::default();
         let data_dir = Path::new(&settings.game_path).join("Data");
         for entry in fs::read_dir(&data_dir)? {

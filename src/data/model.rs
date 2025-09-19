@@ -241,7 +241,7 @@ mod test {
 
     #[test]
     fn load_main_menu() -> Result {
-        let settings = settings::load_settings()?;
+        let settings = settings::TestSettings::load()?;
         let mut file_info_map = file::test::default_file_info_map(&settings)?;
         file_info_map.load_file_and_dependencies(&settings.default_model.file_path)?;
         let mut images = Assets::<Image>::default();
@@ -260,7 +260,7 @@ mod test {
 
     #[test]
     fn load_city() -> Result {
-        let settings = settings::load_settings()?;
+        let settings = settings::TestSettings::load()?;
         let mut file_info_map = file::test::default_file_info_map(&settings)?;
         file_info_map.load_file_and_dependencies(&settings.city_model.file_path)?;
         let mut images = Assets::<Image>::default();
@@ -278,7 +278,7 @@ mod test {
 
     #[test]
     fn load_dwarf() -> Result {
-        let settings = settings::load_settings()?;
+        let settings = settings::TestSettings::load()?;
         let mut file_info_map = file::test::default_file_info_map(&settings)?;
         file_info_map.load_file_and_dependencies(&settings.test_model.file_path)?;
         let mut images = Assets::<Image>::default();

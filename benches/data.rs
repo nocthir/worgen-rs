@@ -8,7 +8,7 @@ use worgen_rs::{data::archive, settings};
 
 fn bench_read_terrain_archive(c: &mut Criterion) {
     // Load settings from settings.json
-    let settings = match settings::load_settings() {
+    let settings = match settings::TestSettings::load() {
         Ok(s) => s,
         Err(e) => {
             println!("[BENCH] Failed to load settings: {e}");
