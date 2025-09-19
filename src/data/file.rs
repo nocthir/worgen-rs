@@ -68,18 +68,6 @@ impl FileInfo {
         }
     }
 
-    pub fn is_unloaded(&self) -> bool {
-        matches!(self.state, FileInfoState::Unloaded)
-    }
-
-    pub fn is_loading(&self) -> bool {
-        matches!(self.state, FileInfoState::Loading)
-    }
-
-    pub fn is_loaded(&self) -> bool {
-        matches!(self.state, FileInfoState::Loaded)
-    }
-
     pub fn new_texture<S: Into<String>, P: AsRef<Path>>(
         path: S,
         archive_path: P,
@@ -212,7 +200,6 @@ pub struct LoadFileTask {
     completed: Vec<FileInfo>,
 }
 
-// TODO: This function is getting quite large. Consider breaking it down.
 pub fn check_file_loading(
     mut load_task: ResMut<LoadFileTask>,
     mut file_info_map: ResMut<FileInfoMap>,
@@ -238,34 +225,8 @@ pub fn check_file_loading(
                         file_info_map.insert(file);
                         continue;
                     }
-
-                    match &file.data_info {
-                        Some(DataInfo::Model(model_info)) => {
-                            // At this point we have the model loaded, but textures may not be loaded yet.
-                            // We need to check the file info map for texture files and start loading them if necessary.
-                            for texture_path in model_info.get_texture_paths() {
-                                let texture_file_info =
-                                    file_info_map.get_file_info_mut(&texture_path)?;
-                                if texture_file_info.is_unloaded() {
-                                    // Start loading the texture
-                                    texture_file_info.state = FileInfoState::Loading;
-                                    let new_task = texture::loading_texture_task(texture_file_info);
-                                    new_tasks.push(new_task);
-                                }
-                            }
-
-                            // Put the current task back to be processed later
-                            load_task.completed.push(file);
-                        }
-                        Some(DataInfo::Texture(_)) => {
-                            // Texture loaded, update the file info map
-                            file_info_map.insert(file);
-                        }
-                        _ => {
-                            error!("Loaded file type is not valid: {}", file.path);
-                            continue;
-                        }
-                    }
+                    assert_eq!(file.state, FileInfoState::Loaded);
+                    process_loaded_file(file, &mut file_info_map, &mut new_tasks, &mut load_task)?;
                 }
             }
         } else {
@@ -275,71 +236,132 @@ pub fn check_file_loading(
     }
 
     load_task.tasks.extend(new_tasks);
+    process_completed_tasks(
+        &mut load_task,
+        &mut file_info_map,
+        &mut images,
+        &mut materials,
+        &mut meshes,
+        &mut commands,
+    )
+}
 
+fn process_loaded_file(
+    mut file: FileInfo,
+    file_info_map: &mut FileInfoMap,
+    new_tasks: &mut Vec<tasks::Task<Result<FileInfo>>>,
+    load_task: &mut LoadFileTask,
+) -> Result<()> {
+    match &file.data_info {
+        Some(DataInfo::Model(model_info)) => {
+            // At this point we have the model loaded, but textures may not be loaded yet.
+            // We need to check the file info map for texture files and start loading them if necessary.
+            for texture_path in model_info.get_texture_paths() {
+                let texture_file_info = file_info_map.get_file_info_mut(&texture_path)?;
+                if texture_file_info.state == FileInfoState::Unloaded {
+                    // Start loading the texture
+                    texture_file_info.state = FileInfoState::Loading;
+                    let new_task = texture::loading_texture_task(texture_file_info);
+                    new_tasks.push(new_task);
+                }
+            }
+
+            // Put the current task back to be processed later
+            load_task.completed.push(file);
+        }
+        Some(DataInfo::Texture(_)) => {
+            // Texture loaded, update the file info map
+            file_info_map.insert(file);
+        }
+        _ => {
+            file.state = FileInfoState::Error("Loaded file type is not supported".to_string());
+            file_info_map.insert(file);
+        }
+    }
+    Ok(())
+}
+
+fn process_completed_tasks(
+    load_task: &mut LoadFileTask,
+    file_info_map: &mut FileInfoMap,
+    images: &mut Assets<Image>,
+    materials: &mut Assets<StandardMaterial>,
+    meshes: &mut Assets<Mesh>,
+    commands: &mut Commands,
+) -> Result<()> {
     let mut completed_tasks = Vec::new();
     completed_tasks.append(&mut load_task.completed);
 
     for mut file in completed_tasks {
-        let mut all_textures_loaded = true;
-        let mut state = file.state.clone();
-
         match &file.data_info {
             Some(DataInfo::Model(model_info)) => {
                 // At this point we have the model loaded, but textures may not be loaded yet.
                 // We need to check the file info map to see whether the loading has completed.
-                for texture_path in model_info.get_texture_paths() {
-                    let texture_file_info = file_info_map.get_file_info(&texture_path)?;
-                    match &texture_file_info.state {
-                        FileInfoState::Loading => {
-                            warn!("Still waiting for texture: {}", texture_path);
-                            // Put this task back to be processed later
-                            all_textures_loaded = false;
+                let textures_state =
+                    check_files_state(&model_info.get_texture_paths(), file_info_map);
+
+                match textures_state {
+                    FileInfoState::Loaded => {
+                        // All textures are loaded, we can create the meshes
+                        let bundles = model::create_meshes_from_model_info(
+                            model_info,
+                            file_info_map,
+                            images,
+                            materials,
+                            meshes,
+                        )?;
+
+                        if bundles.is_empty() {
+                            file.state = FileInfoState::Error("No meshes".to_string());
+                        } else {
+                            for bundle in bundles {
+                                add_bundle(commands, bundle, &file.path);
+                            }
+                            info!("Added meshes from {}", file.path);
+                            file.state = FileInfoState::Loaded;
                         }
-                        FileInfoState::Error(err) => {
-                            state = FileInfoState::Error(format!(
-                                "Failed to load texture {}: {}",
-                                texture_path, err
-                            ));
-                        }
-                        _ => (), // Texture is loaded
+                        // Update the file archive map
+                        file_info_map.insert(file);
                     }
-                }
-
-                if let FileInfoState::Error(_) = state {
-                    file.state = state;
-                    file_info_map.insert(file);
-                } else if all_textures_loaded {
-                    // Update the file archive map
-                    let bundles = model::create_meshes_from_model_info(
-                        model_info,
-                        &file_info_map,
-                        &mut images,
-                        &mut materials,
-                        &mut meshes,
-                    )?;
-
-                    if bundles.is_empty() {
-                        file.state = FileInfoState::Error("No meshes".to_string());
-                    } else {
-                        for bundle in bundles {
-                            add_bundle(&mut commands, bundle, &file.path);
-                        }
-                        info!("Added meshes from {}", file.path);
+                    FileInfoState::Error(_) => {
+                        file.state = textures_state.clone();
+                        file_info_map.insert(file);
                     }
-
-                    // All textures are loaded, update the file info map
-                    file_info_map.insert(file);
-                } else {
-                    // Put this task back to be processed later
-                    load_task.completed.push(file);
+                    _ => {
+                        // Put this task back to be processed later
+                        load_task.completed.push(file);
+                    }
                 }
             }
             _ => {
-                error!("Loaded file is not a model: {}", file.path);
-                continue;
+                file.state = FileInfoState::Error("No data".to_string());
+                file_info_map.insert(file);
             }
         }
     }
 
     Ok(())
+}
+
+/// Returns the overall state of the files in `paths`.
+/// If all files are `Loaded`, returns `Loaded`.
+/// If any file is `Error`, returns `Error`.
+/// If any file is `Loading`, returns `Loading`.
+/// If any file is `Unloaded`, returns `Unloaded`.
+/// If `paths` is empty, returns `Loaded`.
+fn check_files_state(paths: &[String], file_info_map: &FileInfoMap) -> FileInfoState {
+    let state = FileInfoState::Loaded;
+    for path in paths {
+        let file_info = match file_info_map.get_file_info(path) {
+            Ok(info) => info,
+            Err(e) => {
+                return FileInfoState::Error(e.to_string());
+            }
+        };
+        match &file_info.state {
+            FileInfoState::Loaded => (), // continue checking
+            _ => return file_info.state.clone(),
+        }
+    }
+    state
 }

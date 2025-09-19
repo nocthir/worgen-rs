@@ -75,7 +75,7 @@ fn load_selected_file(
         }
 
         let file_info = file_info_map.get_file_info_mut(&event.file_path)?;
-        if file_info.is_unloaded() {
+        if file_info.state == file::FileInfoState::Unloaded {
             file_info.state = file::FileInfoState::Loading;
             model::start_loading_model(&mut load_file_tasks, file_info);
         }
