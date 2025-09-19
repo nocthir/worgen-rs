@@ -9,7 +9,8 @@ use std::{
 
 use bevy::{prelude::*, tasks};
 
-use crate::data::{add_bundle, archive::ArchiveInfo, model, texture, world_map, world_model};
+use crate::camera::FocusCamera;
+use crate::data::*;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FileInfoState {
@@ -298,6 +299,7 @@ pub fn check_file_loading(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut commands: Commands,
+    mut focus_writer: EventWriter<FocusCamera>,
 ) -> Result<()> {
     let mut tasks = Vec::new();
     tasks.append(&mut load_task.tasks);
@@ -332,6 +334,7 @@ pub fn check_file_loading(
         &mut materials,
         &mut meshes,
         &mut commands,
+        &mut focus_writer,
     )
 }
 
@@ -444,6 +447,7 @@ fn process_completed_tasks(
     materials: &mut Assets<StandardMaterial>,
     meshes: &mut Assets<Mesh>,
     commands: &mut Commands,
+    focus_writer: &mut EventWriter<FocusCamera>,
 ) -> Result<()> {
     let mut completed_tasks = Vec::new();
     completed_tasks.append(&mut load_task.completed);
@@ -459,6 +463,7 @@ fn process_completed_tasks(
                     meshes,
                     commands,
                     load_task,
+                    focus_writer,
                 )?;
             }
             DataType::WorldModel => {
@@ -470,6 +475,7 @@ fn process_completed_tasks(
                     meshes,
                     commands,
                     load_task,
+                    focus_writer,
                 )?;
             }
             DataType::WorldMap => {
@@ -481,6 +487,7 @@ fn process_completed_tasks(
                     meshes,
                     commands,
                     load_task,
+                    focus_writer,
                 )?;
             }
             _ => {
@@ -493,6 +500,7 @@ fn process_completed_tasks(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 fn check_loaded_model(
     mut task: LoadFileTask,
     file_info_map: &mut FileInfoMap,
@@ -501,6 +509,7 @@ fn check_loaded_model(
     meshes: &mut Assets<Mesh>,
     commands: &mut Commands,
     load_task: &mut LoadingFileTasks,
+    focus_writer: &mut EventWriter<FocusCamera>,
 ) -> Result<()> {
     let model_info = task.file.get_model()?;
 
@@ -523,6 +532,13 @@ fn check_loaded_model(
                 if bundles.is_empty() {
                     task.file.state = FileInfoState::Error("No meshes".to_string());
                 } else {
+                    // Compute bounds before spawning (bundles carry the final local transform)
+                    if let Some(bounding_sphere) =
+                        compute_bounding_sphere_from_bundles(&bundles, meshes)
+                    {
+                        focus_writer.write(FocusCamera { bounding_sphere });
+                    }
+
                     for bundle in bundles {
                         add_bundle(commands, bundle, &task.file.path);
                     }
@@ -548,6 +564,7 @@ fn check_loaded_model(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 fn check_loaded_world_model(
     mut task: LoadFileTask,
     file_info_map: &mut FileInfoMap,
@@ -556,6 +573,7 @@ fn check_loaded_world_model(
     meshes: &mut Assets<Mesh>,
     commands: &mut Commands,
     load_task: &mut LoadingFileTasks,
+    focus_writer: &mut EventWriter<FocusCamera>,
 ) -> Result<()> {
     let world_model_info = task.file.get_world_model()?;
 
@@ -579,6 +597,12 @@ fn check_loaded_world_model(
                 if bundles.is_empty() {
                     task.file.state = FileInfoState::Error("No meshes".to_string());
                 } else {
+                    if let Some(bounding_sphere) =
+                        compute_bounding_sphere_from_bundles(&bundles, meshes)
+                    {
+                        focus_writer.write(FocusCamera { bounding_sphere });
+                    }
+
                     for bundle in bundles {
                         add_bundle(commands, bundle, &task.file.path);
                     }
@@ -604,6 +628,7 @@ fn check_loaded_world_model(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 fn check_loaded_world_map(
     mut task: LoadFileTask,
     file_info_map: &mut FileInfoMap,
@@ -612,6 +637,7 @@ fn check_loaded_world_map(
     meshes: &mut Assets<Mesh>,
     commands: &mut Commands,
     load_task: &mut LoadingFileTasks,
+    focus_writer: &mut EventWriter<FocusCamera>,
 ) -> Result<()> {
     let world_map_info = task.file.get_world_map()?;
 
@@ -639,6 +665,12 @@ fn check_loaded_world_map(
                 if bundles.is_empty() {
                     task.file.state = FileInfoState::Error("No meshes".to_string());
                 } else {
+                    if let Some(bounding_sphere) =
+                        compute_bounding_sphere_from_bundles(&bundles, meshes)
+                    {
+                        focus_writer.write(FocusCamera { bounding_sphere });
+                    }
+
                     for bundle in bundles {
                         add_bundle(commands, bundle, &task.file.path);
                     }

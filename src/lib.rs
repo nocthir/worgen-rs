@@ -4,6 +4,7 @@
 
 //! Library entry point for worgen-rs, for benchmarks and tests.
 
+pub mod camera;
 pub mod data;
 pub mod settings;
 pub mod ui;

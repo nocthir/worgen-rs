@@ -4,6 +4,7 @@
 
 use std::f32::consts::{FRAC_PI_2, PI, TAU};
 
+use crate::data::BoundingSphere;
 use bevy::input::mouse::{MouseMotion, MouseScrollUnit, MouseWheel};
 use bevy::prelude::*;
 use bevy_egui::EguiContexts;
@@ -90,8 +91,9 @@ pub struct PanOrbitCameraPlugin;
 
 impl Plugin for PanOrbitCameraPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, setup_camera)
-            .add_systems(Update, pan_orbit_camera);
+        app.add_event::<FocusCamera>()
+            .add_systems(Startup, setup_camera)
+            .add_systems(Update, (focus_camera_on_event, pan_orbit_camera));
     }
 }
 
@@ -281,5 +283,35 @@ fn pan_orbit_camera(
             // and place the camera at the desired radius from the center.
             transform.translation = state.center + transform.back() * state.radius;
         }
+    }
+}
+
+#[derive(Event, Debug, Clone, Copy)]
+pub struct FocusCamera {
+    /// Bounding sphere radius in world units; the camera should apply a comfortable multiplier.
+    pub bounding_sphere: BoundingSphere,
+}
+
+fn focus_camera_on_event(
+    mut ev_focus: EventReader<FocusCamera>,
+    mut q_camera: Query<(&mut PanOrbitState, &mut Transform)>,
+) {
+    // Only act on the most recent focus request in this frame
+    let Some(event) = ev_focus.read().last() else {
+        return;
+    };
+
+    let center = event.bounding_sphere.center;
+    let mut radius = event.bounding_sphere.radius;
+    // Clamp to a minimal reasonable radius
+    let min_radius = 0.5_f32;
+    let comfort = 2.5_f32;
+    radius = (radius * comfort).max(min_radius);
+
+    for (mut state, mut transform) in &mut q_camera {
+        state.center = center;
+        state.radius = radius;
+        // Preserve current yaw/pitch encoded in transform.rotation/state; recompute position only
+        transform.translation = state.center + transform.back() * state.radius;
     }
 }
