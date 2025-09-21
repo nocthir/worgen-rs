@@ -54,6 +54,7 @@ pub struct TestSettings {
     pub model_archive_path: String,
     pub world_model_archive_path: String,
     pub terrain_archive_path: String,
+    pub test_texture: FileSettings,
 }
 
 impl TestSettings {

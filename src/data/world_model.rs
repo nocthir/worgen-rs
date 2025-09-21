@@ -27,8 +27,8 @@ impl WorldModelInfo {
         })
     }
 
-    pub fn get_texture_paths(&self) -> &[String] {
-        &self.world_model.textures
+    pub fn get_texture_paths(&self) -> Vec<String> {
+        self.world_model.textures.clone()
     }
 }
 

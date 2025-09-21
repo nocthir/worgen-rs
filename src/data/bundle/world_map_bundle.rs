@@ -32,6 +32,8 @@ pub fn create_meshes_from_world_map_info(
 
     bundles.extend(create_terrain_bundles_from_world_map_info(
         world_map_info,
+        file_info_map,
+        images,
         materials,
         meshes,
     )?);
@@ -57,17 +59,30 @@ pub fn create_meshes_from_world_map_info(
 
 fn create_terrain_bundles_from_world_map_info(
     world_map_info: &WorldMapInfo,
+    file_info_map: &FileInfoMap,
+    images: &mut Assets<Image>,
     materials: &mut Assets<StandardMaterial>,
     meshes: &mut Assets<Mesh>,
 ) -> Result<Vec<ModelBundle>> {
     let mut bundles = Vec::new();
 
+    let textures =
+        create_textures_from_world_map(&world_map_info.world_map, file_info_map, images)?;
+
     for chunk in &world_map_info.world_map.mcnk_chunks {
         let mesh = create_mesh_from_world_map_chunk(chunk);
         let mesh_handle = meshes.add(mesh);
 
+        let texture_handle = if chunk.texture_layers.is_empty() {
+            None
+        } else {
+            // Use just the first layer texture for now
+            let texture_index = chunk.texture_layers[0].texture_id as usize;
+            textures.get(texture_index).cloned()
+        };
+
         let material = materials.add(StandardMaterial {
-            base_color: Color::LinearRgba(LinearRgba::GREEN),
+            base_color_texture: texture_handle,
             perceptual_roughness: 1.0,
             reflectance: 0.0,
             unlit: false,
@@ -117,6 +132,7 @@ pub fn create_mesh_from_world_map_chunk(chunk: &adt::McnkChunk) -> Mesh {
     static VERTEX_COUNT: usize = 145; // 8*8 + 9*9
     let mut positions = vec![[0.0, 0.0, 0.0]; VERTEX_COUNT];
     let mut normals = vec![[0.0, 0.0, 0.0]; VERTEX_COUNT];
+    let mut tex_coords = vec![[0.0, 0.0]; VERTEX_COUNT];
     let indices = terrain_indices();
 
     for i in 0..VERTEX_COUNT {
@@ -138,6 +154,7 @@ pub fn create_mesh_from_world_map_chunk(chunk: &adt::McnkChunk) -> Mesh {
         let x = x_offset + x_suboffset;
         let y = y_offset + y_suboffset;
 
+        tex_coords[i] = [x / 8.0, y / 8.0];
         positions[i] = [x, y, chunk.height_map[i]];
         normals[i] = from_normalized_vec3_u8(chunk.normals[i]);
     }
@@ -155,6 +172,7 @@ pub fn create_mesh_from_world_map_chunk(chunk: &adt::McnkChunk) -> Mesh {
         positions.clone(),
     )
     .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, normals.clone())
+    .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, tex_coords.clone())
     .with_inserted_indices(Indices::U16(indices.clone()))
 }
 

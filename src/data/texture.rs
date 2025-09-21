@@ -29,6 +29,10 @@ impl TextureInfo {
     pub fn from_blp(image: blp::BlpImage) -> Self {
         Self { image }
     }
+
+    pub fn get_dependencies(&self) -> Vec<String> {
+        Vec::new()
+    }
 }
 
 pub fn loading_texture_task(task: file::LoadFileTask) -> Task<file::LoadFileTask> {
@@ -48,6 +52,13 @@ pub async fn load_texture(mut task: file::LoadFileTask) -> file::LoadFileTask {
         }
     }
     task
+}
+
+// Actually used in tests
+#[allow(unused)]
+pub fn is_texture_extension(filename: &str) -> bool {
+    let lower_filename = filename.to_lowercase();
+    lower_filename.ends_with(".blp")
 }
 
 pub fn create_image_from_path(

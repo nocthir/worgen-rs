@@ -13,6 +13,7 @@ use crate::data::file;
 #[derive(Clone)]
 pub struct WorldMapInfo {
     pub world_map: adt::Adt,
+    pub texture_paths: Vec<String>,
     pub model_paths: Vec<String>,
     pub world_model_paths: Vec<String>,
 }
@@ -26,9 +27,11 @@ impl WorldMapInfo {
 
     fn from_adt(mut world_map: adt::Adt) -> Self {
         Self::fix_model_extensions(&mut world_map);
+        let texture_paths = Self::get_texture_paths(&world_map);
         let model_paths = Self::get_model_paths(&world_map);
         let world_model_paths = Self::get_world_model_paths(&world_map);
         Self {
+            texture_paths,
             world_map,
             model_paths,
             world_model_paths,
@@ -43,6 +46,14 @@ impl WorldMapInfo {
                 }
             }
         }
+    }
+
+    fn get_texture_paths(world_map: &adt::Adt) -> Vec<String> {
+        let mut textures = Vec::new();
+        if let Some(mtex) = &world_map.mtex {
+            textures.extend(mtex.filenames.iter().cloned());
+        }
+        textures
     }
 
     fn get_model_paths(world_map: &adt::Adt) -> Vec<String> {
@@ -71,6 +82,14 @@ impl WorldMapInfo {
             }
         }
         world_models
+    }
+
+    pub fn get_dependencies(&self) -> Vec<String> {
+        let mut deps = Vec::new();
+        deps.extend(self.texture_paths.iter().cloned());
+        deps.extend(self.model_paths.iter().cloned());
+        deps.extend(self.world_model_paths.iter().cloned());
+        deps
     }
 }
 

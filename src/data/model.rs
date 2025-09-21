@@ -17,6 +17,7 @@ use crate::data::file;
 pub struct ModelInfo {
     pub model: m2::M2Model,
     pub data: Vec<u8>,
+    pub texture_paths: Vec<String>,
 }
 
 impl ModelInfo {
@@ -25,16 +26,25 @@ impl ModelInfo {
         let data = archive.read_file(file_path)?;
         let mut reader = io::Cursor::new(&data);
         let model = m2::M2Model::parse(&mut reader)?;
-        Ok(Self { model, data })
+        let texture_paths = Self::create_texture_paths(&model);
+        Ok(Self {
+            model,
+            data,
+            texture_paths,
+        })
     }
 
-    pub fn get_texture_paths(&self) -> Vec<String> {
-        self.model
+    fn create_texture_paths(model: &m2::M2Model) -> Vec<String> {
+        model
             .textures
             .iter()
             .filter(|t| t.texture_type == m2::chunks::M2TextureType::Hardcoded)
             .map(|t| t.filename.string.to_string_lossy())
             .collect()
+    }
+
+    pub fn get_texture_paths(&self) -> Vec<String> {
+        self.texture_paths.clone()
     }
 }
 

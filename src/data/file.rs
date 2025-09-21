@@ -99,10 +99,11 @@ impl FileInfo {
 
     #[allow(unused)]
     pub fn get_dependencies(&self) -> Vec<String> {
-        self.data_info
-            .as_ref()
-            .map(|data_info| data_info.get_dependencies())
-            .unwrap_or_default()
+        if let Some(data_info) = &self.data_info {
+            data_info.get_dependencies()
+        } else {
+            Vec::new()
+        }
     }
 
     #[allow(unused)]
@@ -168,15 +169,10 @@ pub enum DataInfo {
 impl DataInfo {
     pub fn get_dependencies(&self) -> Vec<String> {
         match self {
-            DataInfo::Texture(_) => Vec::new(),
+            DataInfo::Texture(texture) => texture.get_dependencies(),
             DataInfo::Model(model_info) => model_info.get_texture_paths(),
-            DataInfo::WorldModel(world_model_info) => world_model_info.get_texture_paths().to_vec(),
-            DataInfo::WorldMap(world_map_info) => {
-                let mut deps = Vec::new();
-                deps.extend(world_map_info.model_paths.iter().cloned());
-                deps.extend(world_map_info.world_model_paths.iter().cloned());
-                deps
-            }
+            DataInfo::WorldModel(world_model_info) => world_model_info.get_texture_paths(),
+            DataInfo::WorldMap(world_map_info) => world_map_info.get_dependencies(),
         }
     }
 }
@@ -187,6 +183,12 @@ pub struct FileInfoMap {
 }
 
 impl FileInfoMap {
+    // Actually used in tests
+    #[allow(unused)]
+    pub fn get_file_infos(&self) -> impl Iterator<Item = &FileInfo> {
+        self.map.values()
+    }
+
     pub fn insert(&mut self, file_info: FileInfo) {
         self.map.insert(file_info.path.to_lowercase(), file_info);
     }
@@ -195,14 +197,14 @@ impl FileInfoMap {
         let lowercase_name = file_path.to_lowercase();
         self.map
             .get(&lowercase_name)
-            .ok_or(format!("File {} not found", file_path).into())
+            .ok_or(format!("File `{}` not found", file_path).into())
     }
 
     pub fn get_file_info_mut(&mut self, file_path: &str) -> Result<&mut FileInfo> {
         let lowercase_name = file_path.to_lowercase();
         self.map
             .get_mut(&lowercase_name)
-            .ok_or(format!("File {} not found", file_path).into())
+            .ok_or(format!("File `{}` not found", file_path).into())
     }
 
     pub fn get_texture_info(&self, file_path: &str) -> Result<&texture::TextureInfo> {
@@ -210,7 +212,7 @@ impl FileInfoMap {
         if let Some(DataInfo::Texture(texture_info)) = &file_info.data_info {
             Ok(texture_info)
         } else {
-            Err(format!("Texture {} not found", file_path).into())
+            Err(format!("Texture `{}` not found", file_path).into())
         }
     }
 
@@ -219,7 +221,7 @@ impl FileInfoMap {
         if let Some(DataInfo::Model(model_info)) = &file_info.data_info {
             Ok(model_info)
         } else {
-            Err(format!("Model {} not found", file_path).into())
+            Err(format!("Model `{}` not found", file_path).into())
         }
     }
 
@@ -228,7 +230,7 @@ impl FileInfoMap {
         if let Some(DataInfo::WorldModel(wmo_info)) = &file_info.data_info {
             Ok(wmo_info)
         } else {
-            Err(format!("World model {} not found", file_path).into())
+            Err(format!("World model `{}` not found", file_path).into())
         }
     }
 
@@ -237,7 +239,7 @@ impl FileInfoMap {
         if let Some(DataInfo::WorldMap(world_map_info)) = &file_info.data_info {
             Ok(world_map_info)
         } else {
-            Err(format!("World map {} not found", file_path).into())
+            Err(format!("World map `{}` not found", file_path).into())
         }
     }
 
@@ -346,6 +348,7 @@ fn process_loaded_file(
 ) -> Result<()> {
     match &file_task.file.data_info {
         Some(DataInfo::WorldMap(world_map_info)) => {
+            load_unloaded_textures(&world_map_info.texture_paths, file_info_map, new_tasks)?;
             load_unloaded_models(&world_map_info.model_paths, file_info_map, new_tasks)?;
             load_unloaded_world_models(
                 &world_map_info.world_model_paths,
@@ -357,7 +360,7 @@ fn process_loaded_file(
         }
         Some(DataInfo::WorldModel(world_model_info)) => {
             load_unloaded_textures(
-                world_model_info.get_texture_paths(),
+                &world_model_info.get_texture_paths(),
                 file_info_map,
                 new_tasks,
             )?;
@@ -643,24 +646,30 @@ fn check_loaded_world_map(
 
     // At this point we have the world map loaded, but models and textures may not be loaded yet.
     // We need to check the file info map to see whether the loading has completed.
-    let all_model_paths = world_map_info
-        .model_paths
-        .iter()
-        .chain(world_map_info.world_model_paths.iter());
+    let dependency_paths = world_map_info.get_dependencies();
 
-    let models_state = check_files_state(all_model_paths, file_info_map);
+    let dependencies_state = check_files_state(dependency_paths.iter(), file_info_map);
 
-    match models_state {
+    match dependencies_state {
         FileInfoState::Loaded => {
             if task.instantiate {
                 // All models are loaded, we can create the meshes
-                let bundles = bundle::create_meshes_from_world_map_info(
+                let bundles_result = bundle::create_meshes_from_world_map_info(
                     world_map_info,
                     file_info_map,
                     images,
                     materials,
                     meshes,
-                )?;
+                );
+
+                let bundles = match bundles_result {
+                    Ok(bundles) => bundles,
+                    Err(e) => {
+                        task.file.state = FileInfoState::Error(e.to_string());
+                        file_info_map.insert(task.file);
+                        return Ok(());
+                    }
+                };
 
                 if bundles.is_empty() {
                     task.file.state = FileInfoState::Error("No meshes".to_string());
@@ -684,7 +693,7 @@ fn check_loaded_world_map(
             file_info_map.insert(task.file);
         }
         FileInfoState::Error(_) => {
-            task.file.state = models_state.clone();
+            task.file.state = dependencies_state.clone();
             file_info_map.insert(task.file);
         }
         _ => {
