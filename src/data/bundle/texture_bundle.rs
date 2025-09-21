@@ -65,30 +65,36 @@ pub fn create_textures_from_world_map(
     Ok(image_handles)
 }
 
-pub fn create_alpha_textures_from_world_map_chunk(
+pub fn create_alpha_texture_from_world_map_chunk(
     chunk: &adt::McnkChunk,
     images: &mut Assets<Image>,
-) -> Result<Vec<Handle<Image>>> {
+) -> Handle<Image> {
     static IMAGE_SIZE: Extent3d = Extent3d {
         width: 64,
         height: 64,
         depth_or_array_layers: 1,
     };
 
-    let mut image_handles = Vec::new();
+    let mut combined_alpha = vec![0u8; (IMAGE_SIZE.width * IMAGE_SIZE.height * 4) as usize];
 
-    for alpha_map in &chunk.alpha_maps {
-        let image = Image::new_fill(
-            IMAGE_SIZE,
-            TextureDimension::D2,
-            alpha_map,
-            TextureFormat::R8Unorm,
-            RenderAssetUsages::RENDER_WORLD,
-        );
-        image_handles.push(images.add(image));
+    // Put level 1 alpha in R channel, level 2 in G channel, level 3 in B channel
+    for (level, alpha) in chunk.alpha_maps.iter().enumerate() {
+        for (pos, &alpha_value) in alpha.iter().enumerate() {
+            let index = pos * 4 + level;
+            if index < combined_alpha.len() {
+                combined_alpha[index] = alpha_value;
+            }
+        }
     }
 
-    Ok(image_handles)
+    let image = Image::new_fill(
+        IMAGE_SIZE,
+        TextureDimension::D2,
+        &combined_alpha,
+        TextureFormat::Rgba8Unorm,
+        RenderAssetUsages::RENDER_WORLD,
+    );
+    images.add(image)
 }
 
 #[cfg(test)]

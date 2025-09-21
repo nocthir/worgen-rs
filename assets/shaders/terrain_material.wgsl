@@ -15,14 +15,20 @@
 }
 #endif
 
-@group(2) @binding(100)
-var level1_texture: texture_2d<f32>;
-@group(2) @binding(101)
-var level1_sampler: sampler;
-@group(2) @binding(102)
-var level1_alpha_texture: texture_2d<f32>;
-@group(2) @binding(103)
-var level1_alpha_sampler: sampler;
+struct TerrainMaterial {
+    level_count: u32,
+};
+
+@group(2) @binding(70) var<uniform> terrain_material: TerrainMaterial;
+
+@group(2) @binding(71) var alpha_texture: texture_2d<f32>;
+@group(2) @binding(72) var alpha_sampler: sampler;
+@group(2) @binding(73) var level1_texture: texture_2d<f32>;
+@group(2) @binding(74) var level1_sampler: sampler;
+@group(2) @binding(75) var level2_texture: texture_2d<f32>;
+@group(2) @binding(76) var level2_sampler: sampler;
+@group(2) @binding(77) var level3_texture: texture_2d<f32>;
+@group(2) @binding(78) var level3_sampler: sampler;
 
 @fragment
 fn fragment(
@@ -36,19 +42,39 @@ fn fragment(
     pbr_input.material.base_color = alpha_discard(pbr_input.material, pbr_input.material.base_color);
     
     // apply level1 texture
-    let level1_alpha = textureSample(
-        level1_alpha_texture,
-        level1_alpha_sampler,
+    var alpha = textureSample(
+        alpha_texture,
+        alpha_sampler,
         in.uv / 2.0
-    ).r;
+    ).rgb;
 
-    let level0_alpha = 1.0 - level1_alpha;
+    var level1_color = vec4<f32>(0.0);
+    var level2_color = vec4<f32>(0.0);
+    var level3_color = vec4<f32>(0.0);
 
-    let level1_color = textureSample(
-        level1_texture,
-        level1_sampler,
-        in.uv
-    );
+    if terrain_material.level_count > 1u {
+        level1_color = textureSample(
+            level1_texture,
+            level1_sampler,
+            in.uv
+        );
+    }
+    if terrain_material.level_count > 2u {
+        level2_color = textureSample(
+            level2_texture,
+            level2_sampler,
+            in.uv
+        );
+    }
+    if terrain_material.level_count > 3u {
+        level3_color = textureSample(
+            level3_texture,
+            level3_sampler,
+            in.uv
+        );
+    }
+
+    let level0_alpha = 1.0 - (alpha.r + alpha.g + alpha.b);
 
 #ifdef PREPASS_PIPELINE
     // in deferred mode we can't modify anything after that, as lighting is run in a separate fullscreen shader.
@@ -63,7 +89,7 @@ fn fragment(
     out.color = main_pass_post_lighting_processing(pbr_input, out.color);
 #endif
 
-    out.color = level0_alpha * out.color + level1_alpha * level1_color;
+    out.color = level0_alpha * out.color + alpha.r * level1_color + alpha.g * level2_color + alpha.b * level3_color;
 
     return out;
 }

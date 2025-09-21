@@ -16,12 +16,21 @@ impl Plugin for TerrainMaterialPlugin {
 // This struct defines the data that will be passed to your shader
 #[derive(Asset, Default, AsBindGroup, Reflect, Debug, Clone)]
 pub struct TerrainMaterial {
-    #[texture(100)]
-    #[sampler(101)]
-    pub level_texture: Option<Handle<Image>>,
-    #[texture(102)]
-    #[sampler(103)]
-    pub level_alpha: Option<Handle<Image>>,
+    #[uniform(70)]
+    pub level_count: u32,
+
+    #[texture(71)]
+    #[sampler(72)]
+    pub alpha_texture: Handle<Image>,
+    #[texture(73)]
+    #[sampler(74)]
+    pub level1_texture: Option<Handle<Image>>,
+    #[texture(75)]
+    #[sampler(76)]
+    pub level2_texture: Option<Handle<Image>>,
+    #[texture(77)]
+    #[sampler(78)]
+    pub level3_texture: Option<Handle<Image>>,
 }
 
 /// The Material trait is very configurable, but comes with sensible defaults for all methods.

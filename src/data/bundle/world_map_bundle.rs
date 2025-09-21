@@ -94,18 +94,23 @@ fn create_terrain_bundles_from_world_map_info(
             level0_texture_handle = textures.get(texture_index).cloned();
         }
 
-        let mut level1_texture_handle = None;
-        let mut level1_alpha_handle = None;
+        let alpha_texture = create_alpha_texture_from_world_map_chunk(chunk, images);
 
-        let alpha_textures = create_alpha_textures_from_world_map_chunk(chunk, images)?;
+        let mut level1_texture_handle = None;
+        let mut level2_texture_handle = None;
+        let mut level3_texture_handle = None;
 
         if let Some(level1) = chunk.texture_layers.get(1) {
-            // Use the second layer texture for now
             let texture_index = level1.texture_id as usize;
             level1_texture_handle = textures.get(texture_index).cloned();
-            level1_alpha_handle = alpha_textures
-                .get(level1.alpha_map_offset as usize)
-                .cloned();
+        }
+        if let Some(level2) = chunk.texture_layers.get(2) {
+            let texture_index = level2.texture_id as usize;
+            level2_texture_handle = textures.get(texture_index).cloned();
+        }
+        if let Some(level3) = chunk.texture_layers.get(3) {
+            let texture_index = level3.texture_id as usize;
+            level3_texture_handle = textures.get(texture_index).cloned();
         }
 
         let material = StandardMaterial {
@@ -116,9 +121,13 @@ fn create_terrain_bundles_from_world_map_info(
             cull_mode: None,
             ..Default::default()
         };
+
         let terrain_material = TerrainMaterial {
-            level_texture: level1_texture_handle,
-            level_alpha: level1_alpha_handle,
+            level_count: chunk.texture_layers.len() as u32,
+            alpha_texture,
+            level1_texture: level1_texture_handle,
+            level2_texture: level2_texture_handle,
+            level3_texture: level3_texture_handle,
         };
 
         let extended_material = ExtendedMaterial {
