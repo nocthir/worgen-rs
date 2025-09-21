@@ -87,7 +87,6 @@ fn create_terrain_bundles_from_world_map_info(
         let mesh_handle = meshes.add(mesh);
 
         let mut level0_texture_handle = None;
-        let mut level1_texture_handle = None;
 
         if let Some(level0) = chunk.texture_layers.first() {
             // Use just the first layer texture for now
@@ -95,10 +94,18 @@ fn create_terrain_bundles_from_world_map_info(
             level0_texture_handle = textures.get(texture_index).cloned();
         }
 
+        let mut level1_texture_handle = None;
+        let mut level1_alpha_handle = None;
+
+        let alpha_textures = create_alpha_textures_from_world_map_chunk(chunk, images)?;
+
         if let Some(level1) = chunk.texture_layers.get(1) {
             // Use the second layer texture for now
             let texture_index = level1.texture_id as usize;
             level1_texture_handle = textures.get(texture_index).cloned();
+            level1_alpha_handle = alpha_textures
+                .get(level1.alpha_map_offset as usize)
+                .cloned();
         }
 
         let material = StandardMaterial {
@@ -111,6 +118,7 @@ fn create_terrain_bundles_from_world_map_info(
         };
         let terrain_material = TerrainMaterial {
             level_texture: level1_texture_handle,
+            level_alpha: level1_alpha_handle,
         };
 
         let extended_material = ExtendedMaterial {
@@ -120,15 +128,18 @@ fn create_terrain_bundles_from_world_map_info(
 
         let material_handle = materials.add(extended_material);
 
-        // Each chunk is 33.33 units (100.0 / 3.0) in the world space.
+        // Each chunk is 100 feet -> 33.33 yards in world space.
         // Our grid size is 8, so we scale by (100.0 / 3.0) / 8.0 = 100.0 / 24.0
         static CHUNK_SCALE: f32 = 100.0 / 24.0;
 
+        // 1600 feet -> 533.33 yards
+        static MAP_SIZE: f32 = 1600.0 * 32.0 / 3.0; // 17066.66
+
         let transform = Transform::default()
             .with_translation(vec3(
-                17066.0 - chunk.position[0],
+                MAP_SIZE - chunk.position[0],
                 chunk.position[1],
-                17066.0 - chunk.position[2],
+                MAP_SIZE - chunk.position[2],
             ))
             .with_scale(vec3(-CHUNK_SCALE, CHUNK_SCALE, 1.0))
             .with_rotation(Quat::from_axis_angle(Vec3::Y, -std::f32::consts::FRAC_PI_2));
@@ -184,7 +195,8 @@ pub fn create_mesh_from_world_map_chunk(chunk: &adt::McnkChunk) -> Mesh {
         let x = x_offset + x_suboffset;
         let y = y_offset + y_suboffset;
 
-        tex_coords[i] = [x / 8.0, y / 8.0];
+        static UV_SCALE: f32 = 8.0;
+        tex_coords[i] = [x / UV_SCALE, y / UV_SCALE];
         positions[i] = [x, y, chunk.height_map[i]];
         normals[i] = from_normalized_vec3_u8(chunk.normals[i]);
     }

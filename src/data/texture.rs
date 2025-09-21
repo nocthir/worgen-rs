@@ -7,7 +7,7 @@ use std::path::Path;
 use bevy::{
     asset::RenderAssetUsages,
     prelude::*,
-    render::render_resource::{Extent3d, TextureDimension, TextureFormat},
+    render::render_resource::*,
     tasks::{self, Task},
 };
 use wow_blp as blp;

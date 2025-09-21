@@ -2,7 +2,7 @@
 // Author: Nocthir <nocthir@proton.me>
 // SPDX-License-Identifier: MIT or Apache-2.0
 
-use bevy::prelude::*;
+use bevy::{asset::RenderAssetUsages, prelude::*, render::render_resource::*};
 
 use wow_adt as adt;
 use wow_m2 as m2;
@@ -62,6 +62,32 @@ pub fn create_textures_from_world_map(
         let image_handle = texture::create_image_from_path(texture_path, file_info_map, images)?;
         image_handles.push(image_handle);
     }
+    Ok(image_handles)
+}
+
+pub fn create_alpha_textures_from_world_map_chunk(
+    chunk: &adt::McnkChunk,
+    images: &mut Assets<Image>,
+) -> Result<Vec<Handle<Image>>> {
+    static IMAGE_SIZE: Extent3d = Extent3d {
+        width: 64,
+        height: 64,
+        depth_or_array_layers: 1,
+    };
+
+    let mut image_handles = Vec::new();
+
+    for alpha_map in &chunk.alpha_maps {
+        let image = Image::new_fill(
+            IMAGE_SIZE,
+            TextureDimension::D2,
+            alpha_map,
+            TextureFormat::R8Unorm,
+            RenderAssetUsages::RENDER_WORLD,
+        );
+        image_handles.push(images.add(image));
+    }
+
     Ok(image_handles)
 }
 

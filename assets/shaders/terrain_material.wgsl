@@ -19,6 +19,10 @@
 var level1_texture: texture_2d<f32>;
 @group(2) @binding(101)
 var level1_sampler: sampler;
+@group(2) @binding(102)
+var level1_alpha_texture: texture_2d<f32>;
+@group(2) @binding(103)
+var level1_alpha_sampler: sampler;
 
 @fragment
 fn fragment(
@@ -32,6 +36,14 @@ fn fragment(
     pbr_input.material.base_color = alpha_discard(pbr_input.material, pbr_input.material.base_color);
     
     // apply level1 texture
+    let level1_alpha = textureSample(
+        level1_alpha_texture,
+        level1_alpha_sampler,
+        in.uv / 2.0
+    ).r;
+
+    let level0_alpha = 1.0 - level1_alpha;
+
     let level1_color = textureSample(
         level1_texture,
         level1_sampler,
@@ -51,8 +63,7 @@ fn fragment(
     out.color = main_pass_post_lighting_processing(pbr_input, out.color);
 #endif
 
-    // we can optionally modify the final result here
-    out.color = 0.7 * out.color + 0.3 * level1_color;
+    out.color = level0_alpha * out.color + level1_alpha * level1_color;
 
     return out;
 }
