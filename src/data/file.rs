@@ -521,7 +521,7 @@ fn check_loaded_model(
         FileInfoState::Loaded => {
             if task.instantiate {
                 // All textures are loaded, we can create the meshes
-                let bundles = model::create_meshes_from_model_info(
+                let bundles = bundle::create_meshes_from_model_info(
                     model_info,
                     file_info_map,
                     images,
@@ -534,13 +534,13 @@ fn check_loaded_model(
                 } else {
                     // Compute bounds before spawning (bundles carry the final local transform)
                     if let Some(bounding_sphere) =
-                        compute_bounding_sphere_from_bundles(&bundles, meshes)
+                        bundle::compute_bounding_sphere_from_bundles(&bundles, meshes)
                     {
                         focus_writer.write(FocusCamera { bounding_sphere });
                     }
 
                     for bundle in bundles {
-                        add_bundle(commands, bundle, &task.file.path);
+                        bundle::add_bundle(commands, bundle, &task.file.path);
                     }
                     task.file.state = FileInfoState::Loaded;
                     info!("Added meshes from {}", task.file.path);
@@ -586,7 +586,7 @@ fn check_loaded_world_model(
         FileInfoState::Loaded => {
             if task.instantiate {
                 // All textures are loaded, we can create the meshes
-                let bundles = world_model::create_meshes_from_world_model_info(
+                let bundles = bundle::create_meshes_from_world_model_info(
                     world_model_info,
                     file_info_map,
                     images,
@@ -598,13 +598,13 @@ fn check_loaded_world_model(
                     task.file.state = FileInfoState::Error("No meshes".to_string());
                 } else {
                     if let Some(bounding_sphere) =
-                        compute_bounding_sphere_from_bundles(&bundles, meshes)
+                        bundle::compute_bounding_sphere_from_bundles(&bundles, meshes)
                     {
                         focus_writer.write(FocusCamera { bounding_sphere });
                     }
 
                     for bundle in bundles {
-                        add_bundle(commands, bundle, &task.file.path);
+                        bundle::add_bundle(commands, bundle, &task.file.path);
                     }
                     info!("Added meshes from {}", task.file.path);
                     task.file.state = FileInfoState::Loaded;
@@ -654,7 +654,7 @@ fn check_loaded_world_map(
         FileInfoState::Loaded => {
             if task.instantiate {
                 // All models are loaded, we can create the meshes
-                let bundles = world_map::create_meshes_from_world_map_info(
+                let bundles = bundle::create_meshes_from_world_map_info(
                     world_map_info,
                     file_info_map,
                     images,
@@ -666,13 +666,13 @@ fn check_loaded_world_map(
                     task.file.state = FileInfoState::Error("No meshes".to_string());
                 } else {
                     if let Some(bounding_sphere) =
-                        compute_bounding_sphere_from_bundles(&bundles, meshes)
+                        bundle::compute_bounding_sphere_from_bundles(&bundles, meshes)
                     {
                         focus_writer.write(FocusCamera { bounding_sphere });
                     }
 
                     for bundle in bundles {
-                        add_bundle(commands, bundle, &task.file.path);
+                        bundle::add_bundle(commands, bundle, &task.file.path);
                     }
                     info!("Added meshes from {}", task.file.path);
                     task.file.state = FileInfoState::Loaded;

@@ -4,10 +4,11 @@
 
 use std::f32::consts::{FRAC_PI_2, PI, TAU};
 
-use crate::data::BoundingSphere;
 use bevy::input::mouse::{MouseMotion, MouseScrollUnit, MouseWheel};
 use bevy::prelude::*;
 use bevy_egui::EguiContexts;
+
+use crate::data::bundle;
 
 /// Bundle to spawn our custom camera easily
 /// https://bevy-cheatbook.github.io/cookbook/pan-orbit-camera.html
@@ -289,7 +290,7 @@ fn pan_orbit_camera(
 #[derive(Event, Debug, Clone, Copy)]
 pub struct FocusCamera {
     /// Bounding sphere radius in world units; the camera should apply a comfortable multiplier.
-    pub bounding_sphere: BoundingSphere,
+    pub bounding_sphere: bundle::BoundingSphere,
 }
 
 fn focus_camera_on_event(

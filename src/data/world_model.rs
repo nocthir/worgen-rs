@@ -4,17 +4,12 @@
 
 use std::{io, path::Path};
 
-use bevy::{
-    asset::RenderAssetUsages,
-    prelude::*,
-    render::{mesh::*, render_resource::Face},
-    tasks,
-};
+use bevy::{prelude::*, tasks};
 
 use wow_mpq as mpq;
 use wow_wmo as wmo;
 
-use crate::data::{ModelBundle, file, material, normalize_vec3, texture};
+use crate::data::file;
 
 pub struct WorldModelInfo {
     pub world_model: wmo::WmoRoot,
@@ -66,7 +61,7 @@ fn is_world_model_group_path(file_path: &str) -> bool {
         .is_some_and(|s| s.len() == 3 && s.chars().all(|c| c.is_ascii_digit()))
 }
 
-fn is_world_model_extension(file_path: &str) -> bool {
+pub fn is_world_model_extension(file_path: &str) -> bool {
     let lower = file_path.to_lowercase();
     lower.ends_with(".wmo")
 }
@@ -103,133 +98,6 @@ async fn load_world_model(mut task: file::LoadFileTask) -> file::LoadFileTask {
     task
 }
 
-pub fn create_meshes_from_world_model_path(
-    world_model_path: &str,
-    file_info_map: &file::FileInfoMap,
-    images: &mut Assets<Image>,
-    standard_materials: &mut Assets<StandardMaterial>,
-    meshes: &mut Assets<Mesh>,
-) -> Result<Vec<ModelBundle>> {
-    let world_model_info = file_info_map.get_world_model_info(world_model_path)?;
-    create_meshes_from_world_model_info(
-        world_model_info,
-        file_info_map,
-        images,
-        standard_materials,
-        meshes,
-    )
-}
-
-pub fn create_meshes_from_world_model_info(
-    world_model_info: &WorldModelInfo,
-    file_info_map: &file::FileInfoMap,
-    images: &mut Assets<Image>,
-    standard_materials: &mut Assets<StandardMaterial>,
-    meshes: &mut Assets<Mesh>,
-) -> Result<Vec<ModelBundle>> {
-    let mut ret = Vec::default();
-
-    let wmo = &world_model_info.world_model;
-    let textures = texture::create_textures_from_wmo(wmo, file_info_map, images)?;
-    let materials = create_materials_from_wmo(wmo, &textures, images);
-    let material_handles = materials
-        .into_iter()
-        .map(|mat| standard_materials.add(mat))
-        .collect::<Vec<_>>();
-
-    let default_material_handle = standard_materials.add(StandardMaterial {
-        base_color: Color::WHITE,
-        perceptual_roughness: 1.0,
-        unlit: true,
-        ..Default::default()
-    });
-
-    for group_index in 0..world_model_info.groups.len() {
-        let bundles = create_mesh_from_wmo_group(
-            &world_model_info.groups[group_index],
-            default_material_handle.clone(),
-            &material_handles,
-            meshes,
-        );
-        ret.extend(bundles);
-    }
-
-    Ok(ret)
-}
-
-fn create_materials_from_wmo(
-    wmo: &wmo::WmoRoot,
-    images: &[Handle<Image>],
-    image_assets: &mut Assets<Image>,
-) -> Vec<StandardMaterial> {
-    let mut materials = Vec::new();
-
-    for material in &wmo.materials {
-        let base_color = create_color_from_wmo(material.diffuse_color);
-        let emissive = create_color_from_wmo(material.emissive_color).to_linear();
-
-        let texture_index = material.get_texture1_index(&wmo.texture_offset_index_map);
-        let image_handle = images[texture_index as usize].clone();
-        let image = image_assets.get_mut(&image_handle).unwrap();
-        image.sampler = sampler_from_wmo_material_flags(material.flags);
-
-        let unlit = material.flags.intersects(
-            wmo::WmoMaterialFlags::UNLIT
-                | wmo::WmoMaterialFlags::EXTERIOR_LIGHT
-                | wmo::WmoMaterialFlags::WINDOW_LIGHT,
-        );
-        let cull_mode = if material.flags.contains(wmo::WmoMaterialFlags::TWO_SIDED) {
-            None
-        } else {
-            Some(Face::Back)
-        };
-
-        let alpha_mode = material::alpha_mode_from_world_model_blend_mode(material.blend_mode);
-
-        let material = StandardMaterial {
-            base_color,
-            emissive,
-            perceptual_roughness: 1.0,
-            base_color_texture: Some(image_handle),
-            unlit,
-            cull_mode,
-            alpha_mode,
-            ..Default::default()
-        };
-        materials.push(material);
-    }
-    materials
-}
-
-fn sampler_from_wmo_material_flags(flags: wmo::WmoMaterialFlags) -> bevy::image::ImageSampler {
-    use bevy::image::*;
-    let address_mode_u = if flags.contains(wmo::WmoMaterialFlags::CLAMP_S) {
-        ImageAddressMode::ClampToEdge
-    } else {
-        ImageAddressMode::Repeat
-    };
-    let address_mode_v = if flags.contains(wmo::WmoMaterialFlags::CLAMP_T) {
-        ImageAddressMode::ClampToEdge
-    } else {
-        ImageAddressMode::Repeat
-    };
-    let descriptor = ImageSamplerDescriptor {
-        address_mode_u,
-        address_mode_v,
-        ..Default::default()
-    };
-    ImageSampler::Descriptor(descriptor)
-}
-
-fn create_color_from_wmo(color: wmo::types::Color) -> Color {
-    Color::linear_rgba(
-        color.r as f32 / 255.0,
-        color.g as f32 / 255.0,
-        color.b as f32 / 255.0,
-        color.a as f32 / 255.0,
-    )
-}
-
 fn read_group(
     file_path: &str,
     archive: &mut mpq::Archive,
@@ -244,118 +112,4 @@ fn read_group(
 fn get_wmo_group_filename<P: AsRef<Path>>(wmo_path: P, group_index: usize) -> String {
     let base_path = wmo_path.as_ref().with_extension("");
     format!("{}_{:03}.wmo", base_path.display(), group_index)
-}
-
-fn create_mesh_from_wmo_group(
-    wmo: &wmo::WmoGroup,
-    default_material_handle: Handle<StandardMaterial>,
-    material_handles: &[Handle<StandardMaterial>],
-    meshes: &mut Assets<Mesh>,
-) -> Vec<ModelBundle> {
-    let positions: Vec<_> = wmo.vertices.iter().map(|v| [v.x, v.y, v.z]).collect();
-    let normals: Vec<_> = wmo
-        .normals
-        .iter()
-        .map(|v| normalize_vec3([v.x, v.y, v.z]))
-        .collect();
-    let tex_coords_0: Vec<_> = wmo.tex_coords.iter().map(|v| [v.u, v.v]).collect();
-    let mut colors = Vec::new();
-    if let Some(vertex_colors) = &wmo.vertex_colors {
-        colors = vertex_colors
-            .iter()
-            .map(|v| [v.r as f32, v.g as f32, v.b as f32, v.a as f32])
-            .collect();
-    }
-
-    let mut ret = Vec::new();
-
-    for batch in &wmo.batches {
-        let indices = wmo
-            .indices
-            .iter()
-            .copied()
-            .skip(batch.start_index as usize)
-            .take(batch.count as usize)
-            .collect();
-
-        // Keep the mesh data accessible in future frames to be able to mutate it in toggle_texture.
-        let mut mesh = Mesh::new(
-            PrimitiveTopology::TriangleList,
-            RenderAssetUsages::MAIN_WORLD | RenderAssetUsages::RENDER_WORLD,
-        )
-        .with_inserted_attribute(
-            Mesh::ATTRIBUTE_POSITION,
-            // Each array is an [x, y, z] coordinate in local space.
-            // The camera coordinate space is right-handed x-right, y-up, z-back. This means "forward" is -Z.
-            // Meshes always rotate around their local [0, 0, 0] when a rotation is applied to their Transform.
-            // By centering our mesh around the origin, rotating the mesh preserves its center of mass.
-            positions.clone(),
-        )
-        .with_inserted_indices(Indices::U16(indices));
-
-        if !normals.is_empty() {
-            mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals.clone());
-        } else {
-            mesh.compute_normals();
-        }
-        if !tex_coords_0.is_empty() {
-            mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, tex_coords_0.clone());
-        }
-        if !colors.is_empty() {
-            mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, colors.clone());
-        }
-
-        let mesh_handle = meshes.add(mesh);
-
-        let material_index = batch.material_id as usize;
-        let material_handle = if material_index < material_handles.len() {
-            material_handles[material_index].clone()
-        } else {
-            default_material_handle.clone()
-        };
-
-        ret.push(ModelBundle {
-            mesh: Mesh3d(mesh_handle),
-            material: MeshMaterial3d(material_handle),
-            transform: Transform::default(),
-        });
-    }
-
-    ret
-}
-
-#[cfg(test)]
-mod test {
-    use super::*;
-    use crate::*;
-
-    #[test]
-    fn list_world_model_paths() -> Result {
-        let settings = settings::TestSettings::load()?;
-        let mut archive = mpq::Archive::open(&settings.world_model_archive_path)?;
-        for file_path in archive.list()? {
-            if is_world_model_extension(&file_path.name) {
-                println!("{}", file_path.name);
-            }
-        }
-        Ok(())
-    }
-
-    #[test]
-    fn load_world_model() -> Result {
-        let settings = settings::TestSettings::load()?;
-        let mut file_info_map = file::test::default_file_info_map(&settings)?;
-        file_info_map.load_file_and_dependencies(&settings.test_world_model.file_path)?;
-        let mut images = Assets::<Image>::default();
-        let mut custom_materials = Assets::<StandardMaterial>::default();
-        let mut meshes = Assets::<Mesh>::default();
-        data::create_mesh_from_file_path(
-            &settings.test_world_model.file_path,
-            &file_info_map,
-            &mut images,
-            &mut custom_materials,
-            &mut meshes,
-        )?;
-        Ok(())
-    }
 }
