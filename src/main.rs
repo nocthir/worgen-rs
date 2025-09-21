@@ -16,7 +16,7 @@ fn main() {
         .add_plugins(diagnostic::FrameTimeDiagnosticsPlugin::default())
         .add_plugins(bevy_egui::EguiPlugin::default())
         .add_plugins(bevy_inspector_egui::quick::WorldInspectorPlugin::default())
-        .add_plugins(material::CustomMaterialPlugin)
+        .add_plugins(material::TerrainMaterialPlugin)
         .add_plugins(settings::SettingsPlugin)
         .add_plugins(ui::UiPlugin)
         .add_plugins(data::DataPlugin)

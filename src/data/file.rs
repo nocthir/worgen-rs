@@ -7,10 +7,10 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use bevy::{prelude::*, tasks};
+use bevy::{pbr::ExtendedMaterial, prelude::*, tasks};
 
-use crate::camera::FocusCamera;
 use crate::data::*;
+use crate::{camera::FocusCamera, material::TerrainMaterial};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FileInfoState {
@@ -299,6 +299,7 @@ pub fn check_file_loading(
     mut file_info_map: ResMut<FileInfoMap>,
     mut images: ResMut<Assets<Image>>,
     mut meshes: ResMut<Assets<Mesh>>,
+    mut terrain_materials: ResMut<Assets<ExtendedMaterial<StandardMaterial, TerrainMaterial>>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut commands: Commands,
     mut focus_writer: EventWriter<FocusCamera>,
@@ -333,6 +334,7 @@ pub fn check_file_loading(
         &mut load_task,
         &mut file_info_map,
         &mut images,
+        &mut terrain_materials,
         &mut materials,
         &mut meshes,
         &mut commands,
@@ -447,6 +449,7 @@ fn process_completed_tasks(
     load_task: &mut LoadingFileTasks,
     file_info_map: &mut FileInfoMap,
     images: &mut Assets<Image>,
+    terrain_materials: &mut Assets<ExtendedMaterial<StandardMaterial, TerrainMaterial>>,
     materials: &mut Assets<StandardMaterial>,
     meshes: &mut Assets<Mesh>,
     commands: &mut Commands,
@@ -486,6 +489,7 @@ fn process_completed_tasks(
                     task,
                     file_info_map,
                     images,
+                    terrain_materials,
                     materials,
                     meshes,
                     commands,
@@ -636,6 +640,7 @@ fn check_loaded_world_map(
     mut task: LoadFileTask,
     file_info_map: &mut FileInfoMap,
     images: &mut Assets<Image>,
+    terrain_materials: &mut Assets<ExtendedMaterial<StandardMaterial, TerrainMaterial>>,
     materials: &mut Assets<StandardMaterial>,
     meshes: &mut Assets<Mesh>,
     commands: &mut Commands,
@@ -658,11 +663,12 @@ fn check_loaded_world_map(
                     world_map_info,
                     file_info_map,
                     images,
+                    terrain_materials,
                     materials,
                     meshes,
                 );
 
-                let bundles = match bundles_result {
+                let (terrain_bundles, model_bundles) = match bundles_result {
                     Ok(bundles) => bundles,
                     Err(e) => {
                         task.file.state = FileInfoState::Error(e.to_string());
@@ -671,16 +677,26 @@ fn check_loaded_world_map(
                     }
                 };
 
-                if bundles.is_empty() {
+                if terrain_bundles.is_empty() && model_bundles.is_empty() {
                     task.file.state = FileInfoState::Error("No meshes".to_string());
                 } else {
                     if let Some(bounding_sphere) =
-                        bundle::compute_bounding_sphere_from_bundles(&bundles, meshes)
+                        bundle::compute_bounding_sphere_from_bundles(&model_bundles, meshes)
                     {
                         focus_writer.write(FocusCamera { bounding_sphere });
                     }
 
-                    for bundle in bundles {
+                    if model_bundles.is_empty()
+                        && let Some(bounding_sphere) =
+                            bundle::compute_bounding_sphere_from_bundles(&terrain_bundles, meshes)
+                    {
+                        focus_writer.write(FocusCamera { bounding_sphere });
+                    }
+
+                    for bundle in terrain_bundles {
+                        bundle::add_bundle(commands, bundle, &task.file.path);
+                    }
+                    for bundle in model_bundles {
                         bundle::add_bundle(commands, bundle, &task.file.path);
                     }
                     info!("Added meshes from {}", task.file.path);

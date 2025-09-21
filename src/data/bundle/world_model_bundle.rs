@@ -165,13 +165,16 @@ mod test {
         let mut file_info_map = file::test::default_file_info_map(&settings)?;
         file_info_map.load_file_and_dependencies(&settings.test_world_model.file_path)?;
         let mut images = Assets::<Image>::default();
-        let mut custom_materials = Assets::<StandardMaterial>::default();
+        let mut materials = Assets::<StandardMaterial>::default();
+        let mut terrain_materials =
+            Assets::<ExtendedMaterial<StandardMaterial, TerrainMaterial>>::default();
         let mut meshes = Assets::<Mesh>::default();
         bundle::create_mesh_from_file_path(
             &settings.test_world_model.file_path,
             &file_info_map,
             &mut images,
-            &mut custom_materials,
+            &mut terrain_materials,
+            &mut materials,
             &mut meshes,
         )?;
         Ok(())

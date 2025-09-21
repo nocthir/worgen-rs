@@ -2,11 +2,14 @@
 // Author: Nocthir <nocthir@proton.me>
 // SPDX-License-Identifier: MIT or Apache-2.0
 
-use bevy::{asset::RenderAssetUsages, prelude::*, render::mesh::*};
+use bevy::{asset::RenderAssetUsages, pbr::ExtendedMaterial, prelude::*, render::mesh::*};
 
 use wow_adt as adt;
 
-use crate::data::{bundle::*, file::FileInfoMap, world_map::WorldMapInfo};
+use crate::{
+    data::{bundle::*, file::FileInfoMap, world_map::WorldMapInfo},
+    material::TerrainMaterial,
+};
 
 // Actually used in tests
 #[allow(unused)]
@@ -14,23 +17,41 @@ pub fn create_meshes_from_world_map_path(
     world_map_path: &str,
     file_info_map: &FileInfoMap,
     images: &mut Assets<Image>,
+    terrain_materials: &mut Assets<ExtendedMaterial<StandardMaterial, TerrainMaterial>>,
     materials: &mut Assets<StandardMaterial>,
     meshes: &mut Assets<Mesh>,
-) -> Result<Vec<ModelBundle>> {
+) -> Result<(Vec<TerrainBundle>, Vec<ModelBundle>)> {
     let world_map_info = file_info_map.get_world_map_info(world_map_path)?;
-    create_meshes_from_world_map_info(world_map_info, file_info_map, images, materials, meshes)
+    create_meshes_from_world_map_info(
+        world_map_info,
+        file_info_map,
+        images,
+        terrain_materials,
+        materials,
+        meshes,
+    )
 }
 
 pub fn create_meshes_from_world_map_info(
     world_map_info: &WorldMapInfo,
     file_info_map: &FileInfoMap,
     images: &mut Assets<Image>,
+    terrain_materials: &mut Assets<ExtendedMaterial<StandardMaterial, TerrainMaterial>>,
     materials: &mut Assets<StandardMaterial>,
     meshes: &mut Assets<Mesh>,
-) -> Result<Vec<ModelBundle>> {
-    let mut bundles = Vec::new();
+) -> Result<(Vec<TerrainBundle>, Vec<ModelBundle>)> {
+    let mut terrain_bundles = Vec::new();
+    let mut model_bundles = Vec::new();
 
-    bundles.extend(create_terrain_bundles_from_world_map_info(
+    terrain_bundles.extend(create_terrain_bundles_from_world_map_info(
+        world_map_info,
+        file_info_map,
+        images,
+        terrain_materials,
+        meshes,
+    )?);
+
+    model_bundles.extend(create_model_bundles_from_world_map_info(
         world_map_info,
         file_info_map,
         images,
@@ -38,7 +59,7 @@ pub fn create_meshes_from_world_map_info(
         meshes,
     )?);
 
-    bundles.extend(create_model_bundles_from_world_map_info(
+    model_bundles.extend(create_world_model_bundles_from_world_map_info(
         world_map_info,
         file_info_map,
         images,
@@ -46,24 +67,16 @@ pub fn create_meshes_from_world_map_info(
         meshes,
     )?);
 
-    bundles.extend(create_world_model_bundles_from_world_map_info(
-        world_map_info,
-        file_info_map,
-        images,
-        materials,
-        meshes,
-    )?);
-
-    Ok(bundles)
+    Ok((terrain_bundles, model_bundles))
 }
 
 fn create_terrain_bundles_from_world_map_info(
     world_map_info: &WorldMapInfo,
     file_info_map: &FileInfoMap,
     images: &mut Assets<Image>,
-    materials: &mut Assets<StandardMaterial>,
+    materials: &mut Assets<ExtendedMaterial<StandardMaterial, TerrainMaterial>>,
     meshes: &mut Assets<Mesh>,
-) -> Result<Vec<ModelBundle>> {
+) -> Result<Vec<TerrainBundle>> {
     let mut bundles = Vec::new();
 
     let textures =
@@ -73,22 +86,39 @@ fn create_terrain_bundles_from_world_map_info(
         let mesh = create_mesh_from_world_map_chunk(chunk);
         let mesh_handle = meshes.add(mesh);
 
-        let texture_handle = if chunk.texture_layers.is_empty() {
-            None
-        } else {
-            // Use just the first layer texture for now
-            let texture_index = chunk.texture_layers[0].texture_id as usize;
-            textures.get(texture_index).cloned()
-        };
+        let mut level0_texture_handle = None;
+        let mut level1_texture_handle = None;
 
-        let material = materials.add(StandardMaterial {
-            base_color_texture: texture_handle,
+        if let Some(level0) = chunk.texture_layers.first() {
+            // Use just the first layer texture for now
+            let texture_index = level0.texture_id as usize;
+            level0_texture_handle = textures.get(texture_index).cloned();
+        }
+
+        if let Some(level1) = chunk.texture_layers.get(1) {
+            // Use the second layer texture for now
+            let texture_index = level1.texture_id as usize;
+            level1_texture_handle = textures.get(texture_index).cloned();
+        }
+
+        let material = StandardMaterial {
+            base_color_texture: level0_texture_handle,
             perceptual_roughness: 1.0,
             reflectance: 0.0,
             unlit: false,
             cull_mode: None,
             ..Default::default()
-        });
+        };
+        let terrain_material = TerrainMaterial {
+            level_texture: level1_texture_handle,
+        };
+
+        let extended_material = ExtendedMaterial {
+            base: material,
+            extension: terrain_material,
+        };
+
+        let material_handle = materials.add(extended_material);
 
         // Each chunk is 33.33 units (100.0 / 3.0) in the world space.
         // Our grid size is 8, so we scale by (100.0 / 3.0) / 8.0 = 100.0 / 24.0
@@ -103,9 +133,9 @@ fn create_terrain_bundles_from_world_map_info(
             .with_scale(vec3(-CHUNK_SCALE, CHUNK_SCALE, 1.0))
             .with_rotation(Quat::from_axis_angle(Vec3::Y, -std::f32::consts::FRAC_PI_2));
 
-        bundles.push(ModelBundle {
+        bundles.push(TerrainBundle {
             mesh: Mesh3d(mesh_handle),
-            material: MeshMaterial3d(material),
+            material: MeshMaterial3d(material_handle),
             transform,
         });
     }
@@ -316,12 +346,15 @@ mod test {
         file_info_map.load_file_and_dependencies(&settings.world_map_path.file_path)?;
 
         let mut images = Assets::<Image>::default();
+        let mut terrain_materials =
+            Assets::<ExtendedMaterial<StandardMaterial, TerrainMaterial>>::default();
         let mut materials = Assets::<StandardMaterial>::default();
         let mut meshes = Assets::<Mesh>::default();
         bundle::create_meshes_from_world_map_path(
             &settings.world_map_path.file_path,
             &file_info_map,
             &mut images,
+            &mut terrain_materials,
             &mut materials,
             &mut meshes,
         )?;

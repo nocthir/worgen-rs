@@ -2,9 +2,9 @@
 // Author: Nocthir <nocthir@proton.me>
 // SPDX-License-Identifier: MIT or Apache-2.0
 
-use bevy::{asset::*, prelude::*, render::mesh::*};
+use bevy::{asset::*, pbr::ExtendedMaterial, prelude::*, render::mesh::*};
 
-use crate::data::*;
+use crate::{data::*, material::TerrainMaterial};
 
 mod material_bundle;
 mod model_bundle;
@@ -25,12 +25,53 @@ pub struct ModelBundle {
     pub transform: Transform,
 }
 
-pub fn add_bundle<S: Into<String>>(commands: &mut Commands, mut bundle: ModelBundle, path: S) {
+#[derive(Bundle, Clone)]
+pub struct TerrainBundle {
+    pub mesh: Mesh3d,
+    pub material: MeshMaterial3d<ExtendedMaterial<StandardMaterial, TerrainMaterial>>,
+    pub transform: Transform,
+}
+
+pub trait CustomBundle: Bundle {
+    fn get_transform(&self) -> &Transform;
+    fn get_transform_mut(&mut self) -> &mut Transform;
+    fn get_mesh(&self) -> &Mesh3d;
+}
+
+impl CustomBundle for TerrainBundle {
+    fn get_transform(&self) -> &Transform {
+        &self.transform
+    }
+    fn get_transform_mut(&mut self) -> &mut Transform {
+        &mut self.transform
+    }
+    fn get_mesh(&self) -> &Mesh3d {
+        &self.mesh
+    }
+}
+
+impl CustomBundle for ModelBundle {
+    fn get_transform(&self) -> &Transform {
+        &self.transform
+    }
+    fn get_transform_mut(&mut self) -> &mut Transform {
+        &mut self.transform
+    }
+    fn get_mesh(&self) -> &Mesh3d {
+        &self.mesh
+    }
+}
+
+pub fn add_bundle<S: Into<String>>(
+    commands: &mut Commands,
+    mut bundle: impl CustomBundle,
+    path: S,
+) {
     bundle
-        .transform
+        .get_transform_mut()
         .rotate_local_x(-std::f32::consts::FRAC_PI_2);
     bundle
-        .transform
+        .get_transform_mut()
         .rotate_local_z(-std::f32::consts::FRAC_PI_2);
     commands.spawn((CurrentFile { path: path.into() }, bundle));
 }
@@ -41,11 +82,19 @@ pub fn create_mesh_from_file_path(
     file_path: &str,
     file_info_map: &FileInfoMap,
     images: &mut Assets<Image>,
+    terrain_materials: &mut Assets<ExtendedMaterial<StandardMaterial, TerrainMaterial>>,
     materials: &mut Assets<StandardMaterial>,
     meshes: &mut Assets<Mesh>,
-) -> Result<Vec<ModelBundle>> {
+) -> Result<(Vec<TerrainBundle>, Vec<ModelBundle>)> {
     let file_info = file_info_map.get_file_info(file_path)?;
-    create_mesh_from_file_info(file_info, file_info_map, images, materials, meshes)
+    create_mesh_from_file_info(
+        file_info,
+        file_info_map,
+        images,
+        terrain_materials,
+        materials,
+        meshes,
+    )
 }
 
 // Actually used in tests
@@ -54,33 +103,56 @@ pub fn create_mesh_from_file_info(
     file_info: &FileInfo,
     file_info_map: &FileInfoMap,
     images: &mut Assets<Image>,
+    terrain_materials: &mut Assets<ExtendedMaterial<StandardMaterial, TerrainMaterial>>,
     materials: &mut Assets<StandardMaterial>,
     meshes: &mut Assets<Mesh>,
-) -> Result<Vec<ModelBundle>> {
+) -> Result<(Vec<TerrainBundle>, Vec<ModelBundle>)> {
+    let mut terrain_bundles = Vec::new();
+    let mut model_bundles = Vec::new();
+
     match &file_info.data_info {
         Some(DataInfo::Model(model_info)) => {
-            create_meshes_from_model_info(model_info, file_info_map, images, materials, meshes)
+            let models = create_meshes_from_model_info(
+                model_info,
+                file_info_map,
+                images,
+                materials,
+                meshes,
+            )?;
+            model_bundles.extend(models);
         }
-        Some(DataInfo::WorldModel(world_model_info)) => create_meshes_from_world_model_info(
-            world_model_info,
-            file_info_map,
-            images,
-            materials,
-            meshes,
-        ),
-        Some(DataInfo::WorldMap(world_map_info)) => create_meshes_from_world_map_info(
-            world_map_info,
-            file_info_map,
-            images,
-            materials,
-            meshes,
-        ),
-        _ => Err(format!(
-            "Unsupported or missing data info for file: {}",
-            file_info.path
-        )
-        .into()),
-    }
+        Some(DataInfo::WorldModel(world_model_info)) => {
+            let models = create_meshes_from_world_model_info(
+                world_model_info,
+                file_info_map,
+                images,
+                materials,
+                meshes,
+            )?;
+            model_bundles.extend(models);
+        }
+        Some(DataInfo::WorldMap(world_map_info)) => {
+            let (terrains, models) = create_meshes_from_world_map_info(
+                world_map_info,
+                file_info_map,
+                images,
+                terrain_materials,
+                materials,
+                meshes,
+            )?;
+            terrain_bundles.extend(terrains);
+            model_bundles.extend(models);
+        }
+        _ => {
+            return Err(format!(
+                "Unsupported or missing data info for file: {}",
+                file_info.path
+            )
+            .into());
+        }
+    };
+
+    Ok((terrain_bundles, model_bundles))
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -92,19 +164,19 @@ pub struct BoundingSphere {
 /// Compute a combined world-space bounding sphere (center, radius) for the given bundles.
 /// Uses mesh positions and applies the same reorientation as `add_bundle` to match spawned transforms.
 pub fn compute_bounding_sphere_from_bundles(
-    bundles: &[ModelBundle],
+    bundles: &[impl CustomBundle],
     meshes: &Assets<Mesh>,
 ) -> Option<BoundingSphere> {
     let mut min = Vec3::splat(f32::INFINITY);
     let mut max = Vec3::splat(f32::NEG_INFINITY);
 
     for b in bundles {
-        let Some(mesh) = meshes.get(&b.mesh.0) else {
+        let Some(mesh) = meshes.get(&b.get_mesh().0) else {
             continue;
         };
 
         // Prepare final transform: user-provided transform + reorientation applied at spawn
-        let mut final_transform = b.transform;
+        let mut final_transform = *b.get_transform();
         final_transform.rotate_local_x(-f32::consts::FRAC_PI_2);
         final_transform.rotate_local_z(-f32::consts::FRAC_PI_2);
 
