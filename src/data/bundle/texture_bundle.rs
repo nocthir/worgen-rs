@@ -74,53 +74,116 @@ pub fn create_textures_from_world_map(
 ///
 /// If `has_big_alpha` is true, each alpha value is 8 bits (1 byte),
 /// otherwise as 4 bits (half a byte).
+///
+/// If `do_not_fix_alpha` is true, we should read a 63*63 map with the last row
+/// and column being equivalent to the previous one
 pub fn create_alpha_texture_from_world_map_chunk(
     chunk: &adt::McnkChunk,
     images: &mut Assets<Image>,
     has_big_alpha: bool,
+    do_not_fix_alpha: bool,
 ) -> Handle<Image> {
-    let image_size: Extent3d = Extent3d {
-        width: 64,
-        height: 64,
-        depth_or_array_layers: 1,
-    };
-
-    let mut combined_alpha = vec![0u8; (image_size.width * image_size.height * 4) as usize];
+    let mut combined_alpha = CombinedAlphaMap::new(do_not_fix_alpha);
 
     // Put level 1 alpha in R channel, level 2 in G channel, level 3 in B channel
     for (level, alpha) in chunk.alpha_maps.iter().enumerate() {
-        // Offset by level to put in correct channel
-        let mut combined_alpha_index = level;
         for &alpha_value in alpha.iter() {
             if has_big_alpha {
-                if combined_alpha_index < combined_alpha.len() {
-                    // alpha is one byte here
-                    combined_alpha[combined_alpha_index] = alpha_value;
-                    combined_alpha_index += 4;
-                }
+                // alpha is one byte here
+                combined_alpha.set_next_alpha(level, alpha_value);
             } else {
-                if combined_alpha_index < combined_alpha.len() {
-                    // Convert 4-bit alpha to 8-bit alpha
-                    // We set two pixels at a time since each byte contains two 4-bit alpha values
-                    combined_alpha[combined_alpha_index] = (alpha_value & 0x0F) * 16;
-                    combined_alpha_index += 4;
-                }
-                if combined_alpha_index < combined_alpha.len() {
-                    combined_alpha[combined_alpha_index] = ((alpha_value >> 4) & 0x0F) * 16;
-                    combined_alpha_index += 4;
-                }
+                // Convert 4-bit alpha to 8-bit alpha
+                // We set two pixels at a time since each byte contains two 4-bit alpha values
+                combined_alpha.set_next_alpha(level, (alpha_value & 0x0F) * 16);
+                combined_alpha.set_next_alpha(level, ((alpha_value >> 4) & 0x0F) * 16);
             }
         }
     }
 
-    let image = Image::new_fill(
-        image_size,
-        TextureDimension::D2,
-        &combined_alpha,
-        TextureFormat::Rgba8Unorm,
-        RenderAssetUsages::RENDER_WORLD,
-    );
-    images.add(image)
+    images.add(combined_alpha.to_image())
+}
+
+struct CombinedAlphaMap {
+    map: [[[u8; 4]; 64]; 64],
+    current_x: usize,
+    current_y: usize,
+
+    /// If `do_not_fix` is true, we should read a 63*63 map with the last row
+    /// and column being equivalent to the previous one
+    do_not_fix: bool,
+}
+
+impl CombinedAlphaMap {
+    fn new(do_not_fix: bool) -> Self {
+        Self {
+            map: [[[0u8; 4]; 64]; 64],
+            current_x: 0,
+            current_y: 0,
+            do_not_fix,
+        }
+    }
+
+    fn set_alpha(&mut self, x: usize, y: usize, level: usize, alpha: u8) {
+        if y < 64 && x < 64 && level < 4 {
+            self.map[y][x][level] = alpha;
+        }
+    }
+
+    fn set_next_alpha(&mut self, level: usize, alpha: u8) {
+        self.set_alpha(self.current_x, self.current_y, level, alpha);
+        self.advance();
+
+        // If we are at the last row or column and do_not_fix is true,
+        // duplicate the last value to fill the 64x64 texture
+        if self.do_not_fix {
+            if self.current_x == 63 {
+                self.set_alpha(self.current_x, self.current_y, level, alpha);
+                self.advance();
+            }
+            if self.current_y == 63 {
+                let prev_x = if self.current_x == 0 {
+                    63
+                } else {
+                    self.current_x - 1
+                };
+                let alpha = self.map[self.current_y - 1][prev_x][level];
+                self.set_alpha(self.current_x, self.current_y, level, alpha);
+                self.advance();
+            }
+        }
+    }
+
+    fn advance(&mut self) {
+        self.current_x += 1;
+        if self.current_x >= 64 {
+            self.current_x = 0;
+            self.current_y += 1;
+        }
+    }
+
+    fn as_slice(&self) -> &[u8] {
+        unsafe {
+            std::slice::from_raw_parts(
+                self.map.as_ptr() as *const u8,
+                std::mem::size_of_val(&self.map),
+            )
+        }
+    }
+
+    fn to_image(&self) -> Image {
+        let image_size: Extent3d = Extent3d {
+            width: 64,
+            height: 64,
+            depth_or_array_layers: 1,
+        };
+        Image::new_fill(
+            image_size,
+            TextureDimension::D2,
+            self.as_slice(),
+            TextureFormat::Rgba8Unorm,
+            RenderAssetUsages::RENDER_WORLD,
+        )
+    }
 }
 
 #[cfg(test)]

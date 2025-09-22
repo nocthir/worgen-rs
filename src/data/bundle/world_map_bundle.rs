@@ -97,7 +97,14 @@ fn create_terrain_bundles_from_world_map_info(
             level0_texture_handle = textures.get(texture_index).cloned();
         }
 
-        let alpha_texture = create_alpha_texture_from_world_map_chunk(chunk, images, has_big_alpha);
+        let bit_16th = 1 << 15;
+        let do_not_fix_alpha = chunk.flags & bit_16th != 0;
+        let alpha_texture = create_alpha_texture_from_world_map_chunk(
+            chunk,
+            images,
+            has_big_alpha,
+            do_not_fix_alpha,
+        );
 
         let mut level1_texture_handle = None;
         let mut level2_texture_handle = None;
