@@ -7150,6 +7150,7 @@ dependencies = [
  "bevy_egui",
  "criterion",
  "env_logger",
+ "image",
  "serde",
  "serde_json",
  "wow-adt",

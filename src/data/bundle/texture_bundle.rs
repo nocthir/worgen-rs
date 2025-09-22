@@ -80,33 +80,37 @@ pub fn create_textures_from_world_map(
 pub fn create_alpha_texture_from_world_map_chunk(
     chunk: &adt::McnkChunk,
     images: &mut Assets<Image>,
-    has_big_alpha: bool,
     do_not_fix_alpha: bool,
 ) -> Handle<Image> {
     let mut combined_alpha = CombinedAlphaMap::new(do_not_fix_alpha);
+    let has_big_alpha = false;
 
     // Put level 1 alpha in R channel, level 2 in G channel, level 3 in B channel
-    for (level, alpha) in chunk.alpha_maps.iter().enumerate() {
-        for &alpha_value in alpha.iter() {
-            if has_big_alpha {
-                // alpha is one byte here
-                combined_alpha.set_next_alpha(level, alpha_value);
-            } else {
-                // Convert 4-bit alpha to 8-bit alpha
-                // We set two pixels at a time since each byte contains two 4-bit alpha values
-                combined_alpha.set_next_alpha(level, (alpha_value & 0x0F) * 16);
-                combined_alpha.set_next_alpha(level, ((alpha_value >> 4) & 0x0F) * 16);
-            }
+    for &alpha in chunk.alpha_maps.iter() {
+        if has_big_alpha {
+            // alpha is one byte here
+            combined_alpha.set_next_alpha(alpha);
+        } else {
+            // Convert 4-bit alpha to 8-bit alpha
+            // We set two pixels at a time since each byte contains two 4-bit alpha values
+            combined_alpha.set_next_alpha((alpha & 0x0F) * 16);
+            combined_alpha.set_next_alpha(((alpha >> 4) & 0x0F) * 16);
         }
     }
 
-    images.add(combined_alpha.to_image())
+    let image_handle = images.add(combined_alpha.to_image());
+
+    //let path = format!("debug/chunk_alpha_{}.png", image_handle.id());
+    //combined_alpha.save_png(path).unwrap();
+
+    image_handle
 }
 
 struct CombinedAlphaMap {
     map: [[[u8; 4]; 64]; 64],
     current_x: usize,
     current_y: usize,
+    current_level: usize,
 
     /// If `do_not_fix` is true, we should read a 63*63 map with the last row
     /// and column being equivalent to the previous one
@@ -115,10 +119,13 @@ struct CombinedAlphaMap {
 
 impl CombinedAlphaMap {
     fn new(do_not_fix: bool) -> Self {
+        let mut map = [[[0u8; 4]; 64]; 64];
+        map.iter_mut().for_each(|layer| layer.fill([0, 0, 0, 255]));
         Self {
-            map: [[[0u8; 4]; 64]; 64],
+            map,
             current_x: 0,
             current_y: 0,
+            current_level: 0,
             do_not_fix,
         }
     }
@@ -129,15 +136,16 @@ impl CombinedAlphaMap {
         }
     }
 
-    fn set_next_alpha(&mut self, level: usize, alpha: u8) {
-        self.set_alpha(self.current_x, self.current_y, level, alpha);
-        self.advance();
-
+    fn set_next_alpha(&mut self, alpha: u8) {
+        if !self.do_not_fix {
+            self.set_alpha(self.current_x, self.current_y, self.current_level, alpha);
+            self.advance();
+        }
         // If we are at the last row or column and do_not_fix is true,
         // duplicate the last value to fill the 64x64 texture
         if self.do_not_fix {
             if self.current_x == 63 {
-                self.set_alpha(self.current_x, self.current_y, level, alpha);
+                self.set_alpha(self.current_x, self.current_y, self.current_level, alpha);
                 self.advance();
             }
             if self.current_y == 63 {
@@ -146,8 +154,8 @@ impl CombinedAlphaMap {
                 } else {
                     self.current_x - 1
                 };
-                let alpha = self.map[self.current_y - 1][prev_x][level];
-                self.set_alpha(self.current_x, self.current_y, level, alpha);
+                let alpha = self.map[self.current_y - 1][prev_x][self.current_level];
+                self.set_alpha(self.current_x, self.current_y, self.current_level, alpha);
                 self.advance();
             }
         }
@@ -158,6 +166,10 @@ impl CombinedAlphaMap {
         if self.current_x >= 64 {
             self.current_x = 0;
             self.current_y += 1;
+            if self.current_y >= 64 {
+                self.current_y = 0;
+                self.current_level += 1;
+            }
         }
     }
 
@@ -183,6 +195,18 @@ impl CombinedAlphaMap {
             TextureFormat::Rgba8Unorm,
             RenderAssetUsages::RENDER_WORLD,
         )
+    }
+
+    fn save_png(&self, path: impl AsRef<std::path::Path>) -> anyhow::Result<()> {
+        let parent = path.as_ref().parent().unwrap();
+        std::fs::create_dir_all(parent)?;
+        let file = std::fs::File::create(path)?;
+        let writer = std::io::BufWriter::new(file);
+        use image::codecs::png::PngEncoder;
+        let encoder = PngEncoder::new(writer);
+        use image::*;
+        encoder.write_image(self.as_slice(), 64, 64, ExtendedColorType::Rgba8)?;
+        Ok(())
     }
 }
 
