@@ -82,6 +82,9 @@ fn create_terrain_bundles_from_world_map_info(
     let textures =
         create_textures_from_world_map(&world_map_info.world_map, file_info_map, images)?;
 
+    let header = world_map_info.world_map.mhdr.as_ref().unwrap();
+    let has_big_alpha = header.flags & 0x4 != 0;
+
     for chunk in &world_map_info.world_map.mcnk_chunks {
         let mesh = create_mesh_from_world_map_chunk(chunk);
         let mesh_handle = meshes.add(mesh);
@@ -94,7 +97,7 @@ fn create_terrain_bundles_from_world_map_info(
             level0_texture_handle = textures.get(texture_index).cloned();
         }
 
-        let alpha_texture = create_alpha_texture_from_world_map_chunk(chunk, images);
+        let alpha_texture = create_alpha_texture_from_world_map_chunk(chunk, images, has_big_alpha);
 
         let mut level1_texture_handle = None;
         let mut level2_texture_handle = None;

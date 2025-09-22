@@ -65,30 +65,56 @@ pub fn create_textures_from_world_map(
     Ok(image_handles)
 }
 
+/// Create a combined RGBA texture from the alpha maps of a world map chunk.
+/// Each alpha map is stored in a separate channel:
+/// - R: Level 1 alpha
+/// - G: Level 2 alpha
+/// - B: Level 3 alpha
+/// - A: Unused
+///
+/// If `has_big_alpha` is true, each alpha value is 8 bits (1 byte),
+/// otherwise as 4 bits (half a byte).
 pub fn create_alpha_texture_from_world_map_chunk(
     chunk: &adt::McnkChunk,
     images: &mut Assets<Image>,
+    has_big_alpha: bool,
 ) -> Handle<Image> {
-    static IMAGE_SIZE: Extent3d = Extent3d {
+    let image_size: Extent3d = Extent3d {
         width: 64,
         height: 64,
         depth_or_array_layers: 1,
     };
 
-    let mut combined_alpha = vec![0u8; (IMAGE_SIZE.width * IMAGE_SIZE.height * 4) as usize];
+    let mut combined_alpha = vec![0u8; (image_size.width * image_size.height * 4) as usize];
 
     // Put level 1 alpha in R channel, level 2 in G channel, level 3 in B channel
     for (level, alpha) in chunk.alpha_maps.iter().enumerate() {
-        for (pos, &alpha_value) in alpha.iter().enumerate() {
-            let index = pos * 4 + level;
-            if index < combined_alpha.len() {
-                combined_alpha[index] = alpha_value;
+        // Offset by level to put in correct channel
+        let mut combined_alpha_index = level;
+        for &alpha_value in alpha.iter() {
+            if has_big_alpha {
+                if combined_alpha_index < combined_alpha.len() {
+                    // alpha is one byte here
+                    combined_alpha[combined_alpha_index] = alpha_value;
+                    combined_alpha_index += 4;
+                }
+            } else {
+                if combined_alpha_index < combined_alpha.len() {
+                    // Convert 4-bit alpha to 8-bit alpha
+                    // We set two pixels at a time since each byte contains two 4-bit alpha values
+                    combined_alpha[combined_alpha_index] = (alpha_value & 0x0F) * 16;
+                    combined_alpha_index += 4;
+                }
+                if combined_alpha_index < combined_alpha.len() {
+                    combined_alpha[combined_alpha_index] = ((alpha_value >> 4) & 0x0F) * 16;
+                    combined_alpha_index += 4;
+                }
             }
         }
     }
 
     let image = Image::new_fill(
-        IMAGE_SIZE,
+        image_size,
         TextureDimension::D2,
         &combined_alpha,
         TextureFormat::Rgba8Unorm,

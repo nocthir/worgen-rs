@@ -45,7 +45,7 @@ fn fragment(
     var alpha = textureSample(
         alpha_texture,
         alpha_sampler,
-        in.uv / 2.0
+        in.uv
     ).rgb;
 
     var level1_color = vec4<f32>(0.0);
