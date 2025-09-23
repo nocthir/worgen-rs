@@ -1,6 +1,6 @@
 [package]
 name = "worgen-rs"
-version = "0.2.1"
+version = "0.2.2"
 authors = ["Nocthir <nocthir@proton.me>"]
 edition = "2024"
 license = "MIT OR Apache-2.0"
@@ -26,11 +26,11 @@ bevy-inspector-egui = "0.33.*"
 bevy_egui = "0.36.*"
 serde = "1.0.*"
 serde_json = "1.0.*"
-wow-adt = { git = "https://github.com/nocthir/warcraft-rs", rev = "c4aba4df719a7754191efedfbfecfe0d89be33d6" }
-wow-m2 = { git = "https://github.com/nocthir/warcraft-rs", rev = "c4aba4df719a7754191efedfbfecfe0d89be33d6" }
-wow-mpq = { git = "https://github.com/nocthir/warcraft-rs", rev = "c4aba4df719a7754191efedfbfecfe0d89be33d6" }
-wow-wmo = { git = "https://github.com/nocthir/warcraft-rs", rev = "c4aba4df719a7754191efedfbfecfe0d89be33d6" }
-wow-blp = { git = "https://github.com/nocthir/warcraft-rs", rev = "c4aba4df719a7754191efedfbfecfe0d89be33d6" }
+wow-adt = { git = "https://github.com/wowemulation-dev/warcraft-rs", rev = "d61c0991c4ea8d90516f5a3493b2969e318917e4" }
+wow-m2 = { git = "https://github.com/wowemulation-dev/warcraft-rs", rev = "d61c0991c4ea8d90516f5a3493b2969e318917e4" }
+wow-mpq = { git = "https://github.com/wowemulation-dev/warcraft-rs", rev = "d61c0991c4ea8d90516f5a3493b2969e318917e4" }
+wow-wmo = { git = "https://github.com/wowemulation-dev/warcraft-rs", rev = "d61c0991c4ea8d90516f5a3493b2969e318917e4" }
+wow-blp = { git = "https://github.com/wowemulation-dev/warcraft-rs", rev = "d61c0991c4ea8d90516f5a3493b2969e318917e4" }
 
 #wow-adt = { path = "../warcraft-rs/file-formats/world-data/wow-adt" }
 #wow-m2 = { path = "../warcraft-rs/file-formats/graphics/wow-m2" }

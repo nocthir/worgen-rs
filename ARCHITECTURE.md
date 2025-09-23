@@ -1,6 +1,6 @@
 # Architecture
 
-This document describes the current runtime architecture of the `worgen-rs` Bevy application: plugin ordering, schedules, resources/events, and the data flow for asynchronous archive and file loading with an egui-based browser for textures, models (including grouped world models), and world maps.
+This document describes the current runtime architecture of the `worgen-rs` Bevy application: plugin ordering, schedules, resources/events/components, and the end-to-end data flow for asynchronous archive and file loading with an egui-based browser for textures, models (including grouped world models), and world maps.
 
 ## Plugin composition
 
@@ -10,7 +10,7 @@ This document describes the current runtime architecture of the `worgen-rs` Bevy
 2. `FrameTimeDiagnosticsPlugin` – Frame timing diagnostics
 3. `EguiPlugin` – Integrates egui and provides the `EguiPrimaryContextPass`
 4. `WorldInspectorPlugin` – Live world/entity inspector via egui
-5. `CustomMaterialPlugin` – Registers a custom material/shader (loaders use `StandardMaterial`)
+5. `TerrainMaterialPlugin` – Registers an extended material with a custom terrain shader used by world maps
 6. `SettingsPlugin` – Loads `Settings` during `PreStartup`
 7. `UiPlugin` – Declares the `FileSelected` event, owns the `ArchivesInfo` resource, renders the archive browser UI
 8. `DataPlugin` – Starts parallel archive loading tasks (`Startup`), polls their completion and updates resources (`Update`), and drives file loading and instantiation (`Update`)
@@ -26,7 +26,7 @@ Startup:
 - `PanOrbitCameraPlugin::setup_camera` – Spawns a directional light and the orbit camera bundle.
 
 Update:
-- `archive::check_archive_loading` (in `DataPlugin`) – Polls `LoadArchiveTasks`. On success, appends `ArchiveInfo` into `ArchivesInfo` and updates `FileInfoMap`. On failure, logs and requests `AppExit::error`.
+- `archive::check_archive_loading` (in `DataPlugin`) – Polls `LoadArchiveTasks` (only while the resource exists). On success, appends `ArchiveInfo` into `ArchivesInfo` and updates `FileInfoMap`. On failure, logs and requests `AppExit::error`.
 - `data::load_selected_file` – Consumes only the most recent `FileSelected` each frame, despawns any `CurrentFile`, schedules file loading tasks, and marks file state transitions.
 - `file::check_file_loading` – Polls file loading tasks, fans out dependency loads (textures, referenced models/world models), instantiates meshes when dependencies are ready, and emits a `FocusCamera` event with computed bounds.
 - `PanOrbitCameraPlugin::focus_camera_on_event` – Centers and frames the orbit camera around the provided bounding sphere, applying a comfort multiplier and minimum radius.
@@ -39,7 +39,7 @@ Egui pass (`EguiPrimaryContextPass`):
 
 - Resources: `Settings`, `ArchivesInfo`, `FileInfoMap`, `LoadArchiveTasks`, `LoadingFileTasks`.
 - Events: `FileSelected { file_path: String }`, `FocusCamera { bounding_sphere }`.
-- Components: `CurrentFile { path }` (tags spawned entities for the active file).
+- Components: `CurrentFile { path }` (tags spawned entities for the active file), `PanOrbitState` and `PanOrbitSettings` (camera controller state/config), `Camera3d` on the orbit camera entity.
 
 ## Data and event flow
 
@@ -57,8 +57,11 @@ Egui pass (`EguiPrimaryContextPass`):
    - When a world map finishes, it schedules any missing models/world models it references, waits for them to be ready, then prepares placement bundles.
    - Before spawning, a world-space bounding sphere is computed from the prepared bundles (applying the same reorientation as spawning). A `FocusCamera` event is emitted with this sphere.
    - Texture loads update `FileInfoMap` immediately.
-7. When dependencies are ready and instantiation is requested, meshes and materials are created and spawned. New entities are tagged with `CurrentFile`. Model bundles are reoriented to the app’s convention: rotate −90° around X and −90° around Z. World map placements apply translation/rotation and scale (for models) from placement data.
-8. `focus_camera_on_event` receives the most recent focus request per frame and centers the camera on the provided sphere, multiplying radius by a comfort factor and enforcing a minimum radius. Camera input is ignored while egui wants pointer input to prevent conflicts.
+7. When dependencies are ready and instantiation is requested, meshes and materials are created and spawned. New entities are tagged with `CurrentFile`.
+   - Models and world models use `StandardMaterial`.
+   - World maps create terrain meshes using an extended material (`ExtendedMaterial<StandardMaterial, TerrainMaterial>`) backed by `assets/shaders/terrain_material.wgsl`, and also place referenced models/world models at their positions (and scale for models).
+   - Model/world model bundles are reoriented on spawn by rotating −90° around X and −90° around Z. Bounding computations use the same reorientation to match spawned transforms.
+8. `focus_camera_on_event` receives the most recent focus request per frame and centers the camera on the provided sphere, multiplying radius by a comfort factor and enforcing a minimum radius. Camera input is ignored while egui wants the pointer to prevent conflicts.
 
 ## Camera controls
 
@@ -67,7 +70,12 @@ Egui pass (`EguiPrimaryContextPass`):
   - Orbit: hold Left Alt
   - Zoom: hold Left Shift
 - Scroll wheel performs zoom by default (line and pixel sensitivities are supported).
-- The controller automatically handles upside-down orbiting to keep controls intuitive.
+- Upside-down orbiting is handled automatically to keep controls intuitive. Zoom is exponential; yaw/pitch are wrapped to ±π.
+
+## Materials
+
+- The terrain shader is loaded from `assets/shaders/terrain_material.wgsl` and is registered via `TerrainMaterialPlugin` using an extended material type. Terrain chunks pass layer count, an alpha texture, and up to three additional layer textures to the shader.
+- Standard models and world models use `StandardMaterial` (with alpha modes derived from their material data when applicable).
 
 ## Mermaid diagram
 
@@ -115,8 +123,8 @@ flowchart TD
 - Archive discovery and parsing run on async tasks; the main thread remains responsive while tasks complete in the background.
 - The UI reflects archives as they complete by reading from the `ArchivesInfo` resource; no explicit “archive loaded” event is used.
 - `load_selected_file` only processes the most recent selection per frame to avoid redundant work.
-- Spawned meshes use `StandardMaterial`; the custom material plugin is available for experiments.
-- Model entities are reoriented on spawn by rotating −90° around X and −90° around Z. Bounding computations use the same reorientation to match spawned transforms.
+- Terrain uses an extended material and custom shader; models and world models use `StandardMaterial`.
+- Model/world model entities are reoriented on spawn by rotating −90° around X and −90° around Z. Bounding computations use the same reorientation to match spawned transforms.
 - Camera input is disabled while egui wants the pointer to prevent interaction conflicts.
 
 ## Potential enhancements
@@ -128,3 +136,4 @@ flowchart TD
 - Lightweight telemetry in UI (mesh/material counts, vertex/index totals) and optional frame-time overlay segment.
 - Camera UX improvements: smooth focus animation, reset-to-origin, inertia/smoothing, configurable comfort factor.
 - Transparency and material sorting improvements for complex scenes (important for visual correctness in layered materials).
+- Asset lifetime management: optional cleanup or reuse of meshes/materials/images when switching selections to limit memory growth during long sessions.
