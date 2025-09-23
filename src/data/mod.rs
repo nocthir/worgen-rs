@@ -65,6 +65,7 @@ fn load_selected_file(
             commands.entity(entity).despawn();
         }
 
+        let shallow_file_info_map = file_info_map.shallow_clone();
         let file_info = file_info_map.get_file_info_mut(&event.file_path)?;
         if file_info.state == file::FileInfoState::Unloaded {
             file_info.state = file::FileInfoState::Loading;
@@ -73,21 +74,25 @@ fn load_selected_file(
                     load_file_tasks
                         .tasks
                         .push(model::loading_model_task(file::LoadFileTask::new(
-                            file_info, true,
+                            file_info,
+                            &shallow_file_info_map,
+                            true,
                         )));
                 }
                 file::DataType::WorldModel => {
                     load_file_tasks
                         .tasks
                         .push(world_model::loading_world_model_task(
-                            file::LoadFileTask::new(file_info, true),
+                            file::LoadFileTask::new(file_info, &shallow_file_info_map, true),
                         ));
                 }
                 file::DataType::WorldMap => {
                     load_file_tasks
                         .tasks
                         .push(world_map::loading_world_map_task(file::LoadFileTask::new(
-                            file_info, true,
+                            file_info,
+                            &shallow_file_info_map,
+                            true,
                         )));
                 }
                 file::DataType::Texture => {

@@ -26,17 +26,17 @@ bevy-inspector-egui = "0.33.*"
 bevy_egui = "0.36.*"
 serde = "1.0.*"
 serde_json = "1.0.*"
-wow-adt = { git = "https://github.com/wowemulation-dev/warcraft-rs", rev = "d61c0991c4ea8d90516f5a3493b2969e318917e4" }
-wow-m2 = { git = "https://github.com/wowemulation-dev/warcraft-rs", rev = "d61c0991c4ea8d90516f5a3493b2969e318917e4" }
-wow-mpq = { git = "https://github.com/wowemulation-dev/warcraft-rs", rev = "d61c0991c4ea8d90516f5a3493b2969e318917e4" }
-wow-wmo = { git = "https://github.com/wowemulation-dev/warcraft-rs", rev = "d61c0991c4ea8d90516f5a3493b2969e318917e4" }
-wow-blp = { git = "https://github.com/wowemulation-dev/warcraft-rs", rev = "d61c0991c4ea8d90516f5a3493b2969e318917e4" }
+#wow-adt = { git = "https://github.com/wowemulation-dev/warcraft-rs", rev = "d61c0991c4ea8d90516f5a3493b2969e318917e4" }
+#wow-m2 = { git = "https://github.com/wowemulation-dev/warcraft-rs", rev = "d61c0991c4ea8d90516f5a3493b2969e318917e4" }
+#wow-mpq = { git = "https://github.com/wowemulation-dev/warcraft-rs", rev = "d61c0991c4ea8d90516f5a3493b2969e318917e4" }
+#wow-wmo = { git = "https://github.com/wowemulation-dev/warcraft-rs", rev = "d61c0991c4ea8d90516f5a3493b2969e318917e4" }
+#wow-blp = { git = "https://github.com/wowemulation-dev/warcraft-rs", rev = "d61c0991c4ea8d90516f5a3493b2969e318917e4" }
 
-#wow-adt = { path = "../warcraft-rs/file-formats/world-data/wow-adt" }
-#wow-m2 = { path = "../warcraft-rs/file-formats/graphics/wow-m2" }
-#wow-mpq = { path = "../warcraft-rs/file-formats/archives/wow-mpq" }
-#wow-wmo = { path = "../warcraft-rs/file-formats/graphics/wow-wmo" }
-#wow-blp = { path = "../warcraft-rs/file-formats/graphics/wow-blp" }
+wow-adt = { path = "../warcraft-rs/file-formats/world-data/wow-adt" }
+wow-m2 = { path = "../warcraft-rs/file-formats/graphics/wow-m2" }
+wow-mpq = { path = "../warcraft-rs/file-formats/archives/wow-mpq" }
+wow-wmo = { path = "../warcraft-rs/file-formats/graphics/wow-wmo" }
+wow-blp = { path = "../warcraft-rs/file-formats/graphics/wow-blp" }
 
 [dev-dependencies]
 env_logger = "*"
