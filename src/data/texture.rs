@@ -2,8 +2,6 @@
 // Author: Nocthir <nocthir@proton.me>
 // SPDX-License-Identifier: MIT or Apache-2.0
 
-use std::path::Path;
-
 use bevy::{
     asset::RenderAssetUsages,
     prelude::*,
@@ -20,9 +18,9 @@ pub struct TextureInfo {
 }
 
 impl TextureInfo {
-    pub fn new<P: AsRef<Path>>(file_path: &str, archive_path: P) -> Result<Self> {
-        let mut archive = archive::open_archive(archive_path)?;
-        let file = archive.read_file(file_path)?;
+    pub fn new(file_info: &file::FileInfo) -> Result<Self> {
+        let archive = archive::get_archive!(&file_info.archive_path)?;
+        let file = archive.read_file(&file_info.path)?;
         Ok(Self::from_blp(blp::parser::load_blp_from_buf(&file)?))
     }
 
@@ -41,7 +39,7 @@ pub fn loading_texture_task(task: file::LoadFileTask) -> Task<file::LoadFileTask
 }
 
 pub async fn load_texture(mut task: file::LoadFileTask) -> file::LoadFileTask {
-    match TextureInfo::new(&task.file.path, &task.file.archive_path) {
+    match TextureInfo::new(&task.file) {
         Ok(image) => {
             task.file.set_texture(image);
             info!("Loaded texture: {}", task.file.path);

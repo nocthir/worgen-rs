@@ -22,8 +22,8 @@ impl WorldModelInfo {
         archive_path: P,
         file_info_map: &file::FileInfoMap,
     ) -> Result<Self> {
-        let mut archive = mpq::Archive::open(archive_path)?;
-        let world_model = read_wmo(file_path, &mut archive)?;
+        let archive = mpq::Archive::open(archive_path)?;
+        let world_model = read_wmo(file_path, &archive)?;
         let groups = read_groups(file_path, file_info_map, &world_model)?;
         Ok(Self {
             world_model,
@@ -36,7 +36,7 @@ impl WorldModelInfo {
     }
 }
 
-fn read_wmo(path: &str, archive: &mut mpq::Archive) -> Result<wmo::WmoRoot> {
+fn read_wmo(path: &str, archive: &mpq::Archive) -> Result<wmo::WmoRoot> {
     let file = archive.read_file(path)?;
     let mut reader = io::Cursor::new(file);
     Ok(wmo::parse_wmo(&mut reader)?)
@@ -112,7 +112,7 @@ fn read_group(
     group_index: usize,
 ) -> Result<wmo::WmoGroup> {
     let group_filename = get_wmo_group_filename(file_path, group_index);
-    let mut archive = {
+    let archive = {
         let file_info = file_info_map.get_file_info(&group_filename)?;
         mpq::Archive::open(&file_info.archive_path)?
     };

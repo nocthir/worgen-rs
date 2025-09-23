@@ -5,6 +5,7 @@
 use std::collections::HashMap;
 use std::path::Path;
 use std::path::PathBuf;
+use std::sync::OnceLock;
 
 use bevy::prelude::*;
 use bevy::tasks;
@@ -15,6 +16,31 @@ use crate::data::model;
 use crate::data::world_map;
 use crate::data::world_model;
 use crate::settings::Settings;
+
+pub static ARCHIVE_MAP: OnceLock<ArchiveMap> = OnceLock::new();
+
+macro_rules! get_archive {
+    ($path:expr) => {
+        $crate::data::archive::ARCHIVE_MAP
+            .get()
+            .unwrap()
+            .get_archive($path)
+    };
+}
+pub(crate) use get_archive;
+
+#[derive(Default, Resource)]
+pub struct ArchiveMap {
+    pub map: HashMap<PathBuf, mpq::Archive>,
+}
+
+impl ArchiveMap {
+    pub fn get_archive<P: AsRef<Path>>(&self, path: P) -> Result<&mpq::Archive> {
+        self.map
+            .get(path.as_ref())
+            .ok_or_else(|| format!("Archive not found in map: {}", path.as_ref().display()).into())
+    }
+}
 
 #[derive(Default, Resource)]
 pub struct ArchiveInfoMap {
@@ -101,6 +127,27 @@ impl ArchiveInfo {
     }
 }
 
+pub fn init_archive_map(settings: Res<Settings>) -> Result<()> {
+    let mut value = ArchiveMap::default();
+    let game_path = PathBuf::from(&settings.game_path);
+    let data_path = game_path.join("Data");
+
+    for file in data_path.read_dir()? {
+        let file = file?;
+        let file_path = file.path();
+        if is_archive_extension(&file_path) {
+            let archive = mpq::Archive::open(&file_path)?;
+            value.map.insert(file_path, archive);
+        }
+    }
+
+    ARCHIVE_MAP
+        .set(value)
+        .map_err(|_| "Failed to initialize ARCHIVE_MAP")?;
+
+    Ok(())
+}
+
 #[derive(Resource, Default)]
 pub struct LoadArchiveTasks {
     tasks: Vec<tasks::Task<Result<ArchiveInfo>>>,
@@ -134,17 +181,6 @@ pub fn is_archive_extension<P: AsRef<Path>>(path: P) -> bool {
 
 async fn load_archive(archive_path: PathBuf) -> Result<ArchiveInfo> {
     ArchiveInfo::new(archive_path)
-}
-
-pub fn open_archive<P: AsRef<Path>>(archive_path: P) -> Result<mpq::Archive> {
-    mpq::Archive::open(archive_path.as_ref()).map_err(|e| {
-        format!(
-            "Failed to open archive {}: {}",
-            archive_path.as_ref().display(),
-            e
-        )
-        .into()
-    })
 }
 
 pub fn check_archive_loading(

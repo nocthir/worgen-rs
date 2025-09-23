@@ -112,7 +112,7 @@ impl FileInfo {
             self.state = FileInfoState::Loading;
             match self.data_type {
                 DataType::Texture => {
-                    self.set_texture(texture::TextureInfo::new(&self.path, &self.archive_path)?);
+                    self.set_texture(texture::TextureInfo::new(self)?);
                 }
                 DataType::Model => {
                     self.set_model(model::ModelInfo::new(&self.path, &self.archive_path)?)

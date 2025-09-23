@@ -16,6 +16,7 @@ use bevy::prelude::*;
 
 use crate::{
     data::{archive::*, file::*},
+    settings,
     ui::FileSelected,
 };
 
@@ -26,6 +27,10 @@ impl Plugin for DataPlugin {
         app.insert_resource(archive::ArchiveInfoMap::default())
             .insert_resource(file::FileInfoMap::default())
             .insert_resource(file::LoadingFileTasks::default())
+            .add_systems(
+                Startup,
+                archive::init_archive_map.run_if(resource_added::<settings::Settings>),
+            )
             .add_systems(Startup, archive::start_loading)
             .add_systems(
                 Update,

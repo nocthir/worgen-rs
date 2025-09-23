@@ -150,7 +150,7 @@ mod test {
     #[test]
     fn list_world_model_paths() -> Result {
         let settings = settings::TestSettings::load()?;
-        let mut archive = mpq::Archive::open(&settings.world_model_archive_path)?;
+        let archive = mpq::Archive::open(&settings.world_model_archive_path)?;
         for file_path in archive.list()? {
             if world_model::is_world_model_extension(&file_path.name) {
                 println!("{}", file_path.name);
