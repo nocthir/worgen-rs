@@ -11,11 +11,12 @@ use bevy::prelude::*;
 use bevy::tasks;
 use wow_mpq as mpq;
 
+use crate::data::archive;
 use crate::data::file::FileInfoMap;
 use crate::data::model;
 use crate::data::world_map;
 use crate::data::world_model;
-use crate::settings::Settings;
+use crate::settings;
 
 pub static ARCHIVE_MAP: OnceLock<ArchiveMap> = OnceLock::new();
 
@@ -49,7 +50,6 @@ pub struct ArchiveInfoMap {
 
 pub struct ArchiveInfo {
     pub path: PathBuf,
-    pub archive: mpq::Archive,
     pub texture_paths: Vec<String>,
     pub model_paths: Vec<String>,
     pub world_model_paths: Vec<String>,
@@ -58,14 +58,13 @@ pub struct ArchiveInfo {
 
 impl ArchiveInfo {
     pub fn new<P: AsRef<Path>>(path: P) -> Result<Self> {
-        let mut archive = mpq::Archive::open(path.as_ref())?;
-        let texture_paths = Self::get_texture_paths(&mut archive)?;
-        let model_paths = Self::get_model_paths(&mut archive)?;
-        let world_model_paths = Self::get_world_model_paths(&mut archive)?;
-        let world_map_paths = Self::get_world_map_paths(&mut archive)?;
+        let archive = archive::get_archive!(&path)?;
+        let texture_paths = Self::get_texture_paths(archive)?;
+        let model_paths = Self::get_model_paths(archive)?;
+        let world_model_paths = Self::get_world_model_paths(archive)?;
+        let world_map_paths = Self::get_world_map_paths(archive)?;
         Ok(Self {
             path: path.as_ref().into(),
-            archive,
             texture_paths,
             model_paths,
             world_model_paths,
@@ -73,7 +72,7 @@ impl ArchiveInfo {
         })
     }
 
-    fn get_texture_paths(archive: &mut mpq::Archive) -> Result<Vec<String>> {
+    fn get_texture_paths(archive: &mpq::Archive) -> Result<Vec<String>> {
         let mut textures = Vec::new();
         archive.list()?.retain(|file| {
             if file.name.to_lowercase().ends_with(".blp") {
@@ -86,7 +85,7 @@ impl ArchiveInfo {
         Ok(textures)
     }
 
-    fn get_model_paths(archive: &mut mpq::Archive) -> Result<Vec<String>> {
+    fn get_model_paths(archive: &mpq::Archive) -> Result<Vec<String>> {
         let mut models = Vec::new();
         archive.list()?.retain(|file| {
             if model::is_model_extension(&file.name) {
@@ -99,7 +98,7 @@ impl ArchiveInfo {
         Ok(models)
     }
 
-    fn get_world_model_paths(archive: &mut mpq::Archive) -> Result<Vec<String>> {
+    fn get_world_model_paths(archive: &mpq::Archive) -> Result<Vec<String>> {
         let mut world_models = Vec::new();
         archive.list()?.retain(|file| {
             // We only want the root .wmo files, not the group files
@@ -113,7 +112,7 @@ impl ArchiveInfo {
         Ok(world_models)
     }
 
-    fn get_world_map_paths(archive: &mut mpq::Archive) -> Result<Vec<String>> {
+    fn get_world_map_paths(archive: &mpq::Archive) -> Result<Vec<String>> {
         let mut world_maps = Vec::new();
         archive.list()?.retain(|file| {
             if world_map::is_world_map_extension(&file.name) {
@@ -127,9 +126,9 @@ impl ArchiveInfo {
     }
 }
 
-pub fn init_archive_map(settings: Res<Settings>) -> Result<()> {
+pub fn init_archive_map() -> Result<()> {
     let mut value = ArchiveMap::default();
-    let game_path = PathBuf::from(&settings.game_path);
+    let game_path = PathBuf::from(&settings::Settings::get().game_path);
     let data_path = game_path.join("Data");
 
     for file in data_path.read_dir()? {
@@ -153,24 +152,13 @@ pub struct LoadArchiveTasks {
     tasks: Vec<tasks::Task<Result<ArchiveInfo>>>,
 }
 
-pub fn start_loading(mut commands: Commands, settings: Res<Settings>) -> Result<()> {
-    let game_path = PathBuf::from(&settings.game_path);
-    let data_path = game_path.join("Data");
-
+pub fn start_loading(mut commands: Commands) {
     let mut tasks = LoadArchiveTasks::default();
-
-    for file in data_path.read_dir()? {
-        let file = file?;
-        let file_path = file.path();
-        if is_archive_extension(&file_path) {
-            let task = tasks::IoTaskPool::get().spawn(load_archive(file_path));
-            tasks.tasks.push(task);
-        }
+    for archive_path in ARCHIVE_MAP.get().unwrap().map.keys() {
+        let task = tasks::IoTaskPool::get().spawn(load_archive(archive_path.clone()));
+        tasks.tasks.push(task);
     }
-
     commands.insert_resource(tasks);
-
-    Ok(())
 }
 
 pub fn is_archive_extension<P: AsRef<Path>>(path: P) -> bool {

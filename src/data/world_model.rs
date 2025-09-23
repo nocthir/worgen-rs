@@ -6,10 +6,10 @@ use std::{io, path::Path};
 
 use bevy::{prelude::*, tasks};
 
-use wow_mpq as mpq;
+use wow_mpq::{self as mpq};
 use wow_wmo as wmo;
 
-use crate::data::file;
+use crate::data::{archive, file};
 
 pub struct WorldModelInfo {
     pub world_model: wmo::WmoRoot,
@@ -22,8 +22,8 @@ impl WorldModelInfo {
         archive_path: P,
         file_info_map: &file::FileInfoMap,
     ) -> Result<Self> {
-        let archive = mpq::Archive::open(archive_path)?;
-        let world_model = read_wmo(file_path, &archive)?;
+        let archive = archive::get_archive!(archive_path)?;
+        let world_model = read_wmo(file_path, archive)?;
         let groups = read_groups(file_path, file_info_map, &world_model)?;
         Ok(Self {
             world_model,
@@ -114,7 +114,7 @@ fn read_group(
     let group_filename = get_wmo_group_filename(file_path, group_index);
     let archive = {
         let file_info = file_info_map.get_file_info(&group_filename)?;
-        mpq::Archive::open(&file_info.archive_path)?
+        archive::get_archive!(&file_info.archive_path)?
     };
     let file = archive.read_file(&group_filename)?;
     let mut reader = io::Cursor::new(&file);

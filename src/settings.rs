@@ -2,10 +2,13 @@
 // Author: Nocthir <nocthir@proton.me>
 // SPDX-License-Identifier: MIT or Apache-2.0
 
-use std::{fs, io};
+use std::{fs, io, ptr::addr_of, sync::Once};
 
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
+
+pub static mut SETTINGS: Settings = Settings::new();
+static SETTINGS_ONCE: Once = Once::new();
 
 #[derive(Resource, Default, Serialize, Deserialize)]
 pub struct Settings {
@@ -13,11 +16,23 @@ pub struct Settings {
 }
 
 impl Settings {
-    pub fn load() -> Result<Self> {
+    pub const fn new() -> Self {
+        Self {
+            game_path: String::new(),
+        }
+    }
+
+    pub fn get() -> &'static Self {
+        debug_assert!(SETTINGS_ONCE.is_completed());
+        // SAFETY: no mut references exist at this point
+        unsafe { &*addr_of!(SETTINGS) }
+    }
+
+    pub fn load(&mut self) -> Result<()> {
         let file = fs::read("assets/settings.json")?;
         let reader = io::Cursor::new(file);
-        let settings: Settings = serde_json::from_reader(reader)?;
-        Ok(settings)
+        *self = serde_json::from_reader(reader)?;
+        Ok(())
     }
 }
 
@@ -27,17 +42,10 @@ pub struct FileSettings {
     pub file_path: String,
 }
 
-pub struct SettingsPlugin;
-
-impl Plugin for SettingsPlugin {
-    fn build(&self, app: &mut App) {
-        app.add_systems(PreStartup, load_resource);
-    }
-}
-
-fn load_resource(mut commands: Commands) -> Result {
-    commands.insert_resource(Settings::load()?);
-    Ok(())
+pub fn load_settings() {
+    // SAFETY: no concurrent static mut access due to std::Once
+    #[allow(static_mut_refs)]
+    SETTINGS_ONCE.call_once(|| unsafe { SETTINGS.load().expect("Failed to load settings") });
 }
 
 #[derive(Resource, Default, Serialize, Deserialize)]

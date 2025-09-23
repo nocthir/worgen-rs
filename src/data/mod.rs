@@ -28,8 +28,8 @@ impl Plugin for DataPlugin {
             .insert_resource(file::FileInfoMap::default())
             .insert_resource(file::LoadingFileTasks::default())
             .add_systems(
-                Startup,
-                archive::init_archive_map.run_if(resource_added::<settings::Settings>),
+                PreStartup,
+                (settings::load_settings, archive::init_archive_map).chain(),
             )
             .add_systems(Startup, archive::start_loading)
             .add_systems(

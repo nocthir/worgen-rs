@@ -256,7 +256,8 @@ impl FileInfoMap {
     // Actually used in tests
     #[allow(unused)]
     pub fn fill(&mut self, archive_info: &mut ArchiveInfo) -> Result<()> {
-        for file_path in archive_info.archive.list()? {
+        let archive = archive::get_archive!(&archive_info.path)?;
+        for file_path in archive.list()? {
             let file_path = file_path.name;
             let texture_info = FileInfo::new(file_path.clone(), &archive_info.path);
             self.map.insert(file_path.to_lowercase(), texture_info);

@@ -145,12 +145,10 @@ mod test {
     use super::*;
     use crate::{data::bundle, *};
 
-    use wow_mpq as mpq;
-
     #[test]
     fn list_world_model_paths() -> Result {
         let settings = settings::TestSettings::load()?;
-        let archive = mpq::Archive::open(&settings.world_model_archive_path)?;
+        let archive = archive::get_archive!(&settings.world_model_archive_path)?;
         for file_path in archive.list()? {
             if world_model::is_world_model_extension(&file_path.name) {
                 println!("{}", file_path.name);

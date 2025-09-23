@@ -17,7 +17,6 @@ fn main() {
         .add_plugins(bevy_egui::EguiPlugin::default())
         .add_plugins(bevy_inspector_egui::quick::WorldInspectorPlugin::default())
         .add_plugins(material::TerrainMaterialPlugin)
-        .add_plugins(settings::SettingsPlugin)
         .add_plugins(ui::UiPlugin)
         .add_plugins(data::DataPlugin)
         .add_plugins(camera::PanOrbitCameraPlugin)
