@@ -5,7 +5,8 @@
 use std::collections::HashMap;
 use std::path::Path;
 use std::path::PathBuf;
-use std::sync::OnceLock;
+use std::ptr::addr_of;
+use std::sync::Once;
 
 use bevy::prelude::*;
 use bevy::tasks;
@@ -18,28 +19,74 @@ use crate::data::world_map;
 use crate::data::world_model;
 use crate::settings;
 
-pub static ARCHIVE_MAP: OnceLock<ArchiveMap> = OnceLock::new();
+pub static mut ARCHIVE_MAP: ArchiveMap = ArchiveMap::new();
+static ARCHIVE_INIT: Once = Once::new();
 
 macro_rules! get_archive {
     ($path:expr) => {
-        $crate::data::archive::ARCHIVE_MAP
-            .get()
-            .unwrap()
-            .get_archive($path)
+        $crate::data::archive::ArchiveMap::get().get_archive($path)
     };
 }
 pub(crate) use get_archive;
 
 #[derive(Default, Resource)]
 pub struct ArchiveMap {
-    pub map: HashMap<PathBuf, mpq::Archive>,
+    pub map: Option<HashMap<PathBuf, mpq::Archive>>,
 }
 
 impl ArchiveMap {
+    pub const fn new() -> Self {
+        Self { map: None }
+    }
+
+    pub fn get() -> &'static Self {
+        debug_assert!(ARCHIVE_INIT.is_completed());
+        // SAFETY: no mut references exist at this point
+        unsafe { &*addr_of!(ARCHIVE_MAP) }
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = (&PathBuf, &mpq::Archive)> {
+        self.map.as_ref().unwrap().iter()
+    }
+
+    pub fn get_archive_paths(&self) -> impl Iterator<Item = &PathBuf> {
+        self.map.as_ref().unwrap().keys()
+    }
+
     pub fn get_archive<P: AsRef<Path>>(&self, path: P) -> Result<&mpq::Archive> {
         self.map
+            .as_ref()
+            .unwrap()
             .get(path.as_ref())
             .ok_or_else(|| format!("Archive not found in map: {}", path.as_ref().display()).into())
+    }
+
+    pub fn load(&mut self) -> Result<()> {
+        let game_path = PathBuf::from(&settings::Settings::get().game_path);
+        let data_path = game_path.join("Data");
+
+        let mut map = HashMap::new();
+
+        for file in data_path.read_dir()? {
+            let file = file?;
+            let file_path = file.path();
+            if is_archive_extension(&file_path) {
+                let archive = mpq::Archive::open(&file_path)?;
+                map.insert(file_path, archive);
+            }
+        }
+
+        self.map.replace(map);
+
+        Ok(())
+    }
+
+    pub fn init() {
+        // SAFETY: no concurrent static mut access due to std::Once
+        #[allow(static_mut_refs)]
+        ARCHIVE_INIT.call_once(|| {
+            unsafe { ARCHIVE_MAP.load().expect("Failed to load archives") };
+        });
     }
 }
 
@@ -126,27 +173,6 @@ impl ArchiveInfo {
     }
 }
 
-pub fn init_archive_map() -> Result<()> {
-    let mut value = ArchiveMap::default();
-    let game_path = PathBuf::from(&settings::Settings::get().game_path);
-    let data_path = game_path.join("Data");
-
-    for file in data_path.read_dir()? {
-        let file = file?;
-        let file_path = file.path();
-        if is_archive_extension(&file_path) {
-            let archive = mpq::Archive::open(&file_path)?;
-            value.map.insert(file_path, archive);
-        }
-    }
-
-    ARCHIVE_MAP
-        .set(value)
-        .map_err(|_| "Failed to initialize ARCHIVE_MAP")?;
-
-    Ok(())
-}
-
 #[derive(Resource, Default)]
 pub struct LoadArchiveTasks {
     tasks: Vec<tasks::Task<Result<ArchiveInfo>>>,
@@ -154,7 +180,7 @@ pub struct LoadArchiveTasks {
 
 pub fn start_loading(mut commands: Commands) {
     let mut tasks = LoadArchiveTasks::default();
-    for archive_path in ARCHIVE_MAP.get().unwrap().map.keys() {
+    for archive_path in ArchiveMap::get().get_archive_paths() {
         let task = tasks::IoTaskPool::get().spawn(load_archive(archive_path.clone()));
         tasks.tasks.push(task);
     }
