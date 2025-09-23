@@ -28,11 +28,17 @@ impl Settings {
         unsafe { &*addr_of!(SETTINGS) }
     }
 
-    pub fn load(&mut self) -> Result<()> {
+    fn load(&mut self) -> Result<()> {
         let file = fs::read("assets/settings.json")?;
         let reader = io::Cursor::new(file);
         *self = serde_json::from_reader(reader)?;
         Ok(())
+    }
+
+    pub fn init() {
+        // SAFETY: no concurrent static mut access due to std::Once
+        #[allow(static_mut_refs)]
+        SETTINGS_ONCE.call_once(|| unsafe { SETTINGS.load().expect("Failed to load settings") });
     }
 }
 
@@ -40,12 +46,6 @@ impl Settings {
 pub struct FileSettings {
     pub archive_path: String,
     pub file_path: String,
-}
-
-pub fn load_settings() {
-    // SAFETY: no concurrent static mut access due to std::Once
-    #[allow(static_mut_refs)]
-    SETTINGS_ONCE.call_once(|| unsafe { SETTINGS.load().expect("Failed to load settings") });
 }
 
 #[derive(Resource, Default, Serialize, Deserialize)]
