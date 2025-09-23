@@ -17,10 +17,14 @@ pub struct WorldModelInfo {
 }
 
 impl WorldModelInfo {
-    pub fn new<P: AsRef<Path>>(file_path: &str, archive_path: P) -> Result<Self> {
+    pub fn new<P: AsRef<Path>>(
+file_path: &str,
+archive_path: P,
+        file_info_map: &file::FileInfoMap,
+) -> Result<Self> {
         let mut archive = mpq::Archive::open(archive_path)?;
         let world_model = read_wmo(file_path, &mut archive)?;
-        let groups = read_groups(file_path, &mut archive, &world_model)?;
+        let groups = read_groups(file_path, file_info_map, &world_model)?;
         Ok(Self {
             world_model,
             groups,
@@ -68,12 +72,12 @@ pub fn is_world_model_extension(file_path: &str) -> bool {
 
 fn read_groups(
     file_path: &str,
-    archive: &mut mpq::Archive,
+    file_info_map: &file::FileInfoMap,
     wmo: &wmo::WmoRoot,
 ) -> Result<Vec<wmo::WmoGroup>> {
     let mut groups = Vec::new();
     for (group_index, _) in wmo.groups.iter().enumerate() {
-        let wmo_group = read_group(file_path, archive, group_index)?;
+        let wmo_group = read_group(file_path, file_info_map, group_index)?;
         groups.push(wmo_group);
     }
     Ok(groups)
@@ -85,7 +89,11 @@ pub fn loading_world_model_task(task: file::LoadFileTask) -> tasks::Task<file::L
 }
 
 async fn load_world_model(mut task: file::LoadFileTask) -> file::LoadFileTask {
-    match WorldModelInfo::new(&task.file.path, &task.file.archive_path) {
+    match WorldModelInfo::new(
+        &task.file.path,
+        &task.file.archive_path,
+        &task.file_info_map,
+    ) {
         Ok(world_model_info) => {
             task.file.set_world_model(world_model_info);
             info!("Loaded world model: {}", task.file.path);
@@ -100,10 +108,14 @@ async fn load_world_model(mut task: file::LoadFileTask) -> file::LoadFileTask {
 
 fn read_group(
     file_path: &str,
-    archive: &mut mpq::Archive,
+    file_info_map: &file::FileInfoMap,
     group_index: usize,
 ) -> Result<wmo::WmoGroup> {
     let group_filename = get_wmo_group_filename(file_path, group_index);
+    let mut archive = {
+        let file_info = file_info_map.get_file_info(&group_filename)?;
+        mpq::Archive::open(&file_info.archive_path)?
+    };
     let file = archive.read_file(&group_filename)?;
     let mut reader = io::Cursor::new(&file);
     Ok(wmo::parse_wmo_group(&mut reader, group_index as _)?)
