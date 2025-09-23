@@ -6,7 +6,7 @@ use bevy::prelude::*;
 use bevy_egui::*;
 
 use crate::{
-    data::{ArchivesInfo, archive::ArchiveInfo, file},
+    data::{archive, file},
     settings::FileSettings,
 };
 
@@ -15,7 +15,6 @@ pub struct UiPlugin;
 impl Plugin for UiPlugin {
     fn build(&self, app: &mut App) {
         app.add_event::<FileSelected>()
-            .insert_resource(ArchivesInfo::default())
             .add_systems(EguiPrimaryContextPass, data_info);
     }
 }
@@ -35,14 +34,14 @@ impl From<&FileSettings> for FileSelected {
 
 fn data_info(
     mut contexts: EguiContexts,
-    data_info: Res<ArchivesInfo>,
+    data_info: Res<archive::ArchiveInfoMap>,
     file_info_map: Res<file::FileInfoMap>,
     mut event_writer: EventWriter<FileSelected>,
 ) -> Result<()> {
     egui::Window::new("Info")
         .scroll([false, true])
         .show(contexts.ctx_mut()?, |ui| {
-            for archive in &data_info.archives {
+            for archive in data_info.map.values() {
                 archive_info(archive, &file_info_map, ui, &mut event_writer)?;
             }
             Ok::<(), BevyError>(())
@@ -51,7 +50,7 @@ fn data_info(
 }
 
 fn archive_info(
-    archive: &ArchiveInfo,
+    archive: &archive::ArchiveInfo,
     file_info_map: &file::FileInfoMap,
     ui: &mut egui::Ui,
     event_writer: &mut EventWriter<FileSelected>,

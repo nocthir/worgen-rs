@@ -23,7 +23,8 @@ pub struct DataPlugin;
 
 impl Plugin for DataPlugin {
     fn build(&self, app: &mut App) {
-        app.insert_resource(FileInfoMap::default())
+        app.insert_resource(archive::ArchiveInfoMap::default())
+            .insert_resource(file::FileInfoMap::default())
             .insert_resource(file::LoadingFileTasks::default())
             .add_systems(Startup, archive::start_loading)
             .add_systems(
@@ -37,11 +38,6 @@ impl Plugin for DataPlugin {
 #[derive(Component)]
 pub struct CurrentFile {
     path: String,
-}
-
-#[derive(Default, Resource)]
-pub struct ArchivesInfo {
-    pub archives: Vec<ArchiveInfo>,
 }
 
 fn load_selected_file(

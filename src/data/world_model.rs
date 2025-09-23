@@ -18,10 +18,10 @@ pub struct WorldModelInfo {
 
 impl WorldModelInfo {
     pub fn new<P: AsRef<Path>>(
-file_path: &str,
-archive_path: P,
+        file_path: &str,
+        archive_path: P,
         file_info_map: &file::FileInfoMap,
-) -> Result<Self> {
+    ) -> Result<Self> {
         let mut archive = mpq::Archive::open(archive_path)?;
         let world_model = read_wmo(file_path, &mut archive)?;
         let groups = read_groups(file_path, file_info_map, &world_model)?;

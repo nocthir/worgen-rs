@@ -2,6 +2,7 @@
 // Author: Nocthir <nocthir@proton.me>
 // SPDX-License-Identifier: MIT or Apache-2.0
 
+use std::collections::HashMap;
 use std::path::Path;
 use std::path::PathBuf;
 
@@ -9,12 +10,16 @@ use bevy::prelude::*;
 use bevy::tasks;
 use wow_mpq as mpq;
 
-use crate::data::ArchivesInfo;
 use crate::data::file::FileInfoMap;
 use crate::data::model;
 use crate::data::world_map;
 use crate::data::world_model;
 use crate::settings::Settings;
+
+#[derive(Default, Resource)]
+pub struct ArchiveInfoMap {
+    pub map: HashMap<PathBuf, ArchiveInfo>,
+}
 
 pub struct ArchiveInfo {
     pub path: PathBuf,
@@ -146,7 +151,7 @@ pub fn check_archive_loading(
     mut exit: EventWriter<AppExit>,
     mut load_task: ResMut<LoadArchiveTasks>,
     mut file_info_map: ResMut<FileInfoMap>,
-    mut archives_info: ResMut<ArchivesInfo>,
+    mut archive_info_map: ResMut<ArchiveInfoMap>,
 ) -> Result<()> {
     let mut tasks = Vec::new();
     tasks.append(&mut load_task.tasks);
@@ -164,7 +169,7 @@ pub fn check_archive_loading(
 
                     // Update the file archive map
                     file_info_map.fill(&mut archive)?;
-                    archives_info.archives.push(archive);
+                    archive_info_map.map.insert(archive.path.clone(), archive);
                 }
             }
         } else {
