@@ -53,7 +53,7 @@ pub struct FileSettings {
 pub struct TestSettings {
     pub game_path: String,
     pub default_model: FileSettings,
-    pub test_model: FileSettings,
+    pub test_model_path: String,
     pub test_world_model: FileSettings,
     pub city_model: FileSettings,
     pub world_map_path: FileSettings,

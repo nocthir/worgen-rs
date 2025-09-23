@@ -21,7 +21,7 @@ pub struct WorldMapInfo {
 impl WorldMapInfo {
     pub fn new<P: AsRef<Path>>(file_path: &str, archive_path: P) -> Result<Self> {
         let archive = archive::get_archive!(archive_path)?;
-        let world_map = read_world_map(file_path, archive)?;
+        let world_map = read_world_map(file_path, &archive)?;
         Ok(Self::from_adt(world_map))
     }
 
@@ -42,7 +42,7 @@ impl WorldMapInfo {
         if let Some(mmdx) = &mut world_map.mmdx {
             for filename in &mut mmdx.filenames {
                 if filename.ends_with(".mdx") {
-                    *filename = filename.replace(".mdx", ".m2");
+                    filename.replace_range(filename.len() - 4..filename.len(), ".m2");
                 }
             }
         }

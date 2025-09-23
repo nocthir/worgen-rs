@@ -158,3 +158,94 @@ fn create_mesh_from_model_submesh(
         transform: Transform::default(),
     })
 }
+
+#[cfg(test)]
+mod test {
+    use bevy::pbr::ExtendedMaterial;
+
+    use super::*;
+    use crate::{data::bundle, material::TerrainMaterial, *};
+
+    #[test]
+    fn list_model_paths() -> Result {
+        settings::Settings::init();
+        archive::ArchiveMap::init();
+        let archives = archive::ArchiveMap::get().get_archives()?;
+        println!("Path, Archive");
+        for archive in archives {
+            for file_path in archive.list()? {
+                if model::is_model_extension(&file_path.name) {
+                    println!("{}, {}", file_path.name, archive.path().display());
+                }
+            }
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn load_main_menu() -> Result {
+        let settings = settings::TestSettings::load()?;
+        let mut file_info_map = file::test::default_file_info_map(&settings)?;
+        file_info_map.load_file_and_dependencies(&settings.default_model.file_path)?;
+        let mut images = Assets::<Image>::default();
+        let mut terrain_materials =
+            Assets::<ExtendedMaterial<StandardMaterial, TerrainMaterial>>::default();
+        let mut materials = Assets::<StandardMaterial>::default();
+        let mut meshes = Assets::<Mesh>::default();
+
+        bundle::create_mesh_from_file_path(
+            &settings.default_model.file_path,
+            &file_info_map,
+            &mut images,
+            &mut terrain_materials,
+            &mut materials,
+            &mut meshes,
+        )?;
+        Ok(())
+    }
+
+    #[test]
+    fn load_city() -> Result {
+        let settings = settings::TestSettings::load()?;
+        let mut file_info_map = file::test::default_file_info_map(&settings)?;
+        file_info_map.load_file_and_dependencies(&settings.city_model.file_path)?;
+        let mut images = Assets::<Image>::default();
+        let mut terrain_materials =
+            Assets::<ExtendedMaterial<StandardMaterial, TerrainMaterial>>::default();
+        let mut materials = Assets::<StandardMaterial>::default();
+        let mut meshes = Assets::<Mesh>::default();
+        bundle::create_mesh_from_file_path(
+            &settings.city_model.file_path,
+            &file_info_map,
+            &mut images,
+            &mut terrain_materials,
+            &mut materials,
+            &mut meshes,
+        )?;
+        Ok(())
+    }
+
+    #[test]
+    fn load_test_model() -> Result {
+        let settings = settings::TestSettings::load()?;
+        settings::Settings::init();
+        archive::ArchiveMap::init();
+        file::FileArchiveMap::init();
+        let mut file_info_map = file::test::default_file_info_map(&settings)?;
+        file_info_map.load_file_and_dependencies(&settings.test_model_path)?;
+        let mut images = Assets::<Image>::default();
+        let mut terrain_materials =
+            Assets::<ExtendedMaterial<StandardMaterial, TerrainMaterial>>::default();
+        let mut materials = Assets::<StandardMaterial>::default();
+        let mut meshes = Assets::<Mesh>::default();
+        bundle::create_mesh_from_file_path(
+            &settings.test_model_path,
+            &file_info_map,
+            &mut images,
+            &mut terrain_materials,
+            &mut materials,
+            &mut meshes,
+        )?;
+        Ok(())
+    }
+}

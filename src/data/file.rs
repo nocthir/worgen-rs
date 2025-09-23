@@ -5,12 +5,63 @@
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
+    ptr::addr_of,
+    sync::Once,
 };
 
 use bevy::{pbr::ExtendedMaterial, prelude::*, tasks};
 
 use crate::data::*;
 use crate::{camera::FocusCamera, material::TerrainMaterial};
+
+pub static mut FILE_ARCHIVE_MAP: FileArchiveMap = FileArchiveMap::new();
+static FILE_ARCHIVE_MAP_ONCE: Once = Once::new();
+
+pub struct FileArchiveMap {
+    pub map: Option<HashMap<String, PathBuf>>,
+}
+
+impl FileArchiveMap {
+    const fn new() -> Self {
+        Self { map: None }
+    }
+
+    pub fn get() -> &'static Self {
+        debug_assert!(FILE_ARCHIVE_MAP_ONCE.is_completed());
+        // SAFETY: no mut references exist at this point
+        unsafe { &*addr_of!(FILE_ARCHIVE_MAP) }
+    }
+
+    pub fn get_archive_path(&self, file_path: &str) -> Result<&PathBuf> {
+        let lowercase_name = file_path.to_lowercase();
+        self.map
+            .as_ref()
+            .unwrap()
+            .get(&lowercase_name)
+            .ok_or(format!("File `{}` not found in archive map", file_path).into())
+    }
+
+    fn fill(&mut self) -> Result<()> {
+        let mut map = HashMap::new();
+        for (archive_path, archive) in archive::ArchiveMap::get().iter() {
+            for file_path in archive.list()? {
+                map.insert(file_path.name.to_lowercase(), archive_path.clone());
+            }
+        }
+        self.map.replace(map);
+        Ok(())
+    }
+
+    pub fn init() {
+        // SAFETY: no concurrent static mut access due to std::Once
+        #[allow(static_mut_refs)]
+        FILE_ARCHIVE_MAP_ONCE.call_once(|| unsafe {
+            FILE_ARCHIVE_MAP
+                .fill()
+                .expect("Failed to fill file archive map");
+        });
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FileInfoState {
@@ -107,7 +158,7 @@ impl FileInfo {
     }
 
     #[allow(unused)]
-    pub fn load(&mut self, file_info_map: &FileInfoMap) -> Result<()> {
+    pub fn load(&mut self) -> Result<()> {
         if self.state == FileInfoState::Unloaded {
             self.state = FileInfoState::Loading;
             match self.data_type {
@@ -120,7 +171,6 @@ impl FileInfo {
                 DataType::WorldModel => self.set_world_model(world_model::WorldModelInfo::new(
                     &self.path,
                     &self.archive_path,
-                    file_info_map,
                 )?),
                 DataType::WorldMap => self.set_world_map(world_map::WorldMapInfo::new(
                     &self.path,
@@ -184,15 +234,6 @@ pub struct FileInfoMap {
 }
 
 impl FileInfoMap {
-    pub fn shallow_clone(&self) -> Self {
-        let map = self
-            .map
-            .iter()
-            .map(|(k, v)| (k.clone(), v.shallow_clone()))
-            .collect();
-        Self { map }
-    }
-
     // Actually used in tests
     #[allow(unused)]
     pub fn get_file_infos(&self) -> impl Iterator<Item = &FileInfo> {
@@ -268,11 +309,10 @@ impl FileInfoMap {
 
     #[allow(unused)]
     pub fn load_file_and_dependencies(&mut self, file_path: &str) -> Result<()> {
-        let shallow_clone = self.shallow_clone();
         let file_info = self.get_file_info_mut(file_path)?;
         if file_info.state == FileInfoState::Unloaded {
             // Start loading the file
-            file_info.load(&shallow_clone)?;
+            file_info.load()?;
             assert_eq!(file_info.state, FileInfoState::Loaded);
             assert!(file_info.data_info.is_some());
             // Load dependencies
@@ -287,16 +327,14 @@ impl FileInfoMap {
 
 pub struct LoadFileTask {
     pub file: FileInfo,
-    pub file_info_map: FileInfoMap,
     /// Whether to instantiate the loaded file into the scene.
     instantiate: bool,
 }
 
 impl LoadFileTask {
-    pub fn new(file: &FileInfo, file_info_map: &FileInfoMap, instantiate: bool) -> Self {
+    pub fn new(file: &FileInfo, instantiate: bool) -> Self {
         Self {
             file: file.shallow_clone(),
-            file_info_map: file_info_map.shallow_clone(),
             instantiate,
         }
     }
@@ -408,16 +446,12 @@ fn load_unloaded_textures(
     new_tasks: &mut Vec<tasks::Task<LoadFileTask>>,
 ) -> Result<()> {
     for texture_path in texture_paths {
-        let shallow_file_info_map = file_info_map.shallow_clone();
         let texture_file_info = file_info_map.get_file_info_mut(texture_path)?;
         if texture_file_info.state == FileInfoState::Unloaded {
             // Start loading the texture
             texture_file_info.state = FileInfoState::Loading;
-            let new_task = texture::loading_texture_task(LoadFileTask::new(
-                texture_file_info,
-                &shallow_file_info_map,
-                false,
-            ));
+            let new_task =
+                texture::loading_texture_task(LoadFileTask::new(texture_file_info, false));
             new_tasks.push(new_task);
         }
     }
@@ -431,16 +465,11 @@ fn load_unloaded_models(
     new_tasks: &mut Vec<tasks::Task<LoadFileTask>>,
 ) -> Result<()> {
     for model_path in model_paths {
-        let shallow_file_info_map = file_info_map.shallow_clone();
         let model_file_info = file_info_map.get_file_info_mut(model_path)?;
         if model_file_info.state == FileInfoState::Unloaded {
             // Start loading the model
             model_file_info.state = FileInfoState::Loading;
-            let new_task = model::loading_model_task(LoadFileTask::new(
-                model_file_info,
-                &shallow_file_info_map,
-                false,
-            ));
+            let new_task = model::loading_model_task(LoadFileTask::new(model_file_info, false));
             new_tasks.push(new_task);
         }
     }
@@ -454,14 +483,12 @@ fn load_unloaded_world_models(
     new_tasks: &mut Vec<tasks::Task<LoadFileTask>>,
 ) -> Result<()> {
     for world_model_path in world_model_paths {
-        let shallow_file_info_map = file_info_map.shallow_clone();
         let world_model_file_info = file_info_map.get_file_info_mut(world_model_path)?;
         if world_model_file_info.state == FileInfoState::Unloaded {
             // Start loading the world model
             world_model_file_info.state = FileInfoState::Loading;
             let new_task = world_model::loading_world_model_task(LoadFileTask::new(
                 world_model_file_info,
-                &shallow_file_info_map,
                 false,
             ));
             new_tasks.push(new_task);

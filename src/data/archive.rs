@@ -53,12 +53,15 @@ impl ArchiveMap {
         self.map.as_ref().unwrap().keys()
     }
 
-    pub fn get_archive<P: AsRef<Path>>(&self, path: P) -> Result<&mpq::Archive> {
-        self.map
-            .as_ref()
-            .unwrap()
-            .get(path.as_ref())
-            .ok_or_else(|| format!("Archive not found in map: {}", path.as_ref().display()).into())
+    pub fn get_archive<P: AsRef<Path>>(&self, path: P) -> Result<mpq::Archive> {
+        Ok(mpq::Archive::open(path)?)
+    }
+
+    #[allow(unused)]
+    pub fn get_archives(&self) -> Result<Vec<mpq::Archive>> {
+        self.get_archive_paths()
+            .map(|path| self.get_archive(path))
+            .collect()
     }
 
     pub fn load(&mut self) -> Result<()> {
@@ -106,10 +109,10 @@ pub struct ArchiveInfo {
 impl ArchiveInfo {
     pub fn new<P: AsRef<Path>>(path: P) -> Result<Self> {
         let archive = archive::get_archive!(&path)?;
-        let texture_paths = Self::get_texture_paths(archive)?;
-        let model_paths = Self::get_model_paths(archive)?;
-        let world_model_paths = Self::get_world_model_paths(archive)?;
-        let world_map_paths = Self::get_world_map_paths(archive)?;
+        let texture_paths = Self::get_texture_paths(&archive)?;
+        let model_paths = Self::get_model_paths(&archive)?;
+        let world_model_paths = Self::get_world_model_paths(&archive)?;
+        let world_map_paths = Self::get_world_map_paths(&archive)?;
         Ok(Self {
             path: path.as_ref().into(),
             texture_paths,
