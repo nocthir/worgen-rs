@@ -12,14 +12,14 @@ use wow_wmo as wmo;
 use crate::data::{archive, file};
 
 pub struct WorldModelInfo {
-    pub world_model: wmo::WmoRoot,
-    pub groups: Vec<wmo::WmoGroup>,
+    pub world_model: wmo::root_parser::WmoRoot,
+    pub groups: Vec<wmo::group_parser::WmoGroup>,
 }
 
 impl WorldModelInfo {
     pub fn new<P: AsRef<Path>>(file_path: &str, archive_path: P) -> Result<Self> {
-        let archive = archive::get_archive!(archive_path)?;
-        let world_model = read_wmo(file_path, &archive)?;
+        let mut archive = archive::get_archive!(archive_path)?;
+        let world_model = read_wmo(file_path, &mut archive)?;
         let groups = read_groups(file_path, &world_model)?;
         Ok(Self {
             world_model,
@@ -32,10 +32,13 @@ impl WorldModelInfo {
     }
 }
 
-fn read_wmo(path: &str, archive: &mpq::Archive) -> Result<wmo::WmoRoot> {
+fn read_wmo(path: &str, archive: &mut mpq::Archive) -> Result<wmo::root_parser::WmoRoot> {
     let file = archive.read_file(path)?;
     let mut reader = io::Cursor::new(file);
-    Ok(wmo::parse_wmo(&mut reader)?)
+    let wmo::ParsedWmo::Root(root) = wmo::parse_wmo(&mut reader)? else {
+        return Err(format!("WMO file is not a root WMO: {}", path).into());
+    };
+    Ok(root)
 }
 
 pub fn is_world_model_root_path(file_path: &str) -> bool {
@@ -66,9 +69,12 @@ pub fn is_world_model_extension(file_path: &str) -> bool {
     lower.ends_with(".wmo")
 }
 
-fn read_groups(file_path: &str, wmo: &wmo::WmoRoot) -> Result<Vec<wmo::WmoGroup>> {
+fn read_groups(
+    file_path: &str,
+    wmo: &wmo::root_parser::WmoRoot,
+) -> Result<Vec<wmo::group_parser::WmoGroup>> {
     let mut groups = Vec::new();
-    for (group_index, _) in wmo.groups.iter().enumerate() {
+    for group_index in 0..wmo.n_groups {
         let wmo_group = read_group(file_path, group_index)?;
         groups.push(wmo_group);
     }
@@ -94,19 +100,20 @@ async fn load_world_model(mut task: file::LoadFileTask) -> file::LoadFileTask {
     task
 }
 
-fn read_group(file_path: &str, group_index: usize) -> Result<wmo::WmoGroup> {
+fn read_group(file_path: &str, group_index: u32) -> Result<wmo::group_parser::WmoGroup> {
     let group_filename = get_wmo_group_filename(file_path, group_index);
-    let archive = {
-        let file_archive_map = file::FileArchiveMap::get();
-        let archive_path = file_archive_map.get_archive_path(&group_filename)?;
-        archive::get_archive!(archive_path)?
-    };
+    let file_archive_map = file::FileArchiveMap::get();
+    let archive_path = file_archive_map.get_archive_path(&group_filename)?;
+    let mut archive = archive::get_archive!(archive_path)?;
     let file = archive.read_file(&group_filename)?;
     let mut reader = io::Cursor::new(&file);
-    Ok(wmo::parse_wmo_group(&mut reader, group_index as _)?)
+    let wmo::ParsedWmo::Group(group) = wmo::parse_wmo(&mut reader)? else {
+        return Err(format!("WMO file is not a group WMO: {}", group_filename).into());
+    };
+    Ok(group)
 }
 
-fn get_wmo_group_filename<P: AsRef<Path>>(wmo_path: P, group_index: usize) -> String {
+fn get_wmo_group_filename<P: AsRef<Path>>(wmo_path: P, group_index: u32) -> String {
     let base_path = wmo_path.as_ref().with_extension("");
     format!("{}_{:03}.wmo", base_path.display(), group_index)
 }

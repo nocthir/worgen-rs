@@ -26,7 +26,7 @@ pub fn create_meshes_from_world_model_path(
 }
 
 pub fn create_meshes_from_world_model_info(
-    world_model_info: &WorldModelInfo,
+    world_model: &WorldModelInfo,
     file_info_map: &file::FileInfoMap,
     images: &mut Assets<Image>,
     standard_materials: &mut Assets<StandardMaterial>,
@@ -34,9 +34,8 @@ pub fn create_meshes_from_world_model_info(
 ) -> Result<Vec<ModelBundle>> {
     let mut ret = Vec::default();
 
-    let wmo = &world_model_info.world_model;
-    let textures = bundle::create_textures_from_world_model(wmo, file_info_map, images)?;
-    let materials = bundle::create_materials_from_world_model(wmo, &textures, images);
+    let textures = bundle::create_textures_from_world_model(world_model, file_info_map, images)?;
+    let materials = bundle::create_materials_from_world_model(world_model, &textures, images);
     let material_handles = materials
         .into_iter()
         .map(|mat| standard_materials.add(mat))
@@ -49,9 +48,9 @@ pub fn create_meshes_from_world_model_info(
         ..Default::default()
     });
 
-    for group_index in 0..world_model_info.groups.len() {
+    for group_index in 0..world_model.groups.len() {
         let bundles = create_mesh_from_wmo_group(
-            &world_model_info.groups[group_index],
+            &world_model.groups[group_index],
             default_material_handle.clone(),
             &material_handles,
             meshes,
@@ -63,31 +62,33 @@ pub fn create_meshes_from_world_model_info(
 }
 
 fn create_mesh_from_wmo_group(
-    wmo: &wmo::WmoGroup,
+    wmo: &wmo::group_parser::WmoGroup,
     default_material_handle: Handle<StandardMaterial>,
     material_handles: &[Handle<StandardMaterial>],
     meshes: &mut Assets<Mesh>,
 ) -> Vec<ModelBundle> {
-    let positions: Vec<_> = wmo.vertices.iter().map(|v| [v.x, v.y, v.z]).collect();
+    let positions: Vec<_> = wmo
+        .vertex_positions
+        .iter()
+        .map(|v| [v.x, v.y, v.z])
+        .collect();
     let normals: Vec<_> = wmo
-        .normals
+        .vertex_normals
         .iter()
         .map(|v| normalize_vec3([v.x, v.y, v.z]))
         .collect();
-    let tex_coords_0: Vec<_> = wmo.tex_coords.iter().map(|v| [v.u, v.v]).collect();
-    let mut colors = Vec::new();
-    if let Some(vertex_colors) = &wmo.vertex_colors {
-        colors = vertex_colors
-            .iter()
-            .map(|v| [v.r as f32, v.g as f32, v.b as f32, v.a as f32])
-            .collect();
-    }
+    let tex_coords_0: Vec<_> = wmo.texture_coords.iter().map(|v| [v.u, v.v]).collect();
+    let colors: Vec<_> = wmo
+        .vertex_colors
+        .iter()
+        .map(|v| [v.r as f32, v.g as f32, v.b as f32, v.a as f32])
+        .collect();
 
     let mut ret = Vec::new();
 
-    for batch in &wmo.batches {
+    for batch in &wmo.render_batches {
         let indices = wmo
-            .indices
+            .vertex_indices
             .iter()
             .copied()
             .skip(batch.start_index as usize)
@@ -148,11 +149,10 @@ mod test {
     #[test]
     fn list_world_model_paths() -> Result {
         let settings = settings::TestSettings::load()?;
-        let archive = archive::get_archive!(&settings.world_model_archive_path)?;
-        for file_path in archive.list()? {
-            if world_model::is_world_model_extension(&file_path.name) {
-                println!("{}", file_path.name);
-            }
+        let file_info_map = file::test::default_file_info_map(&settings)?;
+        println!("Path, Archive");
+        for file_info in file_info_map.get_file_infos() {
+            if world_model::is_world_model_extension(&file_info.path) {}
         }
         Ok(())
     }

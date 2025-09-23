@@ -21,7 +21,7 @@ pub struct ModelInfo {
 
 impl ModelInfo {
     pub fn new<P: AsRef<Path>>(file_path: &str, archive_path: P) -> Result<Self> {
-        let archive = archive::get_archive!(archive_path)?;
+        let mut archive = archive::get_archive!(archive_path)?;
         let data = archive.read_file(file_path)?;
         let mut reader = io::Cursor::new(&data);
         let model = m2::M2Model::parse(&mut reader)?;

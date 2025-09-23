@@ -6,17 +6,16 @@ use bevy::{asset::RenderAssetUsages, prelude::*, render::render_resource::*};
 
 use wow_adt as adt;
 use wow_m2 as m2;
-use wow_wmo as wmo;
 
-use crate::data::{file, texture};
+use crate::data::{file, texture, world_model::WorldModelInfo};
 
 pub fn create_textures_from_world_model(
-    wmo: &wmo::WmoRoot,
+    world_model: &WorldModelInfo,
     file_info_map: &file::FileInfoMap,
     images: &mut Assets<Image>,
 ) -> Result<Vec<Handle<Image>>> {
     let mut image_handles = Vec::new();
-    for texture_path in &wmo.textures {
+    for texture_path in &world_model.get_texture_paths() {
         // At this point we do not know which archive contains this texture.
         // But we have built a map of blp paths to their respective archives.
         let image_handle = texture::create_image_from_path(texture_path, file_info_map, images)?;

@@ -7,6 +7,8 @@ use bevy::{prelude::*, render::render_resource::Face};
 use wow_m2 as m2;
 use wow_wmo as wmo;
 
+use crate::data::world_model::WorldModelInfo;
+
 pub fn alpha_mode_from_model_blend_mode(
     blend_mode: m2::chunks::material::M2BlendMode,
 ) -> AlphaMode {
@@ -31,27 +33,30 @@ pub fn alpha_mode_from_world_model_blend_mode(blend_mode: u32) -> AlphaMode {
 }
 
 pub fn create_materials_from_world_model(
-    wmo: &wmo::WmoRoot,
+    world_model: &WorldModelInfo,
     images: &[Handle<Image>],
     image_assets: &mut Assets<Image>,
 ) -> Vec<StandardMaterial> {
     let mut materials = Vec::new();
 
+    let wmo = &world_model.world_model;
     for material in &wmo.materials {
-        let base_color = create_color_from_world_model(material.diffuse_color);
+        let base_color = create_color_from_world_model(material.diff_color);
         let emissive = create_color_from_world_model(material.emissive_color).to_linear();
 
         let texture_index = material.get_texture1_index(&wmo.texture_offset_index_map);
         let image_handle = images[texture_index as usize].clone();
-        let image = image_assets.get_mut(&image_handle).unwrap();
-        image.sampler = sampler_from_world_model_material_flags(material.flags);
 
-        let unlit = material.flags.intersects(
+        let image = image_assets.get_mut(&image_handle).unwrap();
+        let material_flags = wmo::WmoMaterialFlags::from_bits_truncate(material.flags);
+        image.sampler = sampler_from_world_model_material_flags(material_flags);
+
+        let unlit = material_flags.intersects(
             wmo::WmoMaterialFlags::UNLIT
                 | wmo::WmoMaterialFlags::EXTERIOR_LIGHT
                 | wmo::WmoMaterialFlags::WINDOW_LIGHT,
         );
-        let cull_mode = if material.flags.contains(wmo::WmoMaterialFlags::TWO_SIDED) {
+        let cull_mode = if material_flags.contains(wmo::WmoMaterialFlags::TWO_SIDED) {
             None
         } else {
             Some(Face::Back)
@@ -96,11 +101,15 @@ fn sampler_from_world_model_material_flags(
     ImageSampler::Descriptor(descriptor)
 }
 
-fn create_color_from_world_model(color: wmo::types::Color) -> Color {
+fn create_color_from_world_model(bgra: [u8; 4]) -> Color {
+    let b = bgra[0];
+    let g = bgra[1];
+    let r = bgra[2];
+    let a = bgra[3];
     Color::linear_rgba(
-        color.r as f32 / 255.0,
-        color.g as f32 / 255.0,
-        color.b as f32 / 255.0,
-        color.a as f32 / 255.0,
+        r as f32 / 255.0,
+        g as f32 / 255.0,
+        b as f32 / 255.0,
+        a as f32 / 255.0,
     )
 }

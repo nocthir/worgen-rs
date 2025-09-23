@@ -170,9 +170,10 @@ mod test {
     fn list_model_paths() -> Result {
         settings::Settings::init();
         archive::ArchiveMap::init();
-        let archives = archive::ArchiveMap::get().get_archives()?;
+        let archive_paths = archive::ArchiveMap::get().get_archive_paths();
         println!("Path, Archive");
-        for archive in archives {
+        for archive_path in archive_paths {
+            let mut archive = archive::get_archive!(archive_path)?;
             for file_path in archive.list()? {
                 if model::is_model_extension(&file_path.name) {
                     println!("{}, {}", file_path.name, archive.path().display());

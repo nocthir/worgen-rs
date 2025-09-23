@@ -43,7 +43,8 @@ impl FileArchiveMap {
 
     fn fill(&mut self) -> Result<()> {
         let mut map = HashMap::new();
-        for (archive_path, archive) in archive::ArchiveMap::get().iter() {
+        for archive_path in archive::ArchiveMap::get().get_archive_paths() {
+            let mut archive = archive::get_archive!(archive_path)?;
             for file_path in archive.list()? {
                 map.insert(file_path.name.to_lowercase(), archive_path.clone());
             }
@@ -297,7 +298,7 @@ impl FileInfoMap {
     // Actually used in tests
     #[allow(unused)]
     pub fn fill(&mut self, archive_info: &mut ArchiveInfo) -> Result<()> {
-        let archive = archive::get_archive!(&archive_info.path)?;
+        let mut archive = archive::get_archive!(&archive_info.path)?;
         for file_path in archive.list()? {
             let file_path = file_path.name;
             let texture_info = FileInfo::new(file_path.clone(), &archive_info.path);

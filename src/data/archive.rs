@@ -45,23 +45,12 @@ impl ArchiveMap {
         unsafe { &*addr_of!(ARCHIVE_MAP) }
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = (&PathBuf, &mpq::Archive)> {
-        self.map.as_ref().unwrap().iter()
-    }
-
     pub fn get_archive_paths(&self) -> impl Iterator<Item = &PathBuf> {
         self.map.as_ref().unwrap().keys()
     }
 
     pub fn get_archive<P: AsRef<Path>>(&self, path: P) -> Result<mpq::Archive> {
         Ok(mpq::Archive::open(path)?)
-    }
-
-    #[allow(unused)]
-    pub fn get_archives(&self) -> Result<Vec<mpq::Archive>> {
-        self.get_archive_paths()
-            .map(|path| self.get_archive(path))
-            .collect()
     }
 
     pub fn load(&mut self) -> Result<()> {
@@ -108,11 +97,11 @@ pub struct ArchiveInfo {
 
 impl ArchiveInfo {
     pub fn new<P: AsRef<Path>>(path: P) -> Result<Self> {
-        let archive = archive::get_archive!(&path)?;
-        let texture_paths = Self::get_texture_paths(&archive)?;
-        let model_paths = Self::get_model_paths(&archive)?;
-        let world_model_paths = Self::get_world_model_paths(&archive)?;
-        let world_map_paths = Self::get_world_map_paths(&archive)?;
+        let mut archive = archive::get_archive!(&path)?;
+        let texture_paths = Self::get_texture_paths(&mut archive)?;
+        let model_paths = Self::get_model_paths(&mut archive)?;
+        let world_model_paths = Self::get_world_model_paths(&mut archive)?;
+        let world_map_paths = Self::get_world_map_paths(&mut archive)?;
         Ok(Self {
             path: path.as_ref().into(),
             texture_paths,
@@ -122,7 +111,7 @@ impl ArchiveInfo {
         })
     }
 
-    fn get_texture_paths(archive: &mpq::Archive) -> Result<Vec<String>> {
+    fn get_texture_paths(archive: &mut mpq::Archive) -> Result<Vec<String>> {
         let mut textures = Vec::new();
         archive.list()?.retain(|file| {
             if file.name.to_lowercase().ends_with(".blp") {
@@ -135,7 +124,7 @@ impl ArchiveInfo {
         Ok(textures)
     }
 
-    fn get_model_paths(archive: &mpq::Archive) -> Result<Vec<String>> {
+    fn get_model_paths(archive: &mut mpq::Archive) -> Result<Vec<String>> {
         let mut models = Vec::new();
         archive.list()?.retain(|file| {
             if model::is_model_extension(&file.name) {
@@ -148,7 +137,7 @@ impl ArchiveInfo {
         Ok(models)
     }
 
-    fn get_world_model_paths(archive: &mpq::Archive) -> Result<Vec<String>> {
+    fn get_world_model_paths(archive: &mut mpq::Archive) -> Result<Vec<String>> {
         let mut world_models = Vec::new();
         archive.list()?.retain(|file| {
             // We only want the root .wmo files, not the group files
@@ -162,7 +151,7 @@ impl ArchiveInfo {
         Ok(world_models)
     }
 
-    fn get_world_map_paths(archive: &mpq::Archive) -> Result<Vec<String>> {
+    fn get_world_map_paths(archive: &mut mpq::Archive) -> Result<Vec<String>> {
         let mut world_maps = Vec::new();
         archive.list()?.retain(|file| {
             if world_map::is_world_map_extension(&file.name) {

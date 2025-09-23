@@ -19,7 +19,7 @@ pub struct TextureInfo {
 
 impl TextureInfo {
     pub fn new(file_info: &file::FileInfo) -> Result<Self> {
-        let archive = archive::get_archive!(&file_info.archive_path)?;
+        let mut archive = archive::get_archive!(&file_info.archive_path)?;
         let file = archive.read_file(&file_info.path)?;
         Ok(Self::from_blp(blp::parser::load_blp_from_buf(&file)?))
     }

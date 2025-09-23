@@ -6,7 +6,6 @@ use std::{io, path::Path};
 
 use bevy::{prelude::*, tasks};
 use wow_adt as adt;
-use wow_mpq as mpq;
 
 use crate::data::{archive, file};
 
@@ -20,8 +19,7 @@ pub struct WorldMapInfo {
 
 impl WorldMapInfo {
     pub fn new<P: AsRef<Path>>(file_path: &str, archive_path: P) -> Result<Self> {
-        let archive = archive::get_archive!(archive_path)?;
-        let world_map = read_world_map(file_path, &archive)?;
+        let world_map = read_world_map(file_path, archive_path)?;
         Ok(Self::from_adt(world_map))
     }
 
@@ -93,7 +91,8 @@ impl WorldMapInfo {
     }
 }
 
-pub fn read_world_map(path: &str, archive: &mpq::Archive) -> Result<adt::Adt> {
+pub fn read_world_map<P: AsRef<Path>>(path: &str, archive_path: P) -> Result<adt::Adt> {
+    let mut archive = archive::get_archive!(archive_path)?;
     let file = archive.read_file(path)?;
     let mut reader = io::Cursor::new(file);
     Ok(adt::Adt::from_reader(&mut reader)?)
