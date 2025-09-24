@@ -100,7 +100,7 @@ impl FileInfo {
             path: self.path.clone(),
             archive_path: self.archive_path.clone(),
             state: self.state.clone(),
-            data_type: self.data_type.clone(),
+            data_type: self.data_type,
             data_info: None,
         }
     }
@@ -185,7 +185,7 @@ impl FileInfo {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DataType {
     Texture,
     Model,

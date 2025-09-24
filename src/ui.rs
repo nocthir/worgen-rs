@@ -60,7 +60,7 @@ fn archive_info(
     let world_model_paths = &archive.world_model_paths;
     let world_map_paths = &archive.world_map_paths;
 
-    egui::CollapsingHeader::new(format!("{}", archive.path.display()))
+    egui::CollapsingHeader::new(format!("⛃ {}", archive.path.display()))
         .default_open(false)
         .show(ui, |ui| {
             egui::CollapsingHeader::new("Textures")
@@ -153,7 +153,8 @@ fn file_info_header(
         error_message.replace(err.clone());
     }
 
-    egui::CollapsingHeader::new(&file_info.path)
+    let file_icon = get_file_icon(file_info.data_type);
+    egui::CollapsingHeader::new(format!("{} {}", file_icon, file_info.path))
         .icon(move |ui, _, response| {
             let pos = response.rect.center();
             let anchor = egui::Align2::CENTER_CENTER;
@@ -181,4 +182,14 @@ fn file_info_header(
                 ui.colored_label(egui::Color32::RED, msg);
             }
         })
+}
+
+fn get_file_icon(data_type: file::DataType) -> &'static str {
+    match data_type {
+        file::DataType::Texture => "🖼",
+        file::DataType::Model => "📦",
+        file::DataType::WorldModel => "🏰",
+        file::DataType::WorldMap => "🗺",
+        file::DataType::Unknown => "❓",
+    }
 }
