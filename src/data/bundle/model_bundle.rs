@@ -10,31 +10,28 @@ use crate::data::{bundle::*, file, model::*};
 pub fn create_meshes_from_model_path(
     model_path: &str,
     file_info_map: &file::FileInfoMap,
-    images: &mut Assets<Image>,
-    materials: &mut Assets<StandardMaterial>,
-    meshes: &mut Assets<Mesh>,
+    scene_assets: &mut SceneAssets,
 ) -> Result<Vec<ModelBundle>> {
     let model_info = file_info_map.get_model_info(model_path)?;
-    create_meshes_from_model_info(model_info, file_info_map, images, materials, meshes)
+    create_meshes_from_model_info(model_info, file_info_map, scene_assets)
 }
 
 pub fn create_meshes_from_model_info(
     model_info: &ModelInfo,
     file_info_map: &file::FileInfoMap,
-    images: &mut Assets<Image>,
-    materials: &mut Assets<StandardMaterial>,
-    meshes: &mut Assets<Mesh>,
+    scene_assets: &mut SceneAssets,
 ) -> Result<Vec<ModelBundle>> {
     let mut ret = Vec::default();
 
     if !model_info.model.vertices.is_empty() {
-        let image_handles = create_textures_from_model(&model_info.model, file_info_map, images)?;
+        let image_handles =
+            create_textures_from_model(&model_info.model, file_info_map, &mut scene_assets.images)?;
         let res = create_mesh_from_model(
             &model_info.model,
             &model_info.data,
             &image_handles,
-            materials,
-            meshes,
+            &mut scene_assets.materials,
+            &mut scene_assets.meshes,
         )?;
         ret.extend(res);
     }
@@ -164,7 +161,7 @@ mod test {
     use bevy::pbr::ExtendedMaterial;
 
     use super::*;
-    use crate::{data::bundle, material::TerrainMaterial, *};
+    use crate::{data::archive, data::bundle, material::TerrainMaterial, *};
 
     #[test]
     fn list_model_paths() -> Result {
@@ -185,43 +182,52 @@ mod test {
 
     #[test]
     fn load_main_menu() -> Result {
+        settings::Settings::init();
+        archive::ArchiveMap::init();
         let settings = settings::TestSettings::load()?;
         let mut file_info_map = file::test::default_file_info_map(&settings)?;
         file_info_map.load_file_and_dependencies(&settings.default_model.file_path)?;
-        let mut images = Assets::<Image>::default();
-        let mut terrain_materials =
-            Assets::<ExtendedMaterial<StandardMaterial, TerrainMaterial>>::default();
-        let mut materials = Assets::<StandardMaterial>::default();
-        let mut meshes = Assets::<Mesh>::default();
+        let mut app = App::new();
+        app.world_mut().init_resource::<Assets<Image>>();
+        app.world_mut().init_resource::<Assets<Mesh>>();
+        app.world_mut()
+            .init_resource::<Assets<ExtendedMaterial<StandardMaterial, TerrainMaterial>>>();
+        app.world_mut().init_resource::<Assets<StandardMaterial>>();
 
-        bundle::create_mesh_from_file_path(
+        use bevy::ecs::system::SystemState;
+        let mut state: SystemState<file::SceneAssets> = SystemState::new(app.world_mut());
+        let mut scene_assets = state.get_mut(app.world_mut());
+
+        let _ = bundle::create_mesh_from_file_path(
             &settings.default_model.file_path,
             &file_info_map,
-            &mut images,
-            &mut terrain_materials,
-            &mut materials,
-            &mut meshes,
+            &mut scene_assets,
         )?;
         Ok(())
     }
 
     #[test]
     fn load_city() -> Result {
+        settings::Settings::init();
+        archive::ArchiveMap::init();
         let settings = settings::TestSettings::load()?;
         let mut file_info_map = file::test::default_file_info_map(&settings)?;
         file_info_map.load_file_and_dependencies(&settings.city_model.file_path)?;
-        let mut images = Assets::<Image>::default();
-        let mut terrain_materials =
-            Assets::<ExtendedMaterial<StandardMaterial, TerrainMaterial>>::default();
-        let mut materials = Assets::<StandardMaterial>::default();
-        let mut meshes = Assets::<Mesh>::default();
-        bundle::create_mesh_from_file_path(
+        let mut app = App::new();
+        app.world_mut().init_resource::<Assets<Image>>();
+        app.world_mut().init_resource::<Assets<Mesh>>();
+        app.world_mut()
+            .init_resource::<Assets<ExtendedMaterial<StandardMaterial, TerrainMaterial>>>();
+        app.world_mut().init_resource::<Assets<StandardMaterial>>();
+
+        use bevy::ecs::system::SystemState;
+        let mut state: SystemState<file::SceneAssets> = SystemState::new(app.world_mut());
+        let mut scene_assets = state.get_mut(app.world_mut());
+
+        let _ = bundle::create_mesh_from_file_path(
             &settings.city_model.file_path,
             &file_info_map,
-            &mut images,
-            &mut terrain_materials,
-            &mut materials,
-            &mut meshes,
+            &mut scene_assets,
         )?;
         Ok(())
     }
@@ -234,18 +240,21 @@ mod test {
         file::FileArchiveMap::init();
         let mut file_info_map = file::test::default_file_info_map(&settings)?;
         file_info_map.load_file_and_dependencies(&settings.test_model_path)?;
-        let mut images = Assets::<Image>::default();
-        let mut terrain_materials =
-            Assets::<ExtendedMaterial<StandardMaterial, TerrainMaterial>>::default();
-        let mut materials = Assets::<StandardMaterial>::default();
-        let mut meshes = Assets::<Mesh>::default();
-        bundle::create_mesh_from_file_path(
+        let mut app = App::new();
+        app.world_mut().init_resource::<Assets<Image>>();
+        app.world_mut().init_resource::<Assets<Mesh>>();
+        app.world_mut()
+            .init_resource::<Assets<ExtendedMaterial<StandardMaterial, TerrainMaterial>>>();
+        app.world_mut().init_resource::<Assets<StandardMaterial>>();
+
+        use bevy::ecs::system::SystemState;
+        let mut state: SystemState<file::SceneAssets> = SystemState::new(app.world_mut());
+        let mut scene_assets = state.get_mut(app.world_mut());
+
+        let _ = bundle::create_mesh_from_file_path(
             &settings.test_model_path,
             &file_info_map,
-            &mut images,
-            &mut terrain_materials,
-            &mut materials,
-            &mut meshes,
+            &mut scene_assets,
         )?;
         Ok(())
     }

@@ -9,7 +9,7 @@ use std::{
     sync::Once,
 };
 
-use bevy::{pbr::ExtendedMaterial, prelude::*, tasks};
+use bevy::{ecs::system::SystemParam, pbr::ExtendedMaterial, prelude::*, tasks};
 
 use crate::data::*;
 use crate::{camera::FocusCamera, material::TerrainMaterial};
@@ -347,13 +347,22 @@ pub struct LoadingFileTasks {
     completed: Vec<LoadFileTask>,
 }
 
+#[derive(SystemParam)]
+pub struct SceneAssets<'w> {
+    pub images: ResMut<'w, Assets<Image>>,
+    pub meshes: ResMut<'w, Assets<Mesh>>,
+    pub terrain_materials: ResMut<'w, Assets<ExtendedMaterial<StandardMaterial, TerrainMaterial>>>,
+    pub materials: ResMut<'w, Assets<StandardMaterial>>,
+}
+
+impl<'w> SceneAssets<'w> {
+    // Intentionally no manual constructor: acquire via SystemState in systems/tests.
+}
+
 pub fn check_file_loading(
     mut load_task: ResMut<LoadingFileTasks>,
     mut file_info_map: ResMut<FileInfoMap>,
-    mut images: ResMut<Assets<Image>>,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut terrain_materials: ResMut<Assets<ExtendedMaterial<StandardMaterial, TerrainMaterial>>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut scene_assets: SceneAssets,
     mut commands: Commands,
     mut focus_writer: EventWriter<FocusCamera>,
 ) -> Result<()> {
@@ -386,10 +395,7 @@ pub fn check_file_loading(
     process_completed_tasks(
         &mut load_task,
         &mut file_info_map,
-        &mut images,
-        &mut terrain_materials,
-        &mut materials,
-        &mut meshes,
+        &mut scene_assets,
         &mut commands,
         &mut focus_writer,
     )
@@ -501,10 +507,7 @@ fn load_unloaded_world_models(
 fn process_completed_tasks(
     load_task: &mut LoadingFileTasks,
     file_info_map: &mut FileInfoMap,
-    images: &mut Assets<Image>,
-    terrain_materials: &mut Assets<ExtendedMaterial<StandardMaterial, TerrainMaterial>>,
-    materials: &mut Assets<StandardMaterial>,
-    meshes: &mut Assets<Mesh>,
+    scene_assets: &mut SceneAssets,
     commands: &mut Commands,
     focus_writer: &mut EventWriter<FocusCamera>,
 ) -> Result<()> {
@@ -517,9 +520,7 @@ fn process_completed_tasks(
                 check_loaded_model(
                     task,
                     file_info_map,
-                    images,
-                    materials,
-                    meshes,
+                    scene_assets,
                     commands,
                     load_task,
                     focus_writer,
@@ -529,9 +530,7 @@ fn process_completed_tasks(
                 check_loaded_world_model(
                     task,
                     file_info_map,
-                    images,
-                    materials,
-                    meshes,
+                    scene_assets,
                     commands,
                     load_task,
                     focus_writer,
@@ -541,10 +540,7 @@ fn process_completed_tasks(
                 check_loaded_world_map(
                     task,
                     file_info_map,
-                    images,
-                    terrain_materials,
-                    materials,
-                    meshes,
+                    scene_assets,
                     commands,
                     load_task,
                     focus_writer,
@@ -560,13 +556,10 @@ fn process_completed_tasks(
     Ok(())
 }
 
-#[allow(clippy::too_many_arguments)]
 fn check_loaded_model(
     mut task: LoadFileTask,
     file_info_map: &mut FileInfoMap,
-    images: &mut Assets<Image>,
-    materials: &mut Assets<StandardMaterial>,
-    meshes: &mut Assets<Mesh>,
+    scene_assets: &mut SceneAssets,
     commands: &mut Commands,
     load_task: &mut LoadingFileTasks,
     focus_writer: &mut EventWriter<FocusCamera>,
@@ -581,20 +574,15 @@ fn check_loaded_model(
         FileInfoState::Loaded => {
             if task.instantiate {
                 // All textures are loaded, we can create the meshes
-                let bundles = bundle::create_meshes_from_model_info(
-                    model_info,
-                    file_info_map,
-                    images,
-                    materials,
-                    meshes,
-                )?;
+                let bundles =
+                    bundle::create_meshes_from_model_info(model_info, file_info_map, scene_assets)?;
 
                 if bundles.is_empty() {
                     task.file.state = FileInfoState::Error("No meshes".to_string());
                 } else {
                     // Compute bounds before spawning (bundles carry the final local transform)
                     if let Some(bounding_sphere) =
-                        bundle::compute_bounding_sphere_from_bundles(&bundles, meshes)
+                        bundle::compute_bounding_sphere_from_bundles(&bundles, &scene_assets.meshes)
                     {
                         focus_writer.write(FocusCamera { bounding_sphere });
                     }
@@ -624,13 +612,10 @@ fn check_loaded_model(
     Ok(())
 }
 
-#[allow(clippy::too_many_arguments)]
 fn check_loaded_world_model(
     mut task: LoadFileTask,
     file_info_map: &mut FileInfoMap,
-    images: &mut Assets<Image>,
-    materials: &mut Assets<StandardMaterial>,
-    meshes: &mut Assets<Mesh>,
+    scene_assets: &mut SceneAssets,
     commands: &mut Commands,
     load_task: &mut LoadingFileTasks,
     focus_writer: &mut EventWriter<FocusCamera>,
@@ -649,16 +634,14 @@ fn check_loaded_world_model(
                 let bundles = bundle::create_meshes_from_world_model_info(
                     world_model_info,
                     file_info_map,
-                    images,
-                    materials,
-                    meshes,
+                    scene_assets,
                 )?;
 
                 if bundles.is_empty() {
                     task.file.state = FileInfoState::Error("No meshes".to_string());
                 } else {
                     if let Some(bounding_sphere) =
-                        bundle::compute_bounding_sphere_from_bundles(&bundles, meshes)
+                        bundle::compute_bounding_sphere_from_bundles(&bundles, &scene_assets.meshes)
                     {
                         focus_writer.write(FocusCamera { bounding_sphere });
                     }
@@ -688,14 +671,10 @@ fn check_loaded_world_model(
     Ok(())
 }
 
-#[allow(clippy::too_many_arguments)]
 fn check_loaded_world_map(
     mut task: LoadFileTask,
     file_info_map: &mut FileInfoMap,
-    images: &mut Assets<Image>,
-    terrain_materials: &mut Assets<ExtendedMaterial<StandardMaterial, TerrainMaterial>>,
-    materials: &mut Assets<StandardMaterial>,
-    meshes: &mut Assets<Mesh>,
+    scene_assets: &mut SceneAssets,
     commands: &mut Commands,
     load_task: &mut LoadingFileTasks,
     focus_writer: &mut EventWriter<FocusCamera>,
@@ -715,10 +694,7 @@ fn check_loaded_world_map(
                 let bundles_result = bundle::create_meshes_from_world_map_info(
                     world_map_info,
                     file_info_map,
-                    images,
-                    terrain_materials,
-                    materials,
-                    meshes,
+                    scene_assets,
                 );
 
                 let (terrain_bundles, model_bundles) = match bundles_result {
@@ -733,15 +709,18 @@ fn check_loaded_world_map(
                 if terrain_bundles.is_empty() && model_bundles.is_empty() {
                     task.file.state = FileInfoState::Error("No meshes".to_string());
                 } else {
-                    if let Some(bounding_sphere) =
-                        bundle::compute_bounding_sphere_from_bundles(&model_bundles, meshes)
-                    {
+                    if let Some(bounding_sphere) = bundle::compute_bounding_sphere_from_bundles(
+                        &model_bundles,
+                        &scene_assets.meshes,
+                    ) {
                         focus_writer.write(FocusCamera { bounding_sphere });
                     }
 
                     if model_bundles.is_empty()
-                        && let Some(bounding_sphere) =
-                            bundle::compute_bounding_sphere_from_bundles(&terrain_bundles, meshes)
+                        && let Some(bounding_sphere) = bundle::compute_bounding_sphere_from_bundles(
+                            &terrain_bundles,
+                            &scene_assets.meshes,
+                        )
                     {
                         focus_writer.write(FocusCamera { bounding_sphere });
                     }

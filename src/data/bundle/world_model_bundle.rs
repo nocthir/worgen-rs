@@ -11,37 +11,32 @@ use crate::data::{bundle::*, file, world_model::WorldModelInfo};
 pub fn create_meshes_from_world_model_path(
     world_model_path: &str,
     file_info_map: &file::FileInfoMap,
-    images: &mut Assets<Image>,
-    standard_materials: &mut Assets<StandardMaterial>,
-    meshes: &mut Assets<Mesh>,
+    scene_assets: &mut SceneAssets,
 ) -> Result<Vec<ModelBundle>> {
     let world_model_info = file_info_map.get_world_model_info(world_model_path)?;
-    create_meshes_from_world_model_info(
-        world_model_info,
-        file_info_map,
-        images,
-        standard_materials,
-        meshes,
-    )
+    create_meshes_from_world_model_info(world_model_info, file_info_map, scene_assets)
 }
 
 pub fn create_meshes_from_world_model_info(
     world_model: &WorldModelInfo,
     file_info_map: &file::FileInfoMap,
-    images: &mut Assets<Image>,
-    standard_materials: &mut Assets<StandardMaterial>,
-    meshes: &mut Assets<Mesh>,
+    scene_assets: &mut SceneAssets,
 ) -> Result<Vec<ModelBundle>> {
     let mut ret = Vec::default();
 
-    let textures = bundle::create_textures_from_world_model(world_model, file_info_map, images)?;
-    let materials = bundle::create_materials_from_world_model(world_model, &textures, images);
+    let textures = bundle::create_textures_from_world_model(
+        world_model,
+        file_info_map,
+        &mut scene_assets.images,
+    )?;
+    let materials =
+        bundle::create_materials_from_world_model(world_model, &textures, &mut scene_assets.images);
     let material_handles = materials
         .into_iter()
-        .map(|mat| standard_materials.add(mat))
+        .map(|mat| scene_assets.materials.add(mat))
         .collect::<Vec<_>>();
 
-    let default_material_handle = standard_materials.add(StandardMaterial {
+    let default_material_handle = scene_assets.materials.add(StandardMaterial {
         base_color: Color::WHITE,
         perceptual_roughness: 1.0,
         unlit: true,
@@ -53,7 +48,7 @@ pub fn create_meshes_from_world_model_info(
             &world_model.groups[group_index],
             default_material_handle.clone(),
             &material_handles,
-            meshes,
+            &mut scene_assets.meshes,
         );
         ret.extend(bundles);
     }
@@ -144,10 +139,12 @@ fn create_mesh_from_wmo_group(
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{data::bundle, *};
+    use crate::{data::archive, data::bundle, *};
 
     #[test]
     fn list_world_model_paths() -> Result {
+        settings::Settings::init();
+        archive::ArchiveMap::init();
         let settings = settings::TestSettings::load()?;
         let file_info_map = file::test::default_file_info_map(&settings)?;
         println!("Path, Archive");
@@ -159,21 +156,26 @@ mod test {
 
     #[test]
     fn load_world_model() -> Result {
+        settings::Settings::init();
+        archive::ArchiveMap::init();
         let settings = settings::TestSettings::load()?;
         let mut file_info_map = file::test::default_file_info_map(&settings)?;
         file_info_map.load_file_and_dependencies(&settings.test_world_model.file_path)?;
-        let mut images = Assets::<Image>::default();
-        let mut materials = Assets::<StandardMaterial>::default();
-        let mut terrain_materials =
-            Assets::<ExtendedMaterial<StandardMaterial, TerrainMaterial>>::default();
-        let mut meshes = Assets::<Mesh>::default();
-        bundle::create_mesh_from_file_path(
+        let mut app = App::new();
+        app.world_mut().init_resource::<Assets<Image>>();
+        app.world_mut().init_resource::<Assets<Mesh>>();
+        app.world_mut()
+            .init_resource::<Assets<ExtendedMaterial<StandardMaterial, TerrainMaterial>>>();
+        app.world_mut().init_resource::<Assets<StandardMaterial>>();
+
+        use bevy::ecs::system::SystemState;
+        let mut state: SystemState<file::SceneAssets> = SystemState::new(app.world_mut());
+        let mut scene_assets = state.get_mut(app.world_mut());
+
+        let _ = bundle::create_mesh_from_file_path(
             &settings.test_world_model.file_path,
             &file_info_map,
-            &mut images,
-            &mut terrain_materials,
-            &mut materials,
-            &mut meshes,
+            &mut scene_assets,
         )?;
         Ok(())
     }

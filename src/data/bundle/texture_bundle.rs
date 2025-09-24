@@ -188,10 +188,12 @@ impl CombinedAlphaMap {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::*;
+    use crate::{data::archive, *};
 
     #[test]
     fn list_texture_paths() -> Result {
+        settings::Settings::init();
+        archive::ArchiveMap::init();
         let settings = settings::TestSettings::load()?;
         let file_info_map = file::test::default_file_info_map(&settings)?;
         println!("Path, Archive");
@@ -205,6 +207,8 @@ mod test {
 
     #[test]
     fn load_texture() -> Result {
+        settings::Settings::init();
+        archive::ArchiveMap::init();
         let settings = settings::TestSettings::load()?;
         let mut file_info_map = file::test::default_file_info_map(&settings)?;
         file_info_map.load_file_and_dependencies(&settings.test_texture.file_path)?;

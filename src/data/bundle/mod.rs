@@ -81,20 +81,10 @@ pub fn add_bundle<S: Into<String>>(
 pub fn create_mesh_from_file_path(
     file_path: &str,
     file_info_map: &FileInfoMap,
-    images: &mut Assets<Image>,
-    terrain_materials: &mut Assets<ExtendedMaterial<StandardMaterial, TerrainMaterial>>,
-    materials: &mut Assets<StandardMaterial>,
-    meshes: &mut Assets<Mesh>,
+    scene_assets: &mut file::SceneAssets,
 ) -> Result<(Vec<TerrainBundle>, Vec<ModelBundle>)> {
     let file_info = file_info_map.get_file_info(file_path)?;
-    create_mesh_from_file_info(
-        file_info,
-        file_info_map,
-        images,
-        terrain_materials,
-        materials,
-        meshes,
-    )
+    create_mesh_from_file_info(file_info, file_info_map, scene_assets)
 }
 
 // Actually used in tests
@@ -102,44 +92,24 @@ pub fn create_mesh_from_file_path(
 pub fn create_mesh_from_file_info(
     file_info: &FileInfo,
     file_info_map: &FileInfoMap,
-    images: &mut Assets<Image>,
-    terrain_materials: &mut Assets<ExtendedMaterial<StandardMaterial, TerrainMaterial>>,
-    materials: &mut Assets<StandardMaterial>,
-    meshes: &mut Assets<Mesh>,
+    scene_assets: &mut file::SceneAssets,
 ) -> Result<(Vec<TerrainBundle>, Vec<ModelBundle>)> {
     let mut terrain_bundles = Vec::new();
     let mut model_bundles = Vec::new();
 
     match &file_info.data_info {
         Some(DataInfo::Model(model_info)) => {
-            let models = create_meshes_from_model_info(
-                model_info,
-                file_info_map,
-                images,
-                materials,
-                meshes,
-            )?;
+            let models = create_meshes_from_model_info(model_info, file_info_map, scene_assets)?;
             model_bundles.extend(models);
         }
         Some(DataInfo::WorldModel(world_model_info)) => {
-            let models = create_meshes_from_world_model_info(
-                world_model_info,
-                file_info_map,
-                images,
-                materials,
-                meshes,
-            )?;
+            let models =
+                create_meshes_from_world_model_info(world_model_info, file_info_map, scene_assets)?;
             model_bundles.extend(models);
         }
         Some(DataInfo::WorldMap(world_map_info)) => {
-            let (terrains, models) = create_meshes_from_world_map_info(
-                world_map_info,
-                file_info_map,
-                images,
-                terrain_materials,
-                materials,
-                meshes,
-            )?;
+            let (terrains, models) =
+                create_meshes_from_world_map_info(world_map_info, file_info_map, scene_assets)?;
             terrain_bundles.extend(terrains);
             model_bundles.extend(models);
         }

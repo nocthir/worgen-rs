@@ -16,29 +16,16 @@ use crate::{
 pub fn create_meshes_from_world_map_path(
     world_map_path: &str,
     file_info_map: &FileInfoMap,
-    images: &mut Assets<Image>,
-    terrain_materials: &mut Assets<ExtendedMaterial<StandardMaterial, TerrainMaterial>>,
-    materials: &mut Assets<StandardMaterial>,
-    meshes: &mut Assets<Mesh>,
+    scene_assets: &mut SceneAssets,
 ) -> Result<(Vec<TerrainBundle>, Vec<ModelBundle>)> {
     let world_map_info = file_info_map.get_world_map_info(world_map_path)?;
-    create_meshes_from_world_map_info(
-        world_map_info,
-        file_info_map,
-        images,
-        terrain_materials,
-        materials,
-        meshes,
-    )
+    create_meshes_from_world_map_info(world_map_info, file_info_map, scene_assets)
 }
 
 pub fn create_meshes_from_world_map_info(
     world_map_info: &WorldMapInfo,
     file_info_map: &FileInfoMap,
-    images: &mut Assets<Image>,
-    terrain_materials: &mut Assets<ExtendedMaterial<StandardMaterial, TerrainMaterial>>,
-    materials: &mut Assets<StandardMaterial>,
-    meshes: &mut Assets<Mesh>,
+    scene_assets: &mut SceneAssets,
 ) -> Result<(Vec<TerrainBundle>, Vec<ModelBundle>)> {
     let mut terrain_bundles = Vec::new();
     let mut model_bundles = Vec::new();
@@ -46,25 +33,19 @@ pub fn create_meshes_from_world_map_info(
     terrain_bundles.extend(create_terrain_bundles_from_world_map_info(
         world_map_info,
         file_info_map,
-        images,
-        terrain_materials,
-        meshes,
+        scene_assets,
     )?);
 
     model_bundles.extend(create_model_bundles_from_world_map_info(
         world_map_info,
         file_info_map,
-        images,
-        materials,
-        meshes,
+        scene_assets,
     )?);
 
     model_bundles.extend(create_world_model_bundles_from_world_map_info(
         world_map_info,
         file_info_map,
-        images,
-        materials,
-        meshes,
+        scene_assets,
     )?);
 
     Ok((terrain_bundles, model_bundles))
@@ -73,21 +54,22 @@ pub fn create_meshes_from_world_map_info(
 fn create_terrain_bundles_from_world_map_info(
     world_map_info: &WorldMapInfo,
     file_info_map: &FileInfoMap,
-    images: &mut Assets<Image>,
-    materials: &mut Assets<ExtendedMaterial<StandardMaterial, TerrainMaterial>>,
-    meshes: &mut Assets<Mesh>,
+    scene_assets: &mut SceneAssets,
 ) -> Result<Vec<TerrainBundle>> {
     let mut bundles = Vec::new();
 
-    let textures =
-        create_textures_from_world_map(&world_map_info.world_map, file_info_map, images)?;
+    let textures = create_textures_from_world_map(
+        &world_map_info.world_map,
+        file_info_map,
+        &mut scene_assets.images,
+    )?;
 
     let header = world_map_info.world_map.mhdr.as_ref().unwrap();
     let has_big_alpha = header.flags & 0x4 != 0;
 
     for chunk in &world_map_info.world_map.mcnk_chunks {
         let mesh = create_mesh_from_world_map_chunk(chunk);
-        let mesh_handle = meshes.add(mesh);
+        let mesh_handle = scene_assets.meshes.add(mesh);
 
         let mut level0_texture_handle = None;
 
@@ -101,7 +83,7 @@ fn create_terrain_bundles_from_world_map_info(
         let do_not_fix_alpha = chunk.flags & bit_16th != 0;
         let alpha_texture = create_alpha_texture_from_world_map_chunk(
             chunk,
-            images,
+            &mut scene_assets.images,
             has_big_alpha,
             do_not_fix_alpha,
         );
@@ -145,7 +127,7 @@ fn create_terrain_bundles_from_world_map_info(
             extension: terrain_material,
         };
 
-        let material_handle = materials.add(extended_material);
+        let material_handle = scene_assets.terrain_materials.add(extended_material);
 
         // Each chunk is 100 feet -> 33.33 yards in world space.
         // Our grid size is 8, so we scale by (100.0 / 3.0) / 8.0 = 100.0 / 24.0
@@ -288,16 +270,13 @@ pub fn terrain_indices() -> Vec<u16> {
 fn create_model_bundles_from_world_map_info(
     world_map_info: &WorldMapInfo,
     file_info_map: &FileInfoMap,
-    images: &mut Assets<Image>,
-    materials: &mut Assets<StandardMaterial>,
-    meshes: &mut Assets<Mesh>,
+    scene_assets: &mut SceneAssets,
 ) -> Result<Vec<ModelBundle>> {
     let mut bundles = Vec::new();
 
     let mut model_bundles = Vec::new();
     for model_path in &world_map_info.model_paths {
-        let bundles =
-            create_meshes_from_model_path(model_path, file_info_map, images, materials, meshes)?;
+        let bundles = create_meshes_from_model_path(model_path, file_info_map, scene_assets)?;
         model_bundles.push(bundles);
     }
 
@@ -326,21 +305,14 @@ fn create_model_bundles_from_world_map_info(
 fn create_world_model_bundles_from_world_map_info(
     world_map_info: &WorldMapInfo,
     file_info_map: &FileInfoMap,
-    images: &mut Assets<Image>,
-    materials: &mut Assets<StandardMaterial>,
-    meshes: &mut Assets<Mesh>,
+    scene_assets: &mut SceneAssets,
 ) -> Result<Vec<ModelBundle>> {
     let mut bundles = Vec::new();
 
     let mut world_model_bundles = Vec::new();
     for world_model_path in &world_map_info.world_model_paths {
-        let bundles = create_meshes_from_world_model_path(
-            world_model_path,
-            file_info_map,
-            images,
-            materials,
-            meshes,
-        )?;
+        let bundles =
+            create_meshes_from_world_model_path(world_model_path, file_info_map, scene_assets)?;
         world_model_bundles.push(bundles);
     }
 
@@ -368,26 +340,32 @@ fn create_world_model_bundles_from_world_map_info(
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{data::bundle, *};
+    use crate::{data::archive, data::bundle, *};
 
     #[test]
     fn load_world_map() -> Result<()> {
+        settings::Settings::init();
+        archive::ArchiveMap::init();
         let settings = settings::TestSettings::load()?;
         let mut file_info_map = file::test::default_file_info_map(&settings)?;
         file_info_map.load_file_and_dependencies(&settings.world_map_path.file_path)?;
 
-        let mut images = Assets::<Image>::default();
-        let mut terrain_materials =
-            Assets::<ExtendedMaterial<StandardMaterial, TerrainMaterial>>::default();
-        let mut materials = Assets::<StandardMaterial>::default();
-        let mut meshes = Assets::<Mesh>::default();
+        let mut app = App::new();
+        // Initialize required asset resources for tests
+        app.world_mut().init_resource::<Assets<Image>>();
+        app.world_mut().init_resource::<Assets<Mesh>>();
+        app.world_mut()
+            .init_resource::<Assets<ExtendedMaterial<StandardMaterial, TerrainMaterial>>>();
+        app.world_mut().init_resource::<Assets<StandardMaterial>>();
+
+        // Extract the SystemParam from the world using SystemState
+        use bevy::ecs::system::SystemState;
+        let mut state: SystemState<file::SceneAssets> = SystemState::new(app.world_mut());
+        let mut scene_assets = state.get_mut(app.world_mut());
         bundle::create_meshes_from_world_map_path(
             &settings.world_map_path.file_path,
             &file_info_map,
-            &mut images,
-            &mut terrain_materials,
-            &mut materials,
-            &mut meshes,
+            &mut scene_assets,
         )?;
         Ok(())
     }
