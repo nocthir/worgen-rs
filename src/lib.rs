@@ -9,3 +9,4 @@ pub mod data;
 pub mod material;
 pub mod settings;
 pub mod ui;
+pub mod assets; // Experimental asset-based loaders (e.g., ModelAsset)
