@@ -37,6 +37,7 @@ wow-m2 = { path = "../warcraft-rs/file-formats/graphics/wow-m2" }
 wow-mpq = { path = "../warcraft-rs/file-formats/archives/wow-mpq" }
 wow-wmo = { path = "../warcraft-rs/file-formats/graphics/wow-wmo" }
 wow-blp = { path = "../warcraft-rs/file-formats/graphics/wow-blp" }
+bevy_atmosphere = "0.13.0"
 
 [dev-dependencies]
 env_logger = "*"

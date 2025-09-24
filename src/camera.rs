@@ -6,6 +6,8 @@ use std::f32::consts::{FRAC_PI_2, PI, TAU};
 
 use bevy::input::mouse::{MouseMotion, MouseScrollUnit, MouseWheel};
 use bevy::prelude::*;
+use bevy_atmosphere::prelude::*;
+use bevy_atmosphere::settings::SkyboxCreationMode;
 use bevy_egui::EguiContexts;
 
 use crate::data::bundle;
@@ -15,6 +17,7 @@ use crate::data::bundle;
 #[derive(Bundle, Default)]
 pub struct PanOrbitCameraBundle {
     pub camera: Camera3d,
+    pub atmosphere: AtmosphereCamera,
     pub state: PanOrbitState,
     pub settings: PanOrbitSettings,
 }
@@ -93,6 +96,11 @@ pub struct PanOrbitCameraPlugin;
 impl Plugin for PanOrbitCameraPlugin {
     fn build(&self, app: &mut App) {
         app.add_event::<FocusCamera>()
+            .insert_resource(AtmosphereSettings {
+                skybox_creation_mode: SkyboxCreationMode::FromSpecifiedFar(20000.0),
+                ..default()
+            })
+            .add_plugins(AtmospherePlugin)
             .add_systems(Startup, setup_camera)
             .add_systems(Update, (focus_camera_on_event, pan_orbit_camera));
     }
