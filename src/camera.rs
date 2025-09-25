@@ -10,7 +10,7 @@ use bevy_atmosphere::prelude::*;
 use bevy_atmosphere::settings::SkyboxCreationMode;
 use bevy_egui::EguiContexts;
 
-use crate::data::bundle::{self, BoundingSphere};
+use crate::assets;
 
 /// Bundle to spawn our custom camera easily
 /// https://bevy-cheatbook.github.io/cookbook/pan-orbit-camera.html
@@ -95,14 +95,13 @@ pub struct PanOrbitCameraPlugin;
 
 impl Plugin for PanOrbitCameraPlugin {
     fn build(&self, app: &mut App) {
-        app.add_event::<FocusCamera>()
-            .insert_resource(AtmosphereSettings {
-                skybox_creation_mode: SkyboxCreationMode::FromSpecifiedFar(20000.0),
-                ..default()
-            })
-            .add_plugins(AtmospherePlugin)
-            .add_systems(Startup, setup_camera)
-            .add_systems(Update, (on_model_loaded, pan_orbit_camera));
+        app.insert_resource(AtmosphereSettings {
+            skybox_creation_mode: SkyboxCreationMode::FromSpecifiedFar(20000.0),
+            ..default()
+        })
+        .add_plugins(AtmospherePlugin)
+        .add_systems(Startup, setup_camera)
+        .add_systems(Update, (on_model_loaded, pan_orbit_camera));
     }
 }
 
@@ -295,14 +294,8 @@ fn pan_orbit_camera(
     }
 }
 
-#[derive(Event, Debug, Clone, Copy)]
-pub struct FocusCamera {
-    /// Bounding sphere radius in world units; the camera should apply a comfortable multiplier.
-    pub bounding_sphere: bundle::BoundingSphere,
-}
-
 fn on_model_loaded(
-    q_bounding_sphere: Query<&BoundingSphere, Added<BoundingSphere>>,
+    q_bounding_sphere: Query<&assets::BoundingSphere, Added<assets::BoundingSphere>>,
     mut q_camera: Query<(&mut PanOrbitState, &mut Transform)>,
 ) {
     if let Ok(bounding_sphere) = q_bounding_sphere.single() {
@@ -311,7 +304,7 @@ fn on_model_loaded(
 }
 
 fn focus_camera(
-    bounding_sphere: &BoundingSphere,
+    bounding_sphere: &assets::BoundingSphere,
     q_camera: &mut Query<(&mut PanOrbitState, &mut Transform)>,
 ) {
     let center = bounding_sphere.center;

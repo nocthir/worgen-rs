@@ -12,7 +12,7 @@ use std::{
 use bevy::{ecs::system::SystemParam, pbr::ExtendedMaterial, prelude::*, tasks};
 
 use crate::data::*;
-use crate::{camera::FocusCamera, material::TerrainMaterial};
+use crate::material::TerrainMaterial;
 
 pub static mut FILE_ARCHIVE_MAP: FileArchiveMap = FileArchiveMap::new();
 static FILE_ARCHIVE_MAP_ONCE: Once = Once::new();
@@ -369,7 +369,6 @@ pub fn check_file_loading(
     mut file_info_map: ResMut<FileInfoMap>,
     mut scene_assets: SceneAssets,
     mut commands: Commands,
-    mut focus_writer: EventWriter<FocusCamera>,
 ) -> Result<()> {
     let mut tasks = Vec::new();
     tasks.append(&mut load_task.tasks);
@@ -402,7 +401,6 @@ pub fn check_file_loading(
         &mut file_info_map,
         &mut scene_assets,
         &mut commands,
-        &mut focus_writer,
     )
 }
 
@@ -514,7 +512,6 @@ fn process_completed_tasks(
     file_info_map: &mut FileInfoMap,
     scene_assets: &mut SceneAssets,
     commands: &mut Commands,
-    focus_writer: &mut EventWriter<FocusCamera>,
 ) -> Result<()> {
     let mut completed_tasks = Vec::new();
     completed_tasks.append(&mut load_task.completed);
@@ -522,34 +519,13 @@ fn process_completed_tasks(
     for mut task in completed_tasks {
         match task.file.data_type {
             DataType::Model => {
-                check_loaded_model(
-                    task,
-                    file_info_map,
-                    scene_assets,
-                    commands,
-                    load_task,
-                    focus_writer,
-                )?;
+                check_loaded_model(task, file_info_map, scene_assets, commands, load_task)?;
             }
             DataType::WorldModel => {
-                check_loaded_world_model(
-                    task,
-                    file_info_map,
-                    scene_assets,
-                    commands,
-                    load_task,
-                    focus_writer,
-                )?;
+                check_loaded_world_model(task, file_info_map, scene_assets, commands, load_task)?;
             }
             DataType::WorldMap => {
-                check_loaded_world_map(
-                    task,
-                    file_info_map,
-                    scene_assets,
-                    commands,
-                    load_task,
-                    focus_writer,
-                )?;
+                check_loaded_world_map(task, file_info_map, scene_assets, commands, load_task)?;
             }
             _ => {
                 task.file.state = FileInfoState::Error("No data".to_string());
@@ -567,7 +543,6 @@ fn check_loaded_model(
     scene_assets: &mut SceneAssets,
     commands: &mut Commands,
     load_task: &mut LoadingFileTasks,
-    focus_writer: &mut EventWriter<FocusCamera>,
 ) -> Result<()> {
     let model_info = task.file.get_model()?;
 
@@ -585,13 +560,6 @@ fn check_loaded_model(
                 if bundles.is_empty() {
                     task.file.state = FileInfoState::Error("No meshes".to_string());
                 } else {
-                    // Compute bounds before spawning (bundles carry the final local transform)
-                    if let Some(bounding_sphere) =
-                        bundle::compute_bounding_sphere_from_bundles(&bundles, &scene_assets.meshes)
-                    {
-                        focus_writer.write(FocusCamera { bounding_sphere });
-                    }
-
                     for bundle in bundles {
                         bundle::add_bundle(commands, bundle, &task.file.path);
                     }
@@ -623,7 +591,6 @@ fn check_loaded_world_model(
     scene_assets: &mut SceneAssets,
     commands: &mut Commands,
     load_task: &mut LoadingFileTasks,
-    focus_writer: &mut EventWriter<FocusCamera>,
 ) -> Result<()> {
     let world_model_info = task.file.get_world_model()?;
 
@@ -645,12 +612,6 @@ fn check_loaded_world_model(
                 if bundles.is_empty() {
                     task.file.state = FileInfoState::Error("No meshes".to_string());
                 } else {
-                    if let Some(bounding_sphere) =
-                        bundle::compute_bounding_sphere_from_bundles(&bundles, &scene_assets.meshes)
-                    {
-                        focus_writer.write(FocusCamera { bounding_sphere });
-                    }
-
                     for bundle in bundles {
                         bundle::add_bundle(commands, bundle, &task.file.path);
                     }
@@ -682,7 +643,6 @@ fn check_loaded_world_map(
     scene_assets: &mut SceneAssets,
     commands: &mut Commands,
     load_task: &mut LoadingFileTasks,
-    focus_writer: &mut EventWriter<FocusCamera>,
 ) -> Result<()> {
     let world_map_info = task.file.get_world_map()?;
 
@@ -714,22 +674,6 @@ fn check_loaded_world_map(
                 if terrain_bundles.is_empty() && model_bundles.is_empty() {
                     task.file.state = FileInfoState::Error("No meshes".to_string());
                 } else {
-                    if let Some(bounding_sphere) = bundle::compute_bounding_sphere_from_bundles(
-                        &model_bundles,
-                        &scene_assets.meshes,
-                    ) {
-                        focus_writer.write(FocusCamera { bounding_sphere });
-                    }
-
-                    if model_bundles.is_empty()
-                        && let Some(bounding_sphere) = bundle::compute_bounding_sphere_from_bundles(
-                            &terrain_bundles,
-                            &scene_assets.meshes,
-                        )
-                    {
-                        focus_writer.write(FocusCamera { bounding_sphere });
-                    }
-
                     for bundle in terrain_bundles {
                         bundle::add_bundle(commands, bundle, &task.file.path);
                     }
