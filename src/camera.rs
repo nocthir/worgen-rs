@@ -305,20 +305,22 @@ pub struct FocusCamera {
 fn on_model_loaded(
     mut events: EventReader<AssetEvent<ModelAsset>>,
     models: Res<Assets<ModelAsset>>,
-    q_camera: Query<(&mut PanOrbitState, &mut Transform)>,
+    mut q_camera: Query<(&mut PanOrbitState, &mut Transform)>,
 ) {
-    if let Some(event) = events.read().last()
-        && let AssetEvent::LoadedWithDependencies { id } = event
-        && let Some(model) = models.get(*id)
-        && let Some(bounding_sphere) = model.bounding_sphere
-    {
-        focus_camera(bounding_sphere, q_camera);
+    for event in events.read() {
+        if let AssetEvent::LoadedWithDependencies { id } = event {
+            if let Some(model) = models.get(*id) {
+                if let Some(bounding_sphere) = model.bounding_sphere {
+                    focus_camera(bounding_sphere, &mut q_camera);
+                }
+            }
+        }
     }
 }
 
 fn focus_camera(
     bounding_sphere: BoundingSphere,
-    mut q_camera: Query<(&mut PanOrbitState, &mut Transform)>,
+    q_camera: &mut Query<(&mut PanOrbitState, &mut Transform)>,
 ) {
     let center = bounding_sphere.center;
     let mut radius = bounding_sphere.radius;
@@ -327,7 +329,7 @@ fn focus_camera(
     let comfort = 2.5_f32;
     radius = (radius * comfort).max(min_radius);
 
-    for (mut state, mut transform) in &mut q_camera {
+    for (mut state, mut transform) in q_camera {
         state.center = center;
         state.radius = radius;
         // Preserve current yaw/pitch encoded in transform.rotation/state; recompute position only

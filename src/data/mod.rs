@@ -67,8 +67,6 @@ fn load_selected_file(
     mut event_reader: EventReader<FileSelected>,
     current_query: Query<&CurrentFile>,
     entity_query: Query<Entity, With<CurrentFile>>,
-    mut file_info_map: ResMut<FileInfoMap>,
-    mut load_file_tasks: ResMut<file::LoadingFileTasks>,
     mut commands: Commands,
     asset_server: ResMut<AssetServer>,
 ) -> Result {
@@ -85,38 +83,6 @@ fn load_selected_file(
 
         let model = asset_server.load(ModelAssetLabel::Model.from_asset(event.get_asset_path()));
         commands.spawn((CurrentFile::new(event.file_path.clone()), SceneRoot(model)));
-        return Ok(());
-
-        let file_info = file_info_map.get_file_info_mut(&event.file_path)?;
-        if file_info.state == file::FileInfoState::Unloaded {
-            file_info.state = file::FileInfoState::Loading;
-            match file_info.data_type {
-                file::DataType::Model => {
-                    let model = asset_server.load(file_info.get_asset_path());
-                    commands.spawn(SceneRoot(model));
-                }
-                file::DataType::WorldModel => {
-                    load_file_tasks
-                        .tasks
-                        .push(world_model::loading_world_model_task(
-                            file::LoadFileTask::new(file_info, true),
-                        ));
-                }
-                file::DataType::WorldMap => {
-                    load_file_tasks
-                        .tasks
-                        .push(world_map::loading_world_map_task(file::LoadFileTask::new(
-                            file_info, true,
-                        )));
-                }
-                file::DataType::Texture => {
-                    // Textures are loaded as part of model/world model/world map loading
-                }
-                file::DataType::Unknown => {
-                    return Err(format!("Unsupported file type: {}", file_info.path).into());
-                }
-            }
-        }
     }
     Ok(())
 }

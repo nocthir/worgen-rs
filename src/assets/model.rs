@@ -74,6 +74,7 @@ pub enum ModelAssetLabel {
     Model,
     Mesh(usize),
     Material(usize),
+    Image(usize),
 }
 
 impl core::fmt::Display for ModelAssetLabel {
@@ -82,6 +83,7 @@ impl core::fmt::Display for ModelAssetLabel {
             ModelAssetLabel::Model => f.write_str("Model"),
             ModelAssetLabel::Mesh(index) => f.write_str(&format!("Mesh{index}")),
             ModelAssetLabel::Material(index) => f.write_str(&format!("Material{index}")),
+            ModelAssetLabel::Image(index) => f.write_str(&format!("Image{index}")),
         }
     }
 }
@@ -131,14 +133,14 @@ pub enum ModelAssetLoaderError {
 }
 
 impl ModelAssetLoader {
-    fn load_model(
+    async fn load_model(
         bytes: Vec<u8>,
         load_context: &mut LoadContext<'_>,
     ) -> Result<ModelAsset, ModelAssetLoaderError> {
         let mut cursor = io::Cursor::new(&bytes);
         let model = m2::M2Model::parse(&mut cursor)?;
 
-        let images = Self::load_images(&model, load_context);
+        let images = Self::load_images(&model, load_context).await?;
         let mut materials = Vec::new();
         let mut meshes = Vec::new();
         Self::load_meshes(&model, &bytes, &images, &mut meshes, &mut materials)?;
@@ -185,14 +187,19 @@ impl ModelAssetLoader {
         })
     }
 
-    fn load_images(model: &m2::M2Model, load_context: &mut LoadContext<'_>) -> Vec<Handle<Image>> {
+    async fn load_images(
+        model: &m2::M2Model,
+        load_context: &mut LoadContext<'_>,
+    ) -> Result<Vec<Handle<Image>>> {
         let mut handles = Vec::new();
-        for texture in &model.textures {
+        for (index, texture) in model.textures.iter().enumerate() {
             let texture_path = Self::get_image_asset_path(texture);
-            let image_handle = load_context.load(texture_path);
+            let image = ImageLoader::load_image(&texture_path, load_context).await?;
+            let image_handle =
+                load_context.add_labeled_asset(ModelAssetLabel::Image(index).to_string(), image);
             handles.push(image_handle);
         }
-        handles
+        Ok(handles)
     }
 
     fn get_image_asset_path(texture: &m2::chunks::texture::M2Texture) -> String {
@@ -313,12 +320,12 @@ impl ModelAssetLoader {
         let mut min = Vec3::splat(f32::INFINITY);
         let mut max = Vec3::splat(f32::NEG_INFINITY);
 
-        for mesh in meshes {
-            // Prepare final transform: user-provided transform + reorientation applied at spawn
-            let mut final_transform = Transform::default();
-            final_transform.rotate_local_x(-std::f32::consts::FRAC_PI_2);
-            final_transform.rotate_local_z(-std::f32::consts::FRAC_PI_2);
+        // Prepare final transform: user-provided transform + reorientation applied at spawn
+        let mut final_transform = Transform::default();
+        final_transform.rotate_local_x(-std::f32::consts::FRAC_PI_2);
+        final_transform.rotate_local_z(-std::f32::consts::FRAC_PI_2);
 
+        for mesh in meshes {
             // Extract positions
             if let Some(VertexAttributeValues::Float32x3(positions)) =
                 mesh.attribute(Mesh::ATTRIBUTE_POSITION)
@@ -371,7 +378,7 @@ impl AssetLoader for ModelAssetLoader {
     ) -> Result<Self::Asset, Self::Error> {
         let mut bytes = Vec::new();
         reader.read_to_end(&mut bytes).await?;
-        Self::load_model(bytes, load_context)
+        Self::load_model(bytes, load_context).await
     }
 
     fn extensions(&self) -> &[&str] {
