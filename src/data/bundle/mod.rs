@@ -125,7 +125,8 @@ pub fn create_mesh_from_file_info(
     Ok((terrain_bundles, model_bundles))
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Component, Debug, Clone, Copy, Reflect)]
+#[reflect(Component)]
 pub struct BoundingSphere {
     pub center: Vec3,
     pub radius: f32,

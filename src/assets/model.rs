@@ -37,7 +37,8 @@ pub struct ModelAssetPlugin;
 
 impl Plugin for ModelAssetPlugin {
     fn build(&self, app: &mut App) {
-        app.init_asset::<ModelAsset>()
+        app.register_type::<BoundingSphere>()
+            .init_asset::<ModelAsset>()
             .init_asset_loader::<ImageLoader>()
             .init_asset_loader::<ModelAssetLoader>();
     }
@@ -54,7 +55,7 @@ impl Plugin for ModelAssetPlugin {
 /// # use bevy_gltf::prelude::*;
 ///
 /// fn load_model(asset_server: Res<AssetServer>) {
-///     let model: Handle<Scene> = asset_server.load(ModelAssetLabel::Mesh(0).from_asset("model/path/extension"));
+///     let mesh: Handle<Scene> = asset_server.load(ModelAssetLabel::Mesh(0).from_asset("model/path/extension"));
 /// }
 /// ```
 ///
@@ -66,7 +67,7 @@ impl Plugin for ModelAssetPlugin {
 /// # use bevy_scene::prelude::*;
 ///
 /// fn load_model(asset_server: Res<AssetServer>) {
-///     let gltf_scene: Handle<Scene> = asset_server.load(format!("model/path.extension#{}", ModelAssetLabel::Mesh(0)));
+///     let mesh: Handle<Scene> = asset_server.load(format!("model/path.extension#{}", ModelAssetLabel::Mesh(0)));
 /// }
 /// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -75,6 +76,7 @@ pub enum ModelAssetLabel {
     Mesh(usize),
     Material(usize),
     Image(usize),
+    BoundingSphere,
 }
 
 impl core::fmt::Display for ModelAssetLabel {
@@ -84,6 +86,7 @@ impl core::fmt::Display for ModelAssetLabel {
             ModelAssetLabel::Mesh(index) => f.write_str(&format!("Mesh{index}")),
             ModelAssetLabel::Material(index) => f.write_str(&format!("Material{index}")),
             ModelAssetLabel::Image(index) => f.write_str(&format!("Image{index}")),
+            ModelAssetLabel::BoundingSphere => f.write_str("BoundingSphere"),
         }
     }
 }
@@ -97,7 +100,7 @@ impl ModelAssetLabel {
     /// # use bevy_scene::prelude::*;
     ///
     /// fn load_model(asset_server: Res<AssetServer>) {
-    ///     let model: Handle<Scene> = asset_server.load(ModelAssetLabel::Mesh(0).from_asset("model/path.extension"));
+    ///     let model: Handle<Scene> = asset_server.load(ModelAssetLabel::Model.from_asset("model/path.extension"));
     /// }
     /// ```
     pub fn from_asset(&self, path: impl Into<AssetPath<'static>>) -> AssetPath<'static> {
@@ -163,16 +166,19 @@ impl ModelAssetLoader {
         transform.rotate_local_x(-std::f32::consts::FRAC_PI_2);
         transform.rotate_local_z(-std::f32::consts::FRAC_PI_2);
         let mut world = World::default();
-        world
-            .spawn((transform, Visibility::default()))
-            .with_children(|parent| {
-                for i in 0..meshes.len() {
-                    parent.spawn((
-                        Mesh3d(meshes[i].clone()),
-                        MeshMaterial3d(materials[i].clone()),
-                    ));
-                }
-            });
+        let mut root = world.spawn((transform, Visibility::default()));
+        if let Some(bounding_sphere) = bounding_sphere {
+            root.insert((BoundingSphere {
+                center: bounding_sphere.center,
+                radius: bounding_sphere.radius,
+            },));
+        }
+        for i in 0..meshes.len() {
+            root.with_child((
+                Mesh3d(meshes[i].clone()),
+                MeshMaterial3d(materials[i].clone()),
+            ));
+        }
         let scene_loader = load_context.begin_labeled_asset();
         let loaded_scene = scene_loader.finish(Scene::new(world));
         let scene =

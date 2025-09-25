@@ -10,7 +10,6 @@ use bevy_atmosphere::prelude::*;
 use bevy_atmosphere::settings::SkyboxCreationMode;
 use bevy_egui::EguiContexts;
 
-use crate::assets::ModelAsset;
 use crate::data::bundle::{self, BoundingSphere};
 
 /// Bundle to spawn our custom camera easily
@@ -303,23 +302,16 @@ pub struct FocusCamera {
 }
 
 fn on_model_loaded(
-    mut events: EventReader<AssetEvent<ModelAsset>>,
-    models: Res<Assets<ModelAsset>>,
+    q_bounding_sphere: Query<&BoundingSphere, Added<BoundingSphere>>,
     mut q_camera: Query<(&mut PanOrbitState, &mut Transform)>,
 ) {
-    for event in events.read() {
-        if let AssetEvent::LoadedWithDependencies { id } = event {
-            if let Some(model) = models.get(*id) {
-                if let Some(bounding_sphere) = model.bounding_sphere {
-                    focus_camera(bounding_sphere, &mut q_camera);
-                }
-            }
-        }
+    if let Ok(bounding_sphere) = q_bounding_sphere.single() {
+        focus_camera(bounding_sphere, &mut q_camera);
     }
 }
 
 fn focus_camera(
-    bounding_sphere: BoundingSphere,
+    bounding_sphere: &BoundingSphere,
     q_camera: &mut Query<(&mut PanOrbitState, &mut Transform)>,
 ) {
     let center = bounding_sphere.center;
