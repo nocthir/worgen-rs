@@ -173,7 +173,7 @@ mod test {
             let mut archive = archive::get_archive!(archive_path)?;
             for file_path in archive.list()? {
                 if model::is_model_extension(&file_path.name) {
-                    println!("{}, {}", file_path.name, archive.path().display());
+                    println!("{}, {}", file_path.name, archive.path().unwrap().display());
                 }
             }
         }

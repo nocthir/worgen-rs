@@ -2,17 +2,20 @@
 // Author: Nocthir <nocthir@proton.me>
 // SPDX-License-Identifier: MIT or Apache-2.0
 
-use bevy::{diagnostic, prelude::*};
+use bevy::{asset::AssetMetaCheck, diagnostic, prelude::*};
 
-mod camera;
-mod data;
-mod material;
-mod settings;
-mod ui;
+use worgen_rs::*;
 
 fn main() {
     App::new()
-        .add_plugins(DefaultPlugins)
+        .add_plugins((
+            assets::archive::ArchiveAssetReaderPlugin,
+            DefaultPlugins.set(AssetPlugin {
+                meta_check: AssetMetaCheck::Never,
+                ..default()
+            }),
+        ))
+        .add_plugins(assets::ExperimentalModelAssetPlugin)
         .add_plugins(diagnostic::FrameTimeDiagnosticsPlugin::default())
         .add_plugins(bevy_egui::EguiPlugin::default())
         .add_plugins(bevy_inspector_egui::quick::WorldInspectorPlugin::default())

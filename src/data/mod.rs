@@ -15,6 +15,7 @@ use std::f32;
 use bevy::prelude::*;
 
 use crate::{
+    assets::ModelAsset,
     data::{archive::*, file::*},
     settings,
     ui::FileSelected,
@@ -57,6 +58,7 @@ fn load_selected_file(
     mut file_info_map: ResMut<FileInfoMap>,
     mut load_file_tasks: ResMut<file::LoadingFileTasks>,
     mut commands: Commands,
+    asset_server: ResMut<AssetServer>,
 ) -> Result {
     // Ignore all but the last event
     if let Some(event) = event_reader.read().last() {
@@ -76,11 +78,12 @@ fn load_selected_file(
             file_info.state = file::FileInfoState::Loading;
             match file_info.data_type {
                 file::DataType::Model => {
-                    load_file_tasks
-                        .tasks
-                        .push(model::loading_model_task(file::LoadFileTask::new(
-                            file_info, true,
-                        )));
+                    let _ = asset_server.load::<ModelAsset>(file_info.get_asset_path());
+                    //load_file_tasks
+                    //    .tasks
+                    //    .push(model::loading_model_task(file::LoadFileTask::new(
+                    //        file_info, true,
+                    //    )));
                 }
                 file::DataType::WorldModel => {
                     load_file_tasks

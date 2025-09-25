@@ -7224,6 +7224,7 @@ dependencies = [
  "env_logger",
  "serde",
  "serde_json",
+ "thiserror 2.0.16",
  "wow-adt",
  "wow-blp",
  "wow-m2",

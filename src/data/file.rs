@@ -17,6 +17,7 @@ use crate::{camera::FocusCamera, material::TerrainMaterial};
 pub static mut FILE_ARCHIVE_MAP: FileArchiveMap = FileArchiveMap::new();
 static FILE_ARCHIVE_MAP_ONCE: Once = Once::new();
 
+#[derive(Default)]
 pub struct FileArchiveMap {
     pub map: Option<HashMap<String, PathBuf>>,
 }
@@ -90,6 +91,10 @@ impl FileInfo {
             data_type: DataType::from(path),
             data_info: None,
         }
+    }
+
+    pub fn get_asset_path(&self) -> String {
+        format!("archive://{}", self.path)
     }
 
     /// Creates a shallow clone of the `FileInfo`, without cloning the `data_info`.

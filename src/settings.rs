@@ -13,12 +13,14 @@ static SETTINGS_ONCE: Once = Once::new();
 #[derive(Resource, Default, Serialize, Deserialize)]
 pub struct Settings {
     pub game_path: String,
+    pub test_image_path: String,
 }
 
 impl Settings {
     pub const fn new() -> Self {
         Self {
             game_path: String::new(),
+            test_image_path: String::new(),
         }
     }
 
@@ -28,7 +30,7 @@ impl Settings {
         unsafe { &*addr_of!(SETTINGS) }
     }
 
-    fn load(&mut self) -> Result<()> {
+    pub fn load(&mut self) -> Result<()> {
         let file = fs::read("assets/settings.json")?;
         let reader = io::Cursor::new(file);
         *self = serde_json::from_reader(reader)?;

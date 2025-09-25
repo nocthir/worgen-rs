@@ -4,9 +4,9 @@
 
 //! Library entry point for worgen-rs, for benchmarks and tests.
 
+pub mod assets;
 pub mod camera;
 pub mod data;
 pub mod material;
 pub mod settings;
-pub mod ui;
-pub mod assets; // Experimental asset-based loaders (e.g., ModelAsset)
+pub mod ui; // Experimental asset-based loaders (e.g., ModelAsset)

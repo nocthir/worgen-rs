@@ -38,6 +38,7 @@ wow-mpq = { path = "../warcraft-rs/file-formats/archives/wow-mpq" }
 wow-wmo = { path = "../warcraft-rs/file-formats/graphics/wow-wmo" }
 wow-blp = { path = "../warcraft-rs/file-formats/graphics/wow-blp" }
 bevy_atmosphere = "0.13.0"
+thiserror = "2.0.16"
 
 [dev-dependencies]
 env_logger = "*"
