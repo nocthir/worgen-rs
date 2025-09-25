@@ -15,10 +15,10 @@ use std::f32;
 use bevy::prelude::*;
 
 use crate::{
-    assets::ModelAsset,
+    assets::ModelAssetLabel,
     data::{archive::*, file::*},
     settings,
-    ui::FileSelected,
+    ui::{self, FileSelected},
 };
 
 pub struct DataPlugin;
@@ -34,6 +34,7 @@ impl Plugin for DataPlugin {
                     settings::Settings::init,
                     archive::ArchiveMap::init,
                     file::FileArchiveMap::init,
+                    ui::select_default_model,
                 )
                     .chain(),
             )
@@ -49,6 +50,17 @@ impl Plugin for DataPlugin {
 #[derive(Component)]
 pub struct CurrentFile {
     path: String,
+}
+
+impl CurrentFile {
+    pub fn new(path: String) -> Self {
+        info!("Current file: {}", path);
+        Self { path }
+    }
+
+    pub fn get_asset_path(&self) -> String {
+        format!("archive://{}", self.path)
+    }
 }
 
 fn load_selected_file(
@@ -68,22 +80,20 @@ fn load_selected_file(
                 return Ok(());
             }
             // Remove the previous model
-            file_info_map.get_file_info_mut(&current_file.path)?.state =
-                file::FileInfoState::Unloaded;
             commands.entity(entity).despawn();
         }
+
+        let model = asset_server.load(ModelAssetLabel::Model.from_asset(event.get_asset_path()));
+        commands.spawn((CurrentFile::new(event.file_path.clone()), SceneRoot(model)));
+        return Ok(());
 
         let file_info = file_info_map.get_file_info_mut(&event.file_path)?;
         if file_info.state == file::FileInfoState::Unloaded {
             file_info.state = file::FileInfoState::Loading;
             match file_info.data_type {
                 file::DataType::Model => {
-                    let _ = asset_server.load::<ModelAsset>(file_info.get_asset_path());
-                    //load_file_tasks
-                    //    .tasks
-                    //    .push(model::loading_model_task(file::LoadFileTask::new(
-                    //        file_info, true,
-                    //    )));
+                    let model = asset_server.load(file_info.get_asset_path());
+                    commands.spawn(SceneRoot(model));
                 }
                 file::DataType::WorldModel => {
                     load_file_tasks

@@ -6,9 +6,8 @@ use bevy::prelude::*;
 use bevy_egui::*;
 
 use crate::{
-    assets::SelectedModelHandle,
     data::{archive, file},
-    settings::FileSettings,
+    settings::{self, FileSettings},
 };
 
 pub struct UiPlugin;
@@ -25,6 +24,17 @@ pub struct FileSelected {
     pub file_path: String,
 }
 
+impl FileSelected {
+    pub fn new(file_path: String) -> Self {
+        info!("File selected: {}", file_path);
+        Self { file_path }
+    }
+
+    pub fn get_asset_path(&self) -> String {
+        format!("archive://{}", self.file_path)
+    }
+}
+
 impl From<&FileSettings> for FileSelected {
     fn from(settings: &FileSettings) -> Self {
         Self {
@@ -33,26 +43,22 @@ impl From<&FileSettings> for FileSelected {
     }
 }
 
+pub fn select_default_model(mut event_writer: EventWriter<FileSelected>) {
+    let default_model_path = settings::Settings::get().test_model_path.clone();
+    event_writer.write(FileSelected::new(default_model_path));
+}
+
 fn data_info(
     mut contexts: EguiContexts,
     data_info: Res<archive::ArchiveInfoMap>,
     file_info_map: Res<file::FileInfoMap>,
     mut event_writer: EventWriter<FileSelected>,
-    mut selected: ResMut<SelectedModelHandle>,
-    asset_server: Res<AssetServer>,
 ) -> Result<()> {
     egui::Window::new("Info")
         .scroll([false, true])
         .show(contexts.ctx_mut()?, |ui| {
             for archive in data_info.map.values() {
-                archive_info(
-                    archive,
-                    &file_info_map,
-                    ui,
-                    &mut event_writer,
-                    &mut selected,
-                    &asset_server,
-                )?;
+                archive_info(archive, &file_info_map, ui, &mut event_writer)?;
             }
             Ok::<(), BevyError>(())
         });
@@ -64,8 +70,6 @@ fn archive_info(
     file_info_map: &file::FileInfoMap,
     ui: &mut egui::Ui,
     event_writer: &mut EventWriter<FileSelected>,
-    selected: &mut SelectedModelHandle,
-    asset_server: &AssetServer,
 ) -> Result<()> {
     let texture_paths = &archive.texture_paths;
     let model_paths = &archive.model_paths;
@@ -89,7 +93,7 @@ fn archive_info(
                 .show(ui, |ui| {
                     for path in model_paths {
                         let file_info = file_info_map.get_file_info(path)?;
-                        model_info(file_info, ui, event_writer, selected, asset_server);
+                        model_info(file_info, ui, event_writer);
                     }
                     Ok::<(), BevyError>(())
                 });
@@ -115,25 +119,17 @@ fn archive_info(
 
     Ok(())
 }
-fn select_test_model(mut sel: ResMut<SelectedModelHandle>, asset_server: Res<AssetServer>) {
-    sel.0 = Some(asset_server.load("HumanMale.m2")); // adjust path
-}
 
 fn model_info(
     file_info: &file::FileInfo,
     ui: &mut egui::Ui,
     event_writer: &mut EventWriter<FileSelected>,
-    selected: &mut SelectedModelHandle,
-    asset_server: &AssetServer,
 ) {
     let header = file_info_header(file_info, ui);
     if header.header_response.clicked() && !header.header_response.is_tooltip_open() {
-        //event_writer.write(FileSelected {
-        //    file_path: file_info.path.to_owned(),
-        //});
-        selected
-            .0
-            .replace(asset_server.load(file_info.get_asset_path()));
+        event_writer.write(FileSelected {
+            file_path: file_info.path.to_owned(),
+        });
     }
 }
 

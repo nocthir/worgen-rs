@@ -9,4 +9,4 @@ pub mod camera;
 pub mod data;
 pub mod material;
 pub mod settings;
-pub mod ui; // Experimental asset-based loaders (e.g., ModelAsset)
+pub mod ui;

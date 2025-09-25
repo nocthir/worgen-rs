@@ -10,7 +10,8 @@ use bevy_atmosphere::prelude::*;
 use bevy_atmosphere::settings::SkyboxCreationMode;
 use bevy_egui::EguiContexts;
 
-use crate::data::bundle;
+use crate::assets::ModelAsset;
+use crate::data::bundle::{self, BoundingSphere};
 
 /// Bundle to spawn our custom camera easily
 /// https://bevy-cheatbook.github.io/cookbook/pan-orbit-camera.html
@@ -102,7 +103,7 @@ impl Plugin for PanOrbitCameraPlugin {
             })
             .add_plugins(AtmospherePlugin)
             .add_systems(Startup, setup_camera)
-            .add_systems(Update, (focus_camera_on_event, pan_orbit_camera));
+            .add_systems(Update, (on_model_loaded, pan_orbit_camera));
     }
 }
 
@@ -301,17 +302,26 @@ pub struct FocusCamera {
     pub bounding_sphere: bundle::BoundingSphere,
 }
 
-fn focus_camera_on_event(
-    mut ev_focus: EventReader<FocusCamera>,
+fn on_model_loaded(
+    mut events: EventReader<AssetEvent<ModelAsset>>,
+    models: Res<Assets<ModelAsset>>,
+    q_camera: Query<(&mut PanOrbitState, &mut Transform)>,
+) {
+    if let Some(event) = events.read().last()
+        && let AssetEvent::LoadedWithDependencies { id } = event
+        && let Some(model) = models.get(*id)
+        && let Some(bounding_sphere) = model.bounding_sphere
+    {
+        focus_camera(bounding_sphere, q_camera);
+    }
+}
+
+fn focus_camera(
+    bounding_sphere: BoundingSphere,
     mut q_camera: Query<(&mut PanOrbitState, &mut Transform)>,
 ) {
-    // Only act on the most recent focus request in this frame
-    let Some(event) = ev_focus.read().last() else {
-        return;
-    };
-
-    let center = event.bounding_sphere.center;
-    let mut radius = event.bounding_sphere.radius;
+    let center = bounding_sphere.center;
+    let mut radius = bounding_sphere.radius;
     // Clamp to a minimal reasonable radius
     let min_radius = 0.5_f32;
     let comfort = 2.5_f32;

@@ -51,6 +51,6 @@ impl AssetLoader for ImageLoader {
     }
 
     fn extensions(&self) -> &[&str] {
-        &["blp"]
+        &["blp", "BLP"]
     }
 }

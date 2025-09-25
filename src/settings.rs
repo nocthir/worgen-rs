@@ -14,6 +14,7 @@ static SETTINGS_ONCE: Once = Once::new();
 pub struct Settings {
     pub game_path: String,
     pub test_image_path: String,
+    pub test_model_path: String,
 }
 
 impl Settings {
@@ -21,6 +22,7 @@ impl Settings {
         Self {
             game_path: String::new(),
             test_image_path: String::new(),
+            test_model_path: String::new(),
         }
     }
 

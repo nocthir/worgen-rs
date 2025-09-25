@@ -19,8 +19,7 @@ pub struct ArchiveAssetReader {}
 impl ArchiveAssetReader {
     pub fn read_file<P: AsRef<Path>>(&self, file_path: P) -> Result<Vec<u8>> {
         let file_name = file_path.as_ref().to_str().ok_or("Invalid file path")?;
-        let archive_file =
-            FileArchiveMap::get().get_archive_path(&file_path.as_ref().to_string_lossy())?;
+        let archive_file = FileArchiveMap::get().get_archive_path(file_name)?;
         let mut archive = archive::get_archive!(archive_file)?;
         Ok(archive.read_file(file_name)?)
     }

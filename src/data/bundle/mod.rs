@@ -4,11 +4,7 @@
 
 use bevy::{asset::*, pbr::ExtendedMaterial, prelude::*, render::mesh::*};
 
-use crate::{
-    assets::{CustomBundle, ModelBundle},
-    data::*,
-    material::TerrainMaterial,
-};
+use crate::{data::*, material::TerrainMaterial};
 
 mod material_bundle;
 mod model_bundle;
@@ -21,6 +17,31 @@ pub use model_bundle::*;
 pub use texture_bundle::*;
 pub use world_map_bundle::*;
 pub use world_model_bundle::*;
+
+pub trait CustomBundle: Bundle {
+    fn get_transform(&self) -> &Transform;
+    fn get_transform_mut(&mut self) -> &mut Transform;
+    fn get_mesh(&self) -> &Mesh3d;
+}
+
+#[derive(Bundle, Clone)]
+pub struct ModelBundle {
+    pub mesh: Mesh3d,
+    pub material: MeshMaterial3d<StandardMaterial>,
+    pub transform: Transform,
+}
+
+impl CustomBundle for ModelBundle {
+    fn get_transform(&self) -> &Transform {
+        &self.transform
+    }
+    fn get_transform_mut(&mut self) -> &mut Transform {
+        &mut self.transform
+    }
+    fn get_mesh(&self) -> &Mesh3d {
+        &self.mesh
+    }
+}
 
 #[derive(Bundle, Clone)]
 pub struct TerrainBundle {
