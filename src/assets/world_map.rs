@@ -678,25 +678,57 @@ pub struct RootAabb {
 
 impl RootAabb {
     fn new(meshes: &[WorldMapMesh]) -> Self {
-        let mut ret = Self::default();
-        for mesh in meshes {
-            if let Some(mut mesh_aabb) = mesh.compute_aabb() {
-                mesh_aabb.transform(&mesh.transform);
-                ret.extend(&mesh_aabb);
+        let mut iter = meshes.iter().filter_map(|mesh| {
+            let mut aabb = mesh.compute_aabb()?;
+            aabb.transform(&mesh.transform);
+            Some(aabb)
+        });
+
+        if let Some(first) = iter.next() {
+            let mut acc = first;
+            for next in iter {
+                acc.extend(&next);
             }
+            acc
+        } else {
+            // No meshes produced an AABB
+            Self::default()
         }
-        ret
     }
 
     fn transform(&mut self, transform: &Transform) {
         let matrix = transform.compute_matrix();
-        self.aabb.center = matrix.transform_point3(self.aabb.center.into()).into();
-        self.aabb.half_extents = matrix
-            .transform_vector3(self.aabb.half_extents.into())
-            .into();
+        let (scale, rotation, _translation) = matrix.to_scale_rotation_translation();
+
+        // Original data
+        let center = Vec3::from(self.aabb.center);
+        let half = Vec3::from(self.aabb.half_extents);
+
+        // Build linear part (rotation * scale)
+        let rot_mat = Mat3::from_quat(rotation);
+        let linear = rot_mat * Mat3::from_diagonal(scale);
+
+        // New center
+        let new_center = (matrix * center.extend(1.0)).truncate();
+
+        // New half extents = abs(linear) * half (component-wise matrix-vector mult)
+        let m = linear.to_cols_array_2d(); // [[m00,m01,m02],[m10,...],...]
+        let abs_linear = Mat3::from_cols(
+            Vec3::new(m[0][0].abs(), m[0][1].abs(), m[0][2].abs()),
+            Vec3::new(m[1][0].abs(), m[1][1].abs(), m[1][2].abs()),
+            Vec3::new(m[2][0].abs(), m[2][1].abs(), m[2][2].abs()),
+        );
+        let new_half = abs_linear * half;
+
+        self.aabb.center = new_center.into();
+        self.aabb.half_extents = new_half.into();
     }
 
     fn extend(&mut self, b: &RootAabb) {
+        if self.aabb.half_extents == Vec3::ZERO.into() {
+            self.aabb = b.aabb;
+            return;
+        }
         let min_a = self.aabb.min();
         let max_a = self.aabb.max();
         let min_b = b.aabb.min();
