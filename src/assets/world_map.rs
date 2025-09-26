@@ -147,12 +147,10 @@ impl WorldMapAssetLoader {
         let images = Self::load_images(&world_map, load_context).await?;
         let terrain = Self::load_terrain(&world_map).await;
         let aabb = RootAabb::new(&terrain);
-        let models = Self::load_models(&world_map, load_context).await?;
-        let world_models = Self::load_world_models(&world_map, load_context).await?;
+        let models = Self::load_models(&world_map, load_context);
+        let world_models = Self::load_world_models(&world_map, load_context);
 
         let terrain = Self::process_terrain(&world_map, terrain, &images, load_context)?;
-        let models = Self::process_models(models, load_context);
-        let world_models = Self::process_world_models(world_models, load_context)?;
 
         let mut transform = Transform::default();
         transform.rotate_local_x(-std::f32::consts::FRAC_PI_2);
@@ -357,7 +355,7 @@ impl WorldMapAssetLoader {
             let z = z_offset + z_suboffset;
 
             static UV_SCALE: f32 = 8.0;
-            tex_coords[i] = [x / UV_SCALE, z / UV_SCALE];
+            tex_coords[i] = [(1.0 - x / UV_SCALE), (1.0 - z / UV_SCALE)];
             positions[i] = [-x, chunk.height_map[i], -z];
             normals[i] = from_normalized_vec3_u8(chunk.normals[i]);
         }
@@ -383,7 +381,7 @@ impl WorldMapAssetLoader {
         static CHUNK_SCALE: f32 = 100.0 / 24.0;
 
         // 1600 feet -> 533.33 yards
-        static MAP_SIZE: f32 = 1600.0 * 32.0 / 3.0; // 17066.66
+        //static MAP_SIZE: f32 = 1600.0 * 32.0 / 3.0; // 17066.66
 
         let x = chunk.position[0];
         let y = chunk.position[1];
@@ -488,73 +486,42 @@ impl WorldMapAssetLoader {
         )
     }
 
-    async fn load_models(
+    fn load_models(
         world_map: &adt::Adt,
         load_context: &mut LoadContext<'_>,
-    ) -> Result<Vec<ModelAsset>> {
-        let mut models = Vec::new();
-        for model_path in Self::get_model_paths(world_map) {
-            let model = ModelAssetLoader::load_path(&model_path, load_context).await?;
-            models.push(model);
-        }
-        Ok(models)
-    }
-
-    fn process_models(
-        models: Vec<ModelAsset>,
-        load_context: &mut LoadContext<'_>,
     ) -> Vec<Handle<ModelAsset>> {
-        let mut handles = Vec::new();
-        for (index, model) in models.into_iter().enumerate() {
-            let handle =
-                load_context.add_labeled_asset(WorldMapAssetLabel::Model(index).to_string(), model);
-            handles.push(handle);
+        let mut models = Vec::new();
+        for model_path in Self::get_model_asset_paths(world_map) {
+            models.push(load_context.load(&model_path));
         }
-        handles
+        models
     }
 
-    fn get_model_paths(world_map: &adt::Adt) -> Vec<String> {
+    fn get_model_asset_paths(world_map: &adt::Adt) -> Vec<String> {
         let mut models = Vec::new();
         if let Some(mmdx) = &world_map.mmdx {
             models.extend(
                 mmdx.filenames
                     .iter()
                     .filter(|f| f.ends_with(".m2"))
-                    .cloned(),
+                    .map(|f| format!("archive://{}", f)),
             );
         }
         models
     }
 
-    async fn load_world_models(
+    fn load_world_models(
         world_map: &adt::Adt,
         load_context: &mut LoadContext<'_>,
-    ) -> Result<Vec<WorldModelAsset>> {
+    ) -> Vec<Handle<WorldModelAsset>> {
         let mut world_models = Vec::new();
-        for world_model_path in Self::get_world_model_paths(world_map) {
-            let world_model =
-                WorldModelAssetLoader::load_path(&world_model_path, load_context).await?;
-            world_models.push(world_model);
+        for world_model_path in Self::get_world_model_asset_paths(world_map) {
+            world_models.push(load_context.load(&world_model_path));
         }
-        Ok(world_models)
+        world_models
     }
 
-    fn process_world_models(
-        world_models: Vec<WorldModelAsset>,
-        load_context: &mut LoadContext<'_>,
-    ) -> Result<Vec<Handle<WorldModelAsset>>> {
-        let mut handles = Vec::new();
-        for (index, world_model) in world_models.into_iter().enumerate() {
-            let handle = load_context.add_labeled_asset(
-                WorldMapAssetLabel::WorldModel(index).to_string(),
-                world_model,
-            );
-            handles.push(handle);
-        }
-        Ok(handles)
-    }
-
-    fn get_world_model_paths(world_map: &adt::Adt) -> Vec<String> {
+    fn get_world_model_asset_paths(world_map: &adt::Adt) -> Vec<String> {
         let mut paths = Vec::new();
         if let Some(modf) = &world_map.modf
             && let Some(mwmo) = &world_map.mwmo
@@ -562,7 +529,7 @@ impl WorldMapAssetLoader {
             let filenames = &mwmo.filenames;
             for model in &modf.models {
                 if let Some(filename) = filenames.get(model.name_id as usize) {
-                    paths.push(filename.clone());
+                    paths.push(format!("archive://{}", filename));
                 }
             }
         }

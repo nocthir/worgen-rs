@@ -241,7 +241,7 @@ impl WorldModelAssetLoader {
     }
 
     fn get_image_asset_paths(root: &wmo::root_parser::WmoRoot) -> Vec<String> {
-        root.textures
+        Self::get_image_paths(root)
             .iter()
             .map(|texture_path| format!("archive://{}", texture_path))
             .collect()

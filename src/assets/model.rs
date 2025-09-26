@@ -134,7 +134,7 @@ impl ModelAssetLoader {
         let mut cursor = io::Cursor::new(&bytes);
         let model = m2::M2Model::parse(&mut cursor)?;
 
-        let images = Self::load_images(&model, load_context).await?;
+        let images = Self::load_images(&model, load_context);
         let mut materials = Vec::new();
         let mut meshes = Vec::new();
         Self::load_meshes(&model, &bytes, &images, &mut meshes, &mut materials)?;
@@ -177,19 +177,13 @@ impl ModelAssetLoader {
         })
     }
 
-    async fn load_images(
-        model: &m2::M2Model,
-        load_context: &mut LoadContext<'_>,
-    ) -> Result<Vec<Handle<Image>>> {
+    fn load_images(model: &m2::M2Model, load_context: &mut LoadContext<'_>) -> Vec<Handle<Image>> {
         let mut handles = Vec::new();
-        for (index, texture) in model.textures.iter().enumerate() {
-            let image_path = Self::get_image_path(texture);
-            let image = ImageLoader::load_path(&image_path, load_context).await?;
-            let image_handle =
-                load_context.add_labeled_asset(ModelAssetLabel::Image(index).to_string(), image);
-            handles.push(image_handle);
+        for texture in &model.textures {
+            let image_path = Self::get_image_asset_path(texture);
+            handles.push(load_context.load(image_path));
         }
-        Ok(handles)
+        handles
     }
 
     fn get_image_path(texture: &m2::chunks::texture::M2Texture) -> String {
@@ -202,6 +196,10 @@ impl ModelAssetLoader {
             return Settings::get().test_image_path.clone();
         }
         filename.to_string()
+    }
+
+    fn get_image_asset_path(texture: &m2::chunks::texture::M2Texture) -> String {
+        format!("archive://{}", Self::get_image_path(texture))
     }
 
     fn load_meshes(
