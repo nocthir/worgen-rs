@@ -2,7 +2,12 @@
 // Author: Nocthir <nocthir@proton.me>
 // SPDX-License-Identifier: MIT or Apache-2.0
 
-use bevy::{asset::RecursiveDependencyLoadState, prelude::*};
+use bevy::{
+    asset::RecursiveDependencyLoadState,
+    prelude::*,
+    render::{camera::Viewport, view::RenderLayers},
+    window::PrimaryWindow,
+};
 use bevy_egui::*;
 
 use crate::{
@@ -15,8 +20,27 @@ pub struct UiPlugin;
 impl Plugin for UiPlugin {
     fn build(&self, app: &mut App) {
         app.add_event::<FileSelected>()
+            .add_systems(Startup, setup_ui)
             .add_systems(EguiPrimaryContextPass, data_info);
     }
+}
+
+fn setup_ui(mut commands: Commands, mut egui_global_settings: ResMut<EguiGlobalSettings>) {
+    // Disable the automatic creation of a primary context to set it up manually for the camera we need.
+    egui_global_settings.auto_create_primary_context = false;
+
+    // Egui camera.
+    commands.spawn((
+        // The `PrimaryEguiContext` component requires everything needed to render a primary context.
+        PrimaryEguiContext,
+        Camera2d,
+        // Setting RenderLayers to none makes sure we won't render anything apart from the UI.
+        RenderLayers::none(),
+        Camera {
+            order: 1,
+            ..default()
+        },
+    ));
 }
 
 #[derive(Event)]
@@ -54,15 +78,19 @@ fn data_info(
     file_info_map: Res<file::FileInfoMap>,
     mut event_writer: EventWriter<FileSelected>,
     asset_server: Res<AssetServer>,
+    // Window + camera for viewport adjustment so 3D scene doesn't render under panel
+    window: Single<&Window, With<PrimaryWindow>>,
+    mut camera: Single<&mut Camera, Without<EguiContext>>,
 ) -> Result<()> {
+    // Acquire egui context once
+    let ctx = contexts.ctx_mut()?;
+
     // Left side panel replacing the floating "Info" window.
-    egui::SidePanel::left("info_panel")
+    let panel_response = egui::SidePanel::left("info_panel")
         .resizable(true)
         .min_width(220.0)
         .default_width(260.0)
-        .show(contexts.ctx_mut()?, |ui| {
-            ui.heading("Info");
-            ui.separator();
+        .show(ctx, |ui| {
             // Single scroll area with both vertical and horizontal scrolling so
             // the horizontal scrollbar is rendered at the bottom of the panel.
             egui::ScrollArea::both()
@@ -82,8 +110,33 @@ fn data_info(
                     }
                 });
         });
+
+    // Adjust world camera viewport so scene starts to the right of the panel (avoid rendering beneath UI)
+    let left_width_logical = panel_response.response.rect.width();
+    let scale = window.scale_factor();
+    let left_phys = (left_width_logical * scale)
+        .round()
+        .clamp(0.0, window.physical_width() as f32) as u32;
+    let pos = UVec2::new(left_phys, 0);
+    let size = UVec2::new(window.physical_width(), window.physical_height()) - pos;
+    // Only update if changed to avoid unnecessary render graph invalidation.
+    let needs_update = match &camera.viewport {
+        Some(vp) => vp.physical_position != pos || vp.physical_size != size,
+        None => true,
+    };
+    if needs_update {
+        camera.viewport = Some(Viewport {
+            physical_position: pos,
+            physical_size: size,
+            ..default()
+        });
+    }
+
     Ok(())
 }
+
+// Viewport adjustment removed: rendering under the panel is acceptable for now; if needed later,
+// implement with a dedicated scene camera and separate UI camera to avoid shifting egui.
 
 fn archive_info(
     archive: &archive::ArchiveInfo,
