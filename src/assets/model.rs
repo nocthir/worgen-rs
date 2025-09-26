@@ -24,6 +24,7 @@ use bevy::asset::{AssetLoader, LoadContext, io::Reader};
 use bevy::asset::{AssetPath, ReadAssetBytesError, RenderAssetUsages};
 use bevy::prelude::*;
 use bevy::render::mesh::*;
+use bevy::tasks::IoTaskPool;
 use thiserror::Error;
 use wow_m2 as m2;
 
@@ -182,26 +183,30 @@ impl ModelAssetLoader {
         load_context: &mut LoadContext<'_>,
     ) -> Result<Vec<Handle<Image>>> {
         let mut handles = Vec::new();
-        for (index, texture) in model.textures.iter().enumerate() {
-            let texture_path = Self::get_image_asset_path(texture);
-            let image = ImageLoader::load_image(&texture_path, load_context).await?;
-            let image_handle =
-                load_context.add_labeled_asset(ModelAssetLabel::Image(index).to_string(), image);
-            handles.push(image_handle);
-        }
+        IoTaskPool::get()
+            .scope(|_| {
+                model.textures.iter().for_each(|texture| {
+                    Self::get_image_path(texture);
+                })
+            })
+            .into_iter()
+            .for_each(|texture_path: String| {
+                let image_handle = load_context.load(texture_path);
+                handles.push(image_handle);
+            });
         Ok(handles)
     }
 
-    fn get_image_asset_path(texture: &m2::chunks::texture::M2Texture) -> String {
+    fn get_image_path(texture: &m2::chunks::texture::M2Texture) -> String {
         if texture.texture_type != m2::chunks::M2TextureType::Hardcoded {
             // Ignore non-hardcoded textures for now.
-            return format!("archive://{}", Settings::get().test_image_path.clone());
+            return Settings::get().test_image_path.clone();
         }
         let filename = texture.filename.string.to_string_lossy();
         if filename.is_empty() {
-            return format!("archive://{}", Settings::get().test_image_path.clone());
+            return Settings::get().test_image_path.clone();
         }
-        format!("archive://{}", filename)
+        filename.to_string()
     }
 
     fn load_meshes(

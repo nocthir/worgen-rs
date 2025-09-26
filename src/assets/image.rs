@@ -47,11 +47,19 @@ impl AssetLoader for ImageLoader {
 }
 
 impl ImageLoader {
-    pub async fn load_image(
-        path: &str,
+    pub async fn load_path<S: Into<String>>(
+        path: S,
         load_context: &mut LoadContext<'_>,
     ) -> Result<Image, ImageLoaderError> {
-        let bytes = load_context.read_asset_bytes(path).await?;
+        let asset_path = format!("archive://{}", path.into());
+        Self::load_image(&asset_path, load_context).await
+    }
+
+    pub async fn load_image(
+        asset_path: &str,
+        load_context: &mut LoadContext<'_>,
+    ) -> Result<Image, ImageLoaderError> {
+        let bytes = load_context.read_asset_bytes(asset_path).await?;
         Self::load_image_impl(&bytes).await
     }
 
