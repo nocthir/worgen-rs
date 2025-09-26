@@ -7,7 +7,6 @@ use std::f32::consts::{FRAC_PI_2, PI, TAU};
 use bevy::input::mouse::{MouseMotion, MouseScrollUnit, MouseWheel};
 use bevy::prelude::*;
 use bevy::render::primitives::Aabb;
-use bevy_atmosphere::prelude::*;
 use bevy_egui::EguiContexts;
 
 use crate::assets::root_aabb::RootAabb;
@@ -17,7 +16,6 @@ use crate::assets::root_aabb::RootAabb;
 #[derive(Bundle, Default)]
 pub struct PanOrbitCameraBundle {
     pub camera: Camera3d,
-    pub atmosphere: AtmosphereCamera,
     pub state: PanOrbitState,
     pub settings: PanOrbitSettings,
 }
