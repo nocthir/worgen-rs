@@ -5,16 +5,19 @@
 pub mod archive;
 pub mod image;
 pub mod material;
+pub mod mesh;
 pub mod model;
+pub mod root_aabb;
 pub mod world_map;
 pub mod world_model;
 
-pub use archive::*;
-pub use image::*;
-pub use material::*;
-pub use model::*;
-pub use world_map::*;
-pub use world_model::*;
+use image::*;
+use material::*;
+use mesh::*;
+use model::*;
+use root_aabb::*;
+use world_map::*;
+use world_model::*;
 
 use bevy::prelude::*;
 

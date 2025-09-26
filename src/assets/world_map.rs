@@ -1,6 +1,7 @@
 // Copyright © 2025
 // Author: Nocthir <nocthir@proton.me>
 // SPDX-License-Identifier: MIT or Apache-2.0
+
 use std::io;
 
 use anyhow::Result;
@@ -9,7 +10,6 @@ use bevy::asset::{AssetPath, RenderAssetUsages};
 use bevy::pbr::ExtendedMaterial;
 use bevy::prelude::*;
 use bevy::render::mesh::*;
-use bevy::render::primitives::Aabb;
 use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
 use thiserror::Error;
 use wow_adt as adt;
@@ -101,20 +101,6 @@ pub struct WorldMapAsset {
     pub aabb: RootAabb,
 }
 
-#[derive(Debug)]
-pub struct WorldMapMesh {
-    pub mesh: Mesh,
-    pub transform: Transform,
-}
-
-impl WorldMapMesh {
-    pub fn compute_aabb(&self) -> Option<RootAabb> {
-        Some(RootAabb {
-            aabb: self.mesh.compute_aabb()?,
-        })
-    }
-}
-
 #[derive(Bundle, Clone, Debug)]
 pub struct TerrainBundle {
     pub mesh: Mesh3d,
@@ -146,7 +132,7 @@ impl WorldMapAssetLoader {
         Self::fix_model_extensions(&mut world_map);
         let images = Self::load_images(&world_map, load_context).await?;
         let terrain = Self::load_terrain(&world_map).await;
-        let aabb = RootAabb::new(&terrain);
+        let aabb = RootAabb::from_transformed_meshes(terrain.iter());
         let models = Self::load_models(&world_map, load_context);
         let world_models = Self::load_world_models(&world_map, load_context);
 
@@ -217,7 +203,7 @@ impl WorldMapAssetLoader {
             .collect()
     }
 
-    async fn load_terrain(world_map: &adt::Adt) -> Vec<WorldMapMesh> {
+    async fn load_terrain(world_map: &adt::Adt) -> Vec<TransformMesh> {
         let mut meshes = Vec::new();
         for chunk in &world_map.mcnk_chunks {
             let mesh = Self::create_mesh_from_world_map_chunk(chunk);
@@ -228,7 +214,7 @@ impl WorldMapAssetLoader {
 
     fn process_terrain(
         world_map: &adt::Adt,
-        meshes: Vec<WorldMapMesh>,
+        meshes: Vec<TransformMesh>,
         images: &[Handle<Image>],
         load_context: &mut LoadContext<'_>,
     ) -> Result<Vec<TerrainBundle>> {
@@ -328,7 +314,7 @@ impl WorldMapAssetLoader {
     ///   per quad using the middle (odd-row) vertex as the center. The triangles are emitted
     ///   with counter-clockwise (CCW) winding so front faces are consistent with the engine's
     ///   default.
-    pub fn create_mesh_from_world_map_chunk(chunk: &adt::McnkChunk) -> WorldMapMesh {
+    pub fn create_mesh_from_world_map_chunk(chunk: &adt::McnkChunk) -> TransformMesh {
         static VERTEX_COUNT: usize = 145; // 8*8 + 9*9
         let mut positions = vec![[0.0, 0.0, 0.0]; VERTEX_COUNT];
         let mut normals = vec![[0.0, 0.0, 0.0]; VERTEX_COUNT];
@@ -394,7 +380,7 @@ impl WorldMapAssetLoader {
         //transform.rotate_local_y(std::f32::consts::PI);
         //transform.rotate_local_x(-std::f32::consts::FRAC_PI_2);
 
-        WorldMapMesh { mesh, transform }
+        TransformMesh { mesh, transform }
     }
 
     /// Generate the triangle index buffer (CCW) for a 145-vertex chunk:
@@ -638,76 +624,6 @@ impl CombinedAlphaMap {
             TextureFormat::Rgba8Unorm,
             RenderAssetUsages::RENDER_WORLD,
         )
-    }
-}
-
-#[derive(Component, Debug, Clone, Copy, Default, Reflect)]
-#[reflect(Component)]
-pub struct RootAabb {
-    pub aabb: Aabb,
-}
-
-impl RootAabb {
-    fn new(meshes: &[WorldMapMesh]) -> Self {
-        let mut iter = meshes.iter().filter_map(|mesh| {
-            let mut aabb = mesh.compute_aabb()?;
-            aabb.transform(&mesh.transform);
-            Some(aabb)
-        });
-
-        if let Some(first) = iter.next() {
-            let mut acc = first;
-            for next in iter {
-                acc.extend(&next);
-            }
-            acc
-        } else {
-            // No meshes produced an AABB
-            Self::default()
-        }
-    }
-
-    fn transform(&mut self, transform: &Transform) {
-        let matrix = transform.compute_matrix();
-        let (scale, rotation, _translation) = matrix.to_scale_rotation_translation();
-
-        // Original data
-        let center = Vec3::from(self.aabb.center);
-        let half = Vec3::from(self.aabb.half_extents);
-
-        // Build linear part (rotation * scale)
-        let rot_mat = Mat3::from_quat(rotation);
-        let linear = rot_mat * Mat3::from_diagonal(scale);
-
-        // New center
-        let new_center = (matrix * center.extend(1.0)).truncate();
-
-        // New half extents = abs(linear) * half (component-wise matrix-vector mult)
-        let m = linear.to_cols_array_2d(); // [[m00,m01,m02],[m10,...],...]
-        let abs_linear = Mat3::from_cols(
-            Vec3::new(m[0][0].abs(), m[0][1].abs(), m[0][2].abs()),
-            Vec3::new(m[1][0].abs(), m[1][1].abs(), m[1][2].abs()),
-            Vec3::new(m[2][0].abs(), m[2][1].abs(), m[2][2].abs()),
-        );
-        let new_half = abs_linear * half;
-
-        self.aabb.center = new_center.into();
-        self.aabb.half_extents = new_half.into();
-    }
-
-    fn extend(&mut self, b: &RootAabb) {
-        if self.aabb.half_extents == Vec3::ZERO.into() {
-            self.aabb = b.aabb;
-            return;
-        }
-        let min_a = self.aabb.min();
-        let max_a = self.aabb.max();
-        let min_b = b.aabb.min();
-        let max_b = b.aabb.max();
-        let min = min_a.min(min_b);
-        let max = max_a.max(max_b);
-        self.aabb.center = (min + max) * 0.5;
-        self.aabb.half_extents = (max - min) * 0.5;
     }
 }
 

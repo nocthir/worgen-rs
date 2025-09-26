@@ -100,6 +100,8 @@ pub struct ModelAsset {
     pub meshes: Vec<Handle<Mesh>>,
     /// Generated material handles after preparation.
     pub materials: Vec<Handle<StandardMaterial>>,
+    /// Axis-aligned bounding box of the model's meshes.
+    pub aabb: RootAabb,
 }
 
 #[derive(Default)]
@@ -143,6 +145,8 @@ impl ModelAssetLoader {
         transform.rotate_local_x(-std::f32::consts::FRAC_PI_2);
         transform.rotate_local_z(-std::f32::consts::FRAC_PI_2);
 
+        let aabb = RootAabb::from_meshes_with_transform(meshes.iter(), &transform);
+
         let meshes: Vec<Handle<Mesh>> = meshes
             .into_iter()
             .enumerate()
@@ -157,7 +161,7 @@ impl ModelAssetLoader {
             .collect();
 
         let mut world = World::default();
-        let mut root = world.spawn((transform, Visibility::default()));
+        let mut root = world.spawn((transform, Visibility::default(), aabb));
         for i in 0..meshes.len() {
             root.with_child((
                 Mesh3d(meshes[i].clone()),
@@ -174,6 +178,7 @@ impl ModelAssetLoader {
             images,
             meshes,
             materials,
+            aabb,
         })
     }
 

@@ -10,8 +10,7 @@ use bevy::prelude::*;
 use bevy::tasks;
 use wow_mpq as mpq;
 
-use crate::assets;
-use crate::assets::{model, world_map, world_model};
+use crate::assets::*;
 
 #[derive(Default, Resource)]
 pub struct ArchiveInfoMap {
@@ -103,7 +102,7 @@ pub struct LoadArchiveTasks {
 
 pub fn start_loading(mut commands: Commands) -> Result<()> {
     let mut tasks = LoadArchiveTasks::default();
-    for archive_path in assets::get_archive_paths()? {
+    for archive_path in archive::get_archive_paths()? {
         let task = tasks::IoTaskPool::get().spawn(load_archive(archive_path.clone()));
         tasks.tasks.push(task);
     }

@@ -10,8 +10,7 @@ use std::{
 use bevy::{asset::RecursiveDependencyLoadState, prelude::*};
 use wow_mpq as mpq;
 
-use crate::assets;
-use crate::assets::{ModelAsset, WorldMapAsset, WorldModelAsset};
+use crate::assets::*;
 
 pub struct FileInfo {
     pub path: String,
@@ -49,9 +48,9 @@ impl FileInfo {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DataType {
     Texture(Handle<Image>),
-    Model(Handle<ModelAsset>),
-    WorldModel(Handle<WorldModelAsset>),
-    WorldMap(Handle<WorldMapAsset>),
+    Model(Handle<model::ModelAsset>),
+    WorldModel(Handle<world_model::WorldModelAsset>),
+    WorldMap(Handle<world_map::WorldMapAsset>),
     Unknown,
 }
 
@@ -127,7 +126,7 @@ pub struct FileInfoMap {
 impl FileInfoMap {
     pub fn new() -> Result<Self> {
         let mut map = HashMap::new();
-        for archive_path in assets::get_archive_paths()? {
+        for archive_path in archive::get_archive_paths()? {
             let mut archive = mpq::Archive::open(&archive_path)?;
             for file_path in archive.list()? {
                 let info = FileInfo::new(file_path.name.clone(), &archive_path);

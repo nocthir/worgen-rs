@@ -7,7 +7,7 @@ pub mod file;
 
 use bevy::prelude::*;
 
-use crate::{assets::ModelAssetLabel, data::archive::*, ui};
+use crate::{assets::*, data::archive::*, ui};
 
 pub struct DataPlugin;
 
@@ -65,7 +65,8 @@ fn load_selected_file(
         file_map
             .get_file_mut(&event.file_path)?
             .load(&mut asset_server);
-        let model = asset_server.load(ModelAssetLabel::Root.from_asset(event.get_asset_path()));
+        let model =
+            asset_server.load(model::ModelAssetLabel::Root.from_asset(event.get_asset_path()));
         commands.spawn((CurrentFile::new(event.file_path.clone()), SceneRoot(model)));
     }
     Ok(())

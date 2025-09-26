@@ -87,6 +87,8 @@ pub struct WorldModelAsset {
     pub meshes: Vec<Handle<Mesh>>,
     /// Generated material handles after preparation.
     pub materials: Vec<Handle<StandardMaterial>>,
+    /// Axis-aligned bounding box of the model in its local space.
+    pub aabb: RootAabb,
 }
 
 #[derive(Debug)]
@@ -133,9 +135,16 @@ impl WorldModelAssetLoader {
         let images = Self::load_images(&root, load_context).await?;
         let materials = Self::load_materials(&root, &images, load_context);
         let default_material = Self::create_default_material(load_context);
-        let meshes = Self::load_meshes(&groups, &materials, default_material);
+        let world_meshes = Self::load_meshes(&groups, &materials, default_material);
 
-        let mesh_handles: Vec<Handle<Mesh>> = meshes
+        let mut transform = Transform::default();
+        transform.rotate_local_x(-std::f32::consts::FRAC_PI_2);
+        transform.rotate_local_z(-std::f32::consts::FRAC_PI_2);
+
+        let meshes = world_meshes.iter().map(|world_mesh| &world_mesh.mesh);
+        let aabb = RootAabb::from_meshes_with_transform(meshes, &transform);
+
+        let mesh_handles: Vec<Handle<Mesh>> = world_meshes
             .iter()
             .enumerate()
             .map(|(i, m)| {
@@ -144,15 +153,12 @@ impl WorldModelAssetLoader {
             })
             .collect();
 
-        let mut transform = Transform::default();
-        transform.rotate_local_x(-std::f32::consts::FRAC_PI_2);
-        transform.rotate_local_z(-std::f32::consts::FRAC_PI_2);
         let mut world = World::default();
-        let mut root = world.spawn((transform, Visibility::default()));
-        for mesh_index in 0..meshes.len() {
+        let mut root = world.spawn((transform, Visibility::default(), aabb));
+        for mesh_index in 0..world_meshes.len() {
             root.with_child((
                 Mesh3d(mesh_handles[mesh_index].clone()),
-                MeshMaterial3d(meshes[mesh_index].material.clone()),
+                MeshMaterial3d(world_meshes[mesh_index].material.clone()),
             ));
         }
         let scene_loader = load_context.begin_labeled_asset();
@@ -165,6 +171,7 @@ impl WorldModelAssetLoader {
             images,
             meshes: mesh_handles,
             materials,
+            aabb,
         })
     }
 

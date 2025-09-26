@@ -10,7 +10,7 @@ use bevy::render::primitives::Aabb;
 use bevy_atmosphere::prelude::*;
 use bevy_egui::EguiContexts;
 
-use crate::assets::RootAabb;
+use crate::assets::root_aabb::RootAabb;
 
 /// Bundle to spawn our custom camera easily
 /// https://bevy-cheatbook.github.io/cookbook/pan-orbit-camera.html
@@ -95,14 +95,9 @@ pub struct PanOrbitCameraPlugin;
 
 impl Plugin for PanOrbitCameraPlugin {
     fn build(&self, app: &mut App) {
-        app
-            //.insert_resource(AtmosphereSettings {
-            //    skybox_creation_mode: SkyboxCreationMode::FromSpecifiedFar(20000.0),
-            //    ..default()
-            //})
-            //.add_plugins(AtmospherePlugin)
-            .add_systems(Startup, setup_camera)
-            .add_systems(Update, (on_model_loaded, pan_orbit_camera));
+        app.add_systems(Startup, setup_camera)
+            .add_systems(PreUpdate, on_model_loaded)
+            .add_systems(Update, pan_orbit_camera);
     }
 }
 
