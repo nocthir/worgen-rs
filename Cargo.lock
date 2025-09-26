@@ -648,30 +648,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "bevy_atmosphere"
-version = "0.13.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "961ca082cd26a7063a2c641bd349745ffc160b3ab60d0d063a159c4e585fb445"
-dependencies = [
- "bevy",
- "bevy_atmosphere_macros",
- "cfg-if",
-]
-
-[[package]]
-name = "bevy_atmosphere_macros"
-version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "116aa3996275b0e6b88f5aa52e492fd0328c694be0eb70906b2befb6751de894"
-dependencies = [
- "bevy_macro_utils",
- "proc-macro-crate",
- "proc-macro2",
- "quote",
- "syn 2.0.106",
-]
-
-[[package]]
 name = "bevy_audio"
 version = "0.16.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7213,12 +7189,11 @@ checksum = "f17a85883d4e6d00e8a97c586de764dabcc06133f7f1d55dce5cdc070ad7fe59"
 
 [[package]]
 name = "worgen-rs"
-version = "0.2.2"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "bevy",
  "bevy-inspector-egui",
- "bevy_atmosphere",
  "bevy_egui",
  "criterion",
  "env_logger",
@@ -7235,6 +7210,7 @@ dependencies = [
 [[package]]
 name = "wow-adt"
 version = "0.5.0"
+source = "git+https://github.com/nocthir/warcraft-rs?rev=cb62481fe71ea1879468bca76cabff3b735d04b4#cb62481fe71ea1879468bca76cabff3b735d04b4"
 dependencies = [
  "log",
  "thiserror 2.0.16",
@@ -7243,6 +7219,7 @@ dependencies = [
 [[package]]
 name = "wow-blp"
 version = "0.5.0"
+source = "git+https://github.com/nocthir/warcraft-rs?rev=cb62481fe71ea1879468bca76cabff3b735d04b4#cb62481fe71ea1879468bca76cabff3b735d04b4"
 dependencies = [
  "bytes",
  "color_quant",
@@ -7255,6 +7232,7 @@ dependencies = [
 [[package]]
 name = "wow-m2"
 version = "0.5.0"
+source = "git+https://github.com/nocthir/warcraft-rs?rev=cb62481fe71ea1879468bca76cabff3b735d04b4#cb62481fe71ea1879468bca76cabff3b735d04b4"
 dependencies = [
  "anyhow",
  "bitflags 2.9.4",
@@ -7269,6 +7247,7 @@ dependencies = [
 [[package]]
 name = "wow-mpq"
 version = "0.5.0"
+source = "git+https://github.com/nocthir/warcraft-rs?rev=cb62481fe71ea1879468bca76cabff3b735d04b4#cb62481fe71ea1879468bca76cabff3b735d04b4"
 dependencies = [
  "adler2",
  "byteorder",
@@ -7300,6 +7279,7 @@ dependencies = [
 [[package]]
 name = "wow-wmo"
 version = "0.5.0"
+source = "git+https://github.com/nocthir/warcraft-rs?rev=cb62481fe71ea1879468bca76cabff3b735d04b4#cb62481fe71ea1879468bca76cabff3b735d04b4"
 dependencies = [
  "binrw",
  "bitflags 2.9.4",
