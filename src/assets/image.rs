@@ -27,22 +27,24 @@ pub enum ImageLoaderError {
 
 impl AssetLoader for ImageLoader {
     type Asset = Image;
-    type Settings = (); // No custom settings yet
+    type Settings = bevy::image::ImageLoaderSettings;
     type Error = ImageLoaderError;
 
     async fn load(
         &self,
         reader: &mut dyn Reader,
-        _settings: &Self::Settings,
+        settings: &Self::Settings,
         _load_context: &mut LoadContext<'_>,
     ) -> Result<Self::Asset, Self::Error> {
         let mut bytes = Vec::new();
         reader.read_to_end(&mut bytes).await?;
-        Self::load_image(&bytes)
+        let mut image = Self::load_image(&bytes)?;
+        image.sampler = settings.sampler.clone();
+        Ok(image)
     }
 
     fn extensions(&self) -> &[&str] {
-        &["blp"]
+        &["blp", "BLP"]
     }
 }
 

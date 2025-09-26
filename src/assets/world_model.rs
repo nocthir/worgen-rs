@@ -7,6 +7,7 @@ use std::path::Path;
 use anyhow::{Result, anyhow};
 use bevy::asset::{AssetLoader, LoadContext, io::Reader};
 use bevy::asset::{AssetPath, ReadAssetBytesError, RenderAssetUsages};
+use bevy::image::ImageLoaderSettings;
 use bevy::prelude::*;
 use bevy::render::mesh::*;
 use bevy::render::render_resource::Face;
@@ -210,37 +211,40 @@ impl WorldModelAssetLoader {
         root: &wmo::root_parser::WmoRoot,
         load_context: &mut LoadContext<'_>,
     ) -> Result<Vec<Handle<Image>>> {
-        let mut images = Vec::new();
-        for image_path in Self::get_image_paths(root) {
-            // At this point we do not know which archive contains this texture.
-            // But we have built a map of blp paths to their respective archives.
-            let image = ImageLoader::load_path(image_path, load_context).await?;
-            images.push(image);
-        }
+        let mut images = vec![Handle::default(); root.textures.len()];
+
+        let image_paths = Self::get_image_asset_paths(root);
 
         // Set image samplers
         for material in &root.materials {
             let texture_index = material.get_texture1_index(&root.texture_offset_index_map);
-            let image = &mut images[texture_index as usize];
+            if images[texture_index as usize] != Handle::default() {
+                continue;
+            }
             let material_flags = wmo::WmoMaterialFlags::from_bits_truncate(material.flags);
-            image.sampler = material::sampler_from_world_model_material_flags(material_flags);
+            let sampler = material::sampler_from_world_model_material_flags(material_flags);
+
+            let image_path = &image_paths[texture_index as usize];
+            images[texture_index as usize] = load_context
+                .loader()
+                .with_settings(move |settings: &mut ImageLoaderSettings| {
+                    settings.sampler = sampler.clone();
+                })
+                .load(image_path);
         }
 
-        // Now that the sampler is set, we can create image handles
-        let image_handles = images
-            .into_iter()
-            .enumerate()
-            .map(|(index, image)| {
-                load_context
-                    .add_labeled_asset(WorldModelAssetLabel::Image(index).to_string(), image)
-            })
-            .collect();
-
-        Ok(image_handles)
+        Ok(images)
     }
 
     fn get_image_paths(root: &wmo::root_parser::WmoRoot) -> &[String] {
         &root.textures
+    }
+
+    fn get_image_asset_paths(root: &wmo::root_parser::WmoRoot) -> Vec<String> {
+        root.textures
+            .iter()
+            .map(|texture_path| format!("archive://{}", texture_path))
+            .collect()
     }
 
     fn load_materials(

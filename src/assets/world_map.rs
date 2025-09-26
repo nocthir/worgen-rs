@@ -195,11 +195,9 @@ impl WorldMapAssetLoader {
         load_context: &mut LoadContext<'_>,
     ) -> Result<Vec<Handle<Image>>> {
         let mut images = Vec::new();
-        for (index, &image_path) in Self::get_image_paths(world_map).iter().enumerate() {
-            let image = ImageLoader::load_path(image_path, load_context).await?;
-            let handle =
-                load_context.add_labeled_asset(WorldMapAssetLabel::Image(index).to_string(), image);
-            images.push(handle);
+        for image_path in Self::get_image_asset_paths(world_map) {
+            let image = load_context.load(image_path);
+            images.push(image);
         }
         Ok(images)
     }
@@ -212,6 +210,13 @@ impl WorldMapAssetLoader {
             }
         }
         paths
+    }
+
+    fn get_image_asset_paths(world_map: &adt::Adt) -> Vec<String> {
+        Self::get_image_paths(world_map)
+            .iter()
+            .map(|p| format!("archive://{}", p))
+            .collect()
     }
 
     async fn load_terrain(world_map: &adt::Adt) -> Vec<WorldMapMesh> {
@@ -240,7 +245,6 @@ impl WorldMapAssetLoader {
                 .add_labeled_asset(WorldMapAssetLabel::Chunk(index).to_string(), mesh.mesh);
 
             let chunk = &world_map.mcnk_chunks[index];
-
             let mut level0_texture_handle = None;
 
             if let Some(level0) = chunk.texture_layers.first() {
