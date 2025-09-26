@@ -14,32 +14,32 @@ use bevy::{ecs::system::SystemParam, pbr::ExtendedMaterial, prelude::*};
 use crate::data::*;
 use crate::material::TerrainMaterial;
 
-pub static mut FILE_ARCHIVE_MAP: FileArchiveMap = FileArchiveMap::new();
-static FILE_ARCHIVE_MAP_ONCE: Once = Once::new();
+pub static mut FILE_MAP: FileMap = FileMap::new();
+static FILE_MAP_ONCE: Once = Once::new();
 
 #[derive(Default)]
-pub struct FileArchiveMap {
-    pub map: Option<HashMap<String, PathBuf>>,
+pub struct FileMap {
+    pub map: Option<HashMap<String, FileInfo>>,
 }
 
-impl FileArchiveMap {
+impl FileMap {
     const fn new() -> Self {
         Self { map: None }
     }
 
     pub fn get() -> &'static Self {
-        debug_assert!(FILE_ARCHIVE_MAP_ONCE.is_completed());
+        debug_assert!(FILE_MAP_ONCE.is_completed());
         // SAFETY: no mut references exist at this point
-        unsafe { &*addr_of!(FILE_ARCHIVE_MAP) }
+        unsafe { &*addr_of!(FILE_MAP) }
     }
 
-    pub fn get_archive_path(&self, file_path: &str) -> Result<&PathBuf> {
+    pub fn get_file(&self, file_path: &str) -> Result<&FileInfo> {
         let lowercase_name = file_path.to_lowercase();
         self.map
             .as_ref()
             .unwrap()
             .get(&lowercase_name)
-            .ok_or(format!("File `{}` not found in archive map", file_path).into())
+            .ok_or(format!("File `{}` not found in file map", file_path).into())
     }
 
     fn fill(&mut self) -> Result<()> {
@@ -47,7 +47,8 @@ impl FileArchiveMap {
         for archive_path in archive::ArchiveMap::get().get_archive_paths() {
             let mut archive = archive::get_archive!(archive_path)?;
             for file_path in archive.list()? {
-                map.insert(file_path.name.to_lowercase(), archive_path.clone());
+                let info = FileInfo::new(file_path.name.clone(), archive_path);
+                map.insert(file_path.name.to_lowercase(), info);
             }
         }
         self.map.replace(map);
@@ -57,10 +58,8 @@ impl FileArchiveMap {
     pub fn init() {
         // SAFETY: no concurrent static mut access due to std::Once
         #[allow(static_mut_refs)]
-        FILE_ARCHIVE_MAP_ONCE.call_once(|| unsafe {
-            FILE_ARCHIVE_MAP
-                .fill()
-                .expect("Failed to fill file archive map");
+        FILE_MAP_ONCE.call_once(|| unsafe {
+            FILE_MAP.fill().expect("Failed to fill file map");
         });
     }
 }
@@ -68,6 +67,33 @@ impl FileArchiveMap {
 pub struct FileInfo {
     pub path: String,
     pub archive_path: PathBuf,
+    pub data_type: DataType,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DataType {
+    Texture,
+    Model,
+    WorldModel,
+    WorldMap,
+    Unknown,
+}
+
+impl<S: Into<String>> From<S> for DataType {
+    fn from(file_path: S) -> Self {
+        let lowercase = file_path.into().to_lowercase();
+        if lowercase.ends_with(".blp") {
+            DataType::Texture
+        } else if lowercase.ends_with(".m2") {
+            DataType::Model
+        } else if lowercase.ends_with(".wmo") {
+            DataType::WorldModel
+        } else if lowercase.ends_with(".adt") {
+            DataType::WorldMap
+        } else {
+            DataType::Unknown
+        }
+    }
 }
 
 impl FileInfo {
@@ -76,6 +102,7 @@ impl FileInfo {
         Self {
             path: path.clone(),
             archive_path: archive_path.as_ref().into(),
+            data_type: DataType::from(path),
         }
     }
 

@@ -29,7 +29,7 @@ impl Plugin for DataPlugin {
                 (
                     settings::Settings::init,
                     archive::ArchiveMap::init,
-                    file::FileArchiveMap::init,
+                    file::FileMap::init,
                     ui::select_default_model,
                 )
                     .chain(),

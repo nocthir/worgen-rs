@@ -169,7 +169,7 @@ fn file_info_header(
     //    error_message.replace(err.clone());
     //}
 
-    let file_icon = "❓"; //get_file_icon(file_info.data_type);
+    let file_icon = get_file_icon(file_info.data_type);
     egui::CollapsingHeader::new(format!("{} {}", file_icon, file_info.path))
         .icon(move |ui, _, response| {
             //let pos = response.rect.center();
@@ -200,12 +200,12 @@ fn file_info_header(
         })
 }
 
-//fn get_file_icon(data_type: file::DataType) -> &'static str {
-//    match data_type {
-//        file::DataType::Texture => "🖼",
-//        file::DataType::Model => "📦",
-//        file::DataType::WorldModel => "🏰",
-//        file::DataType::WorldMap => "🗺",
-//        file::DataType::Unknown => "❓",
-//    }
-//}
+fn get_file_icon(data_type: file::DataType) -> &'static str {
+    match data_type {
+        file::DataType::Texture => "🖼",
+        file::DataType::Model => "📦",
+        file::DataType::WorldModel => "🏰",
+        file::DataType::WorldMap => "🗺",
+        file::DataType::Unknown => "❓",
+    }
+}

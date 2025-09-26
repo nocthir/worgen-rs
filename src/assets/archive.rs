@@ -11,7 +11,7 @@ use std::io;
 use std::path::Path;
 
 use crate::data::archive;
-use crate::data::file::FileArchiveMap;
+use crate::data::file::FileMap;
 
 #[derive(Default)]
 pub struct ArchiveAssetReader {}
@@ -19,9 +19,9 @@ pub struct ArchiveAssetReader {}
 impl ArchiveAssetReader {
     pub fn read_file<P: AsRef<Path>>(&self, file_path: P) -> Result<Vec<u8>> {
         let file_name = file_path.as_ref().to_str().ok_or("Invalid file path")?;
-        let archive_file = FileArchiveMap::get().get_archive_path(file_name)?;
-        let mut archive = archive::get_archive!(archive_file)?;
-        Ok(archive.read_file(file_name)?)
+        let file = FileMap::get().get_file(file_name)?;
+        let mut archive = archive::get_archive!(&file.archive_path)?;
+        Ok(archive.read_file(&file.path)?)
     }
 
     fn into_error(err: BevyError) -> AssetReaderError {
