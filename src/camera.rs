@@ -11,7 +11,6 @@ use bevy_atmosphere::prelude::*;
 use bevy_egui::EguiContexts;
 
 use crate::assets::RootAabb;
-use crate::data::CurrentFile;
 
 /// Bundle to spawn our custom camera easily
 /// https://bevy-cheatbook.github.io/cookbook/pan-orbit-camera.html

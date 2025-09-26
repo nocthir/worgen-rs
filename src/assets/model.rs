@@ -38,12 +38,10 @@ use crate::data::bundle::normalize_vec3;
 /// You can use [`ModelAssetLabel::from_asset`] to add it to an asset path
 ///
 /// ```
-/// # use bevy_ecs::prelude::*;
-/// # use bevy_asset::prelude::*;
-/// # use bevy_scene::prelude::*;
-/// # use bevy_gltf::prelude::*;
+/// # use bevy::prelude::*;
+/// # use worgen_rs::assets::*;
 ///
-/// fn load_model(asset_server: Res<AssetServer>) {
+/// fn load_mesh(asset_server: Res<AssetServer>) {
 ///     let mesh: Handle<Scene> = asset_server.load(ModelAssetLabel::Mesh(0).from_asset("model/path/extension"));
 /// }
 /// ```
@@ -51,11 +49,10 @@ use crate::data::bundle::normalize_vec3;
 /// Or when formatting a string for the path
 ///
 /// ```
-/// # use bevy_ecs::prelude::*;
-/// # use bevy_asset::prelude::*;
-/// # use bevy_scene::prelude::*;
+/// # use bevy::prelude::*;
+/// # use worgen_rs::assets::*;
 ///
-/// fn load_model(asset_server: Res<AssetServer>) {
+/// fn load_mesh(asset_server: Res<AssetServer>) {
 ///     let mesh: Handle<Scene> = asset_server.load(format!("model/path.extension#{}", ModelAssetLabel::Mesh(0)));
 /// }
 /// ```
@@ -84,12 +81,11 @@ impl ModelAssetLabel {
     /// Add this label to an asset path
     ///
     /// ```
-    /// # use bevy_ecs::prelude::*;
-    /// # use bevy_asset::prelude::*;
-    /// # use bevy_scene::prelude::*;
+    /// # use bevy::prelude::*;
+    /// # use worgen_rs::assets::*;
     ///
     /// fn load_model(asset_server: Res<AssetServer>) {
-    ///     let model: Handle<Scene> = asset_server.load(ModelAssetLabel::Model.from_asset("model/path.extension"));
+    ///     let model: Handle<Scene> = asset_server.load(ModelAssetLabel::Root.from_asset("model/path.extension"));
     /// }
     /// ```
     pub fn from_asset(&self, path: impl Into<AssetPath<'static>>) -> AssetPath<'static> {

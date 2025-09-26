@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: MIT or Apache-2.0
 
 use std::collections::HashMap;
-use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
 use std::ptr::addr_of;
@@ -32,7 +31,7 @@ pub(crate) use get_archive;
 
 #[derive(Default, Resource)]
 pub struct ArchiveMap {
-    pub map: Option<HashMap<PathBuf, mpq::Archive<fs::File>>>,
+    pub map: Option<HashMap<PathBuf, mpq::Archive>>,
 }
 
 impl ArchiveMap {
@@ -50,7 +49,7 @@ impl ArchiveMap {
         self.map.as_ref().unwrap().keys()
     }
 
-    pub fn get_archive<P: AsRef<Path>>(&self, path: P) -> Result<mpq::Archive<fs::File>> {
+    pub fn get_archive<P: AsRef<Path>>(&self, path: P) -> Result<mpq::Archive> {
         Ok(mpq::Archive::open(path)?)
     }
 
@@ -112,7 +111,7 @@ impl ArchiveInfo {
         })
     }
 
-    fn get_texture_paths(archive: &mut mpq::Archive<fs::File>) -> Result<Vec<String>> {
+    fn get_texture_paths(archive: &mut mpq::Archive) -> Result<Vec<String>> {
         let mut textures = Vec::new();
         archive.list()?.retain(|file| {
             if file.name.to_lowercase().ends_with(".blp") {
@@ -125,7 +124,7 @@ impl ArchiveInfo {
         Ok(textures)
     }
 
-    fn get_model_paths(archive: &mut mpq::Archive<fs::File>) -> Result<Vec<String>> {
+    fn get_model_paths(archive: &mut mpq::Archive) -> Result<Vec<String>> {
         let mut models = Vec::new();
         archive.list()?.retain(|file| {
             if model::is_model_extension(&file.name) {
@@ -138,7 +137,7 @@ impl ArchiveInfo {
         Ok(models)
     }
 
-    fn get_world_model_paths(archive: &mut mpq::Archive<fs::File>) -> Result<Vec<String>> {
+    fn get_world_model_paths(archive: &mut mpq::Archive) -> Result<Vec<String>> {
         let mut world_models = Vec::new();
         archive.list()?.retain(|file| {
             // We only want the root .wmo files, not the group files
@@ -152,7 +151,7 @@ impl ArchiveInfo {
         Ok(world_models)
     }
 
-    fn get_world_map_paths(archive: &mut mpq::Archive<fs::File>) -> Result<Vec<String>> {
+    fn get_world_map_paths(archive: &mut mpq::Archive) -> Result<Vec<String>> {
         let mut world_maps = Vec::new();
         archive.list()?.retain(|file| {
             if world_map::is_world_map_extension(&file.name) {

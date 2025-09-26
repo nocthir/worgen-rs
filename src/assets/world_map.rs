@@ -26,25 +26,22 @@ use crate::material::TerrainMaterial;
 /// You can use [`WorldMapAssetLabel::from_asset`] to add it to an asset path
 ///
 /// ```
-/// # use bevy_ecs::prelude::*;
-/// # use bevy_asset::prelude::*;
-/// # use bevy_scene::prelude::*;
-/// # use bevy_gltf::prelude::*;
+/// # use bevy::prelude::*;
+/// # use worgen_rs::assets::*;
 ///
 /// fn load_model(asset_server: Res<AssetServer>) {
-///     let mesh: Handle<Scene> = asset_server.load(WorldMapAssetLabel::Mesh(0).from_asset("model/path/extension"));
+///     let mesh: Handle<Scene> = asset_server.load(WorldMapAssetLabel::Model(0).from_asset("model/path/extension"));
 /// }
 /// ```
 ///
 /// Or when formatting a string for the path
 ///
 /// ```
-/// # use bevy_ecs::prelude::*;
-/// # use bevy_asset::prelude::*;
-/// # use bevy_scene::prelude::*;
+/// # use bevy::prelude::*;
+/// # use worgen_rs::assets::*;
 ///
-/// fn load_model(asset_server: Res<AssetServer>) {
-///     let mesh: Handle<Scene> = asset_server.load(format!("model/path.extension#{}", WorldMapAssetLabel::Mesh(0)));
+/// fn load_chunk(asset_server: Res<AssetServer>) {
+///     let mesh: Handle<Scene> = asset_server.load(format!("model/path.extension#{}", WorldMapAssetLabel::Chunk(0)));
 /// }
 /// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -80,12 +77,11 @@ impl WorldMapAssetLabel {
     /// Add this label to an asset path
     ///
     /// ```
-    /// # use bevy_ecs::prelude::*;
-    /// # use bevy_asset::prelude::*;
-    /// # use bevy_scene::prelude::*;
+    /// # use bevy::prelude::*;
+    /// # use worgen_rs::assets::*;
     ///
-    /// fn load_model(asset_server: Res<AssetServer>) {
-    ///     let model: Handle<Scene> = asset_server.load(WorldMapAssetLabel::Model.from_asset("model/path.extension"));
+    /// fn load_map(asset_server: Res<AssetServer>) {
+    ///     let map: Handle<Scene> = asset_server.load(WorldMapAssetLabel::Root.from_asset("model/path.extension"));
     /// }
     /// ```
     pub fn from_asset(&self, path: impl Into<AssetPath<'static>>) -> AssetPath<'static> {

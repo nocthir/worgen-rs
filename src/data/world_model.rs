@@ -2,7 +2,7 @@
 // Author: Nocthir <nocthir@proton.me>
 // SPDX-License-Identifier: MIT or Apache-2.0
 
-use std::{fs, io, path::Path};
+use std::{io, path::Path};
 
 use bevy::{prelude::*, tasks};
 
@@ -32,7 +32,7 @@ impl WorldModelInfo {
     }
 }
 
-fn read_wmo(path: &str, archive: &mut mpq::Archive<fs::File>) -> Result<wmo::root_parser::WmoRoot> {
+fn read_wmo(path: &str, archive: &mut mpq::Archive) -> Result<wmo::root_parser::WmoRoot> {
     let file = archive.read_file(path)?;
     let mut reader = io::Cursor::new(file);
     let wmo::ParsedWmo::Root(root) = wmo::parse_wmo(&mut reader)? else {
