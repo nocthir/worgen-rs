@@ -10,26 +10,8 @@ use bevy::prelude::*;
 use bevy::tasks;
 use wow_mpq as mpq;
 
+use crate::assets;
 use crate::assets::{model, world_map, world_model};
-use crate::data::file;
-use crate::settings;
-
-pub fn get_archive_paths() -> Result<Vec<PathBuf>> {
-    let game_path = PathBuf::from(&settings::Settings::get().game_path);
-    let data_path = game_path.join("Data");
-
-    let mut ret = Vec::new();
-
-    for file in data_path.read_dir()? {
-        let file = file?;
-        let file_path = file.path();
-        if is_archive_extension(&file_path) {
-            ret.push(file_path);
-        }
-    }
-
-    Ok(ret)
-}
 
 #[derive(Default, Resource)]
 pub struct ArchiveInfoMap {
@@ -121,18 +103,12 @@ pub struct LoadArchiveTasks {
 
 pub fn start_loading(mut commands: Commands) -> Result<()> {
     let mut tasks = LoadArchiveTasks::default();
-    for archive_path in get_archive_paths()? {
+    for archive_path in assets::get_archive_paths()? {
         let task = tasks::IoTaskPool::get().spawn(load_archive(archive_path.clone()));
         tasks.tasks.push(task);
     }
     commands.insert_resource(tasks);
     Ok(())
-}
-
-pub fn is_archive_extension<P: AsRef<Path>>(path: P) -> bool {
-    path.as_ref()
-        .extension()
-        .is_some_and(|ext| ext.to_string_lossy().eq_ignore_ascii_case("mpq"))
 }
 
 async fn load_archive(archive_path: PathBuf) -> Result<ArchiveInfo> {
@@ -142,7 +118,6 @@ async fn load_archive(archive_path: PathBuf) -> Result<ArchiveInfo> {
 pub fn check_archive_loading(
     mut exit: EventWriter<AppExit>,
     mut load_task: ResMut<LoadArchiveTasks>,
-    mut file_info_map: ResMut<file::FileInfoMap>,
     mut archive_info_map: ResMut<ArchiveInfoMap>,
 ) -> Result<()> {
     let mut tasks = Vec::new();
@@ -156,11 +131,9 @@ pub fn check_archive_loading(
                     error!("Error loading archive: {err}");
                     exit.write(AppExit::error());
                 }
-                Ok(mut archive) => {
+                Ok(archive) => {
                     info!("Loaded archive info: {}", archive.path.display());
-
                     // Update the file archive map
-                    file_info_map.fill(&mut archive)?;
                     archive_info_map.map.insert(archive.path.clone(), archive);
                 }
             }

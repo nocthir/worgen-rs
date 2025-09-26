@@ -95,7 +95,7 @@ pub struct ModelAsset {
     /// Scene loaded from the model, with reorientation applied.
     pub scene: Handle<Scene>,
     /// Image handles requested during load (populated by the loader).
-    pub image_handles: Vec<Handle<Image>>,
+    pub images: Vec<Handle<Image>>,
     /// Generated mesh handles after preparation.
     pub meshes: Vec<Handle<Mesh>>,
     /// Generated material handles after preparation.
@@ -170,7 +170,7 @@ impl ModelAssetLoader {
 
         Ok(ModelAsset {
             scene,
-            image_handles: images,
+            images,
             meshes,
             materials,
         })

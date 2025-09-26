@@ -81,9 +81,9 @@ pub struct WorldModelAsset {
     /// Scene loaded from the model, with reorientation applied.
     pub scene: Handle<Scene>,
     /// Image handles requested during load (populated by the loader).
-    pub image_handles: Vec<Handle<Image>>,
+    pub images: Vec<Handle<Image>>,
     /// Generated mesh handles after preparation.
-    pub meshes: Vec<WorldModelMesh>,
+    pub meshes: Vec<Handle<Mesh>>,
     /// Generated material handles after preparation.
     pub materials: Vec<Handle<StandardMaterial>>,
 }
@@ -160,8 +160,8 @@ impl WorldModelAssetLoader {
 
         Ok(WorldModelAsset {
             scene,
-            image_handles: images,
-            meshes,
+            images,
+            meshes: mesh_handles,
             materials,
         })
     }

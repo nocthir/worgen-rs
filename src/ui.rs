@@ -83,7 +83,7 @@ fn archive_info(
                 .enabled(!texture_paths.is_empty())
                 .show(ui, |ui| {
                     for path in texture_paths {
-                        let file_info = file_info_map.get_file_info(path)?;
+                        let file_info = file_info_map.get_file(path)?;
                         file_info_header(file_info, ui);
                     }
                     Ok::<(), BevyError>(())
@@ -92,7 +92,7 @@ fn archive_info(
                 .enabled(!model_paths.is_empty())
                 .show(ui, |ui| {
                     for path in model_paths {
-                        let file_info = file_info_map.get_file_info(path)?;
+                        let file_info = file_info_map.get_file(path)?;
                         model_info(file_info, ui, event_writer);
                     }
                     Ok::<(), BevyError>(())
@@ -101,7 +101,7 @@ fn archive_info(
                 .enabled(!world_model_paths.is_empty())
                 .show(ui, |ui| {
                     for path in world_model_paths {
-                        let file_info = file_info_map.get_file_info(path)?;
+                        let file_info = file_info_map.get_file(path)?;
                         world_model_info(file_info, ui, event_writer);
                     }
                     Ok::<(), BevyError>(())
@@ -110,7 +110,7 @@ fn archive_info(
                 .enabled(!world_map_paths.is_empty())
                 .show(ui, |ui| {
                     for path in world_map_paths {
-                        let file_info = file_info_map.get_file_info(path)?;
+                        let file_info = file_info_map.get_file(path)?;
                         world_map_info(file_info, ui, event_writer);
                     }
                     Ok::<(), BevyError>(())
@@ -169,7 +169,7 @@ fn file_info_header(
     //    error_message.replace(err.clone());
     //}
 
-    let file_icon = get_file_icon(file_info.data_type);
+    let file_icon = get_file_icon(&file_info.data_type);
     egui::CollapsingHeader::new(format!("{} {}", file_icon, file_info.path))
         .icon(move |ui, _, response| {
             //let pos = response.rect.center();
@@ -200,12 +200,12 @@ fn file_info_header(
         })
 }
 
-fn get_file_icon(data_type: file::DataType) -> &'static str {
+fn get_file_icon(data_type: &file::DataType) -> &'static str {
     match data_type {
-        file::DataType::Texture => "🖼",
-        file::DataType::Model => "📦",
-        file::DataType::WorldModel => "🏰",
-        file::DataType::WorldMap => "🗺",
+        file::DataType::Texture(_) => "🖼",
+        file::DataType::Model(_) => "📦",
+        file::DataType::WorldModel(_) => "🏰",
+        file::DataType::WorldMap(_) => "🗺",
         file::DataType::Unknown => "❓",
     }
 }

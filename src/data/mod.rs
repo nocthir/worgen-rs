@@ -14,7 +14,6 @@ use bevy::prelude::*;
 use crate::{
     assets::ModelAssetLabel,
     data::archive::*,
-    settings,
     ui::{self, FileSelected},
 };
 
@@ -23,17 +22,8 @@ pub struct DataPlugin;
 impl Plugin for DataPlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(archive::ArchiveInfoMap::default())
-            .insert_resource(file::FileInfoMap::default())
-            .add_systems(
-                PreStartup,
-                (
-                    settings::Settings::init,
-                    file::FileMap::init,
-                    ui::select_default_model,
-                )
-                    .chain(),
-            )
-            .add_systems(Startup, archive::start_loading)
+            .insert_resource(file::FileInfoMap::new().expect("Failed to create FileInfoMap"))
+            .add_systems(Startup, (archive::start_loading, ui::select_default_model))
             .add_systems(
                 Update,
                 archive::check_archive_loading.run_if(resource_exists::<LoadArchiveTasks>),
@@ -63,7 +53,8 @@ fn load_selected_file(
     current_query: Query<&CurrentFile>,
     entity_query: Query<Entity, With<CurrentFile>>,
     mut commands: Commands,
-    asset_server: ResMut<AssetServer>,
+    mut asset_server: ResMut<AssetServer>,
+    mut file_map: ResMut<file::FileInfoMap>,
 ) -> Result {
     // Ignore all but the last event
     if let Some(event) = event_reader.read().last() {
@@ -74,8 +65,14 @@ fn load_selected_file(
             }
             // Remove the previous model
             commands.entity(entity).despawn();
+
+            // Unload the previous file's asset
+            file_map.get_file_mut(&current_file.path)?.unload();
         }
 
+        file_map
+            .get_file_mut(&event.file_path)?
+            .load(&mut asset_server);
         let model = asset_server.load(ModelAssetLabel::Root.from_asset(event.get_asset_path()));
         commands.spawn((CurrentFile::new(event.file_path.clone()), SceneRoot(model)));
     }

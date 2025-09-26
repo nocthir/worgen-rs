@@ -5,96 +5,18 @@
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
-    ptr::addr_of,
-    sync::Once,
 };
 
 use bevy::{ecs::system::SystemParam, pbr::ExtendedMaterial, prelude::*};
 use wow_mpq as mpq;
 
-use crate::data::*;
-use crate::material::TerrainMaterial;
-
-pub static mut FILE_MAP: FileMap = FileMap::new();
-static FILE_MAP_ONCE: Once = Once::new();
-
-#[derive(Default)]
-pub struct FileMap {
-    pub map: Option<HashMap<String, FileInfo>>,
-}
-
-impl FileMap {
-    const fn new() -> Self {
-        Self { map: None }
-    }
-
-    pub fn get() -> &'static Self {
-        debug_assert!(FILE_MAP_ONCE.is_completed());
-        // SAFETY: no mut references exist at this point
-        unsafe { &*addr_of!(FILE_MAP) }
-    }
-
-    pub fn get_file(&self, file_path: &str) -> Result<&FileInfo> {
-        let lowercase_name = file_path.to_lowercase();
-        self.map
-            .as_ref()
-            .unwrap()
-            .get(&lowercase_name)
-            .ok_or(format!("File `{}` not found in file map", file_path).into())
-    }
-
-    fn fill(&mut self) -> Result<()> {
-        let mut map = HashMap::new();
-        for archive_path in archive::get_archive_paths()? {
-            let mut archive = mpq::Archive::open(&archive_path)?;
-            for file_path in archive.list()? {
-                let info = FileInfo::new(file_path.name.clone(), &archive_path);
-                map.insert(file_path.name.to_lowercase(), info);
-            }
-        }
-        self.map.replace(map);
-        Ok(())
-    }
-
-    pub fn init() {
-        // SAFETY: no concurrent static mut access due to std::Once
-        #[allow(static_mut_refs)]
-        FILE_MAP_ONCE.call_once(|| unsafe {
-            FILE_MAP.fill().expect("Failed to fill file map");
-        });
-    }
-}
+use crate::assets::{ModelAsset, WorldMapAsset, WorldModelAsset};
+use crate::{assets, material::TerrainMaterial};
 
 pub struct FileInfo {
     pub path: String,
     pub archive_path: PathBuf,
     pub data_type: DataType,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum DataType {
-    Texture,
-    Model,
-    WorldModel,
-    WorldMap,
-    Unknown,
-}
-
-impl<S: Into<String>> From<S> for DataType {
-    fn from(file_path: S) -> Self {
-        let lowercase = file_path.into().to_lowercase();
-        if lowercase.ends_with(".blp") {
-            DataType::Texture
-        } else if lowercase.ends_with(".m2") {
-            DataType::Model
-        } else if lowercase.ends_with(".wmo") {
-            DataType::WorldModel
-        } else if lowercase.ends_with(".adt") {
-            DataType::WorldMap
-        } else {
-            DataType::Unknown
-        }
-    }
 }
 
 impl FileInfo {
@@ -110,17 +32,116 @@ impl FileInfo {
     pub fn get_asset_path(&self) -> String {
         format!("archive://{}", self.path)
     }
+
+    pub fn load(&mut self, asset_server: &mut AssetServer) {
+        self.data_type.load(self.get_asset_path(), asset_server);
+    }
+
+    pub fn unload(&mut self) {
+        self.data_type.unload();
+    }
 }
 
-#[derive(Resource, Default)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DataType {
+    Texture(Handle<Image>),
+    Model(Handle<ModelAsset>),
+    WorldModel(Handle<WorldModelAsset>),
+    WorldMap(Handle<WorldMapAsset>),
+    Unknown,
+}
+
+impl DataType {
+    pub fn has_handle(&self) -> bool {
+        match self {
+            DataType::Texture(handle) => handle.is_weak(),
+            DataType::Model(handle) => handle.is_weak(),
+            DataType::WorldModel(handle) => handle.is_weak(),
+            DataType::WorldMap(handle) => handle.is_weak(),
+            DataType::Unknown => false,
+        }
+    }
+
+    pub fn set_handle<H: Into<UntypedHandle>>(&mut self, handle: H) {
+        let handle = handle.into();
+        match self {
+            DataType::Texture(h) => *h = handle.typed(),
+            DataType::Model(h) => *h = handle.typed(),
+            DataType::WorldModel(h) => *h = handle.typed(),
+            DataType::WorldMap(h) => *h = handle.typed(),
+            DataType::Unknown => {}
+        }
+    }
+
+    pub fn load(&mut self, path: String, asset_server: &mut AssetServer) {
+        if self.has_handle() {
+            return;
+        }
+        match self {
+            DataType::Texture(handle) => *handle = asset_server.load(path),
+            DataType::Model(handle) => *handle = asset_server.load(path),
+            DataType::WorldModel(handle) => *handle = asset_server.load(path),
+            DataType::WorldMap(handle) => *handle = asset_server.load(path),
+            DataType::Unknown => (),
+        };
+    }
+
+    pub fn unload(&mut self) {
+        match self {
+            DataType::Texture(handle) => *handle = Handle::default(),
+            DataType::Model(handle) => *handle = Handle::default(),
+            DataType::WorldModel(handle) => *handle = Handle::default(),
+            DataType::WorldMap(handle) => *handle = Handle::default(),
+            DataType::Unknown => (),
+        };
+    }
+}
+
+impl<S: Into<String>> From<S> for DataType {
+    fn from(file_path: S) -> Self {
+        let lowercase = file_path.into().to_lowercase();
+        if lowercase.ends_with(".blp") {
+            DataType::Texture(Handle::default())
+        } else if lowercase.ends_with(".m2") {
+            DataType::Model(Handle::default())
+        } else if lowercase.ends_with(".wmo") {
+            DataType::WorldModel(Handle::default())
+        } else if lowercase.ends_with(".adt") {
+            DataType::WorldMap(Handle::default())
+        } else {
+            DataType::Unknown
+        }
+    }
+}
+
+#[derive(Resource)]
 pub struct FileInfoMap {
     map: HashMap<String, FileInfo>,
 }
 
 impl FileInfoMap {
+    pub fn new() -> Result<Self> {
+        let mut map = HashMap::new();
+        for archive_path in assets::get_archive_paths()? {
+            let mut archive = mpq::Archive::open(&archive_path)?;
+            for file_path in archive.list()? {
+                let info = FileInfo::new(file_path.name.clone(), &archive_path);
+                map.insert(file_path.name.to_lowercase(), info);
+            }
+        }
+        Ok(Self { map })
+    }
+
+    pub fn get_file(&self, file_path: &str) -> Result<&FileInfo> {
+        let lowercase_name = file_path.to_lowercase();
+        self.map
+            .get(&lowercase_name)
+            .ok_or(format!("File `{}` not found in file map", file_path).into())
+    }
+
     // Actually used in tests
     #[allow(unused)]
-    pub fn get_file_infos(&self) -> impl Iterator<Item = &FileInfo> {
+    pub fn get_files(&self) -> impl Iterator<Item = &FileInfo> {
         self.map.values()
     }
 
@@ -128,31 +149,11 @@ impl FileInfoMap {
         self.map.insert(file_info.path.to_lowercase(), file_info);
     }
 
-    pub fn get_file_info(&self, file_path: &str) -> Result<&FileInfo> {
-        let lowercase_name = file_path.to_lowercase();
-        self.map
-            .get(&lowercase_name)
-            .ok_or(format!("File `{}` not found", file_path).into())
-    }
-
-    pub fn get_file_info_mut(&mut self, file_path: &str) -> Result<&mut FileInfo> {
+    pub fn get_file_mut(&mut self, file_path: &str) -> Result<&mut FileInfo> {
         let lowercase_name = file_path.to_lowercase();
         self.map
             .get_mut(&lowercase_name)
             .ok_or(format!("File `{}` not found", file_path).into())
-    }
-
-    // Actually used in tests
-    #[allow(unused)]
-    pub fn fill(&mut self, archive_info: &mut ArchiveInfo) -> Result<()> {
-        let mut archive = mpq::Archive::open(&archive_info.path)?;
-        for file_path in archive.list()? {
-            let file_path = file_path.name;
-            let texture_info = FileInfo::new(file_path.clone(), &archive_info.path);
-            self.map.insert(file_path.to_lowercase(), texture_info);
-        }
-
-        Ok(())
     }
 }
 #[derive(SystemParam)]
@@ -165,27 +166,4 @@ pub struct SceneAssets<'w> {
 
 impl<'w> SceneAssets<'w> {
     // Intentionally no manual constructor: acquire via SystemState in systems/tests.
-}
-#[cfg(test)]
-pub mod test {
-    use std::{fs, path::Path};
-
-    use super::*;
-    use crate::{data::archive, settings};
-
-    pub fn default_file_info_map(settings: &settings::TestSettings) -> Result<FileInfoMap> {
-        let mut file_info_map = FileInfoMap::default();
-        let data_dir = Path::new(&settings.game_path).join("Data");
-        for entry in fs::read_dir(&data_dir)? {
-            let entry = entry?;
-            let path = entry.path();
-            if !archive::is_archive_extension(&path) {
-                continue;
-            }
-            let mut archive_info = archive::ArchiveInfo::new(&path)?;
-            file_info_map.fill(&mut archive_info)?;
-        }
-        assert!(!file_info_map.map.is_empty());
-        Ok(file_info_map)
-    }
 }

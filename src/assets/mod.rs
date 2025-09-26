@@ -29,6 +29,7 @@ impl Plugin for AssetPlugin {
             .init_asset_loader::<ImageLoader>()
             .init_asset_loader::<ModelAssetLoader>()
             .init_asset_loader::<WorldModelAssetLoader>()
-            .init_asset_loader::<WorldMapAssetLoader>();
+            .init_asset_loader::<WorldMapAssetLoader>()
+            .add_systems(PreStartup, archive::FileArchiveMap::init);
     }
 }
