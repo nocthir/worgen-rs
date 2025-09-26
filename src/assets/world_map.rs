@@ -337,24 +337,24 @@ impl WorldMapAssetLoader {
             // With these offset we can imagine 17 vertices for the
             // first 8 rows, and 9 vertices for the last row.
             let row_index = i % 17;
-            let y_offset = (i / 17) as f32;
+            let z_offset = (i / 17) as f32;
             let x_offset = row_index as f32;
 
-            let mut y_suboffset = 0.0;
+            let mut z_suboffset = 0.0;
             let mut x_suboffset = 0.0;
             // Step is 0.5
             if row_index >= 9 {
                 // Move the last 8 vertices of this row to a new line (control)
-                y_suboffset = 0.5;
+                z_suboffset = 0.5;
                 x_suboffset = 0.5 - 9.0;
             }
 
             let x = x_offset + x_suboffset;
-            let y = y_offset + y_suboffset;
+            let z = z_offset + z_suboffset;
 
             static UV_SCALE: f32 = 8.0;
-            tex_coords[i] = [x / UV_SCALE, y / UV_SCALE];
-            positions[i] = [x, y, chunk.height_map[i]];
+            tex_coords[i] = [x / UV_SCALE, z / UV_SCALE];
+            positions[i] = [-x, chunk.height_map[i], -z];
             normals[i] = from_normalized_vec3_u8(chunk.normals[i]);
         }
 
@@ -381,17 +381,16 @@ impl WorldMapAssetLoader {
         // 1600 feet -> 533.33 yards
         static MAP_SIZE: f32 = 1600.0 * 32.0 / 3.0; // 17066.66
 
-        let mut transform = Transform::default()
-            .with_translation(vec3(
-                MAP_SIZE - chunk.position[0],
-                chunk.position[1],
-                MAP_SIZE - chunk.position[2],
-            ))
-            .with_scale(vec3(CHUNK_SCALE, -CHUNK_SCALE, 1.0));
+        let x = chunk.position[0];
+        let y = chunk.position[1];
+        let z = chunk.position[2];
+        let transform = Transform::default()
+            .with_translation(vec3(x, y, z))
+            .with_scale(vec3(CHUNK_SCALE, 1.0, CHUNK_SCALE));
 
         //transform.rotate_local_z(-std::f32::consts::FRAC_PI_2);
-        //transform.rotate_local_y(-std::f32::consts::FRAC_PI_2);
-        transform.rotate_local_x(-std::f32::consts::FRAC_PI_2);
+        //transform.rotate_local_y(std::f32::consts::PI);
+        //transform.rotate_local_x(-std::f32::consts::FRAC_PI_2);
 
         WorldMapMesh { mesh, transform }
     }
