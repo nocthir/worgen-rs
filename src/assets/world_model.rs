@@ -6,14 +6,14 @@ use std::path::Path;
 
 use anyhow::{Result, anyhow};
 use bevy::asset::{AssetLoader, LoadContext, io::Reader};
-use bevy::asset::{AssetPath, RenderAssetUsages};
+use bevy::asset::{AssetPath, ReadAssetBytesError, RenderAssetUsages};
 use bevy::prelude::*;
 use bevy::render::mesh::*;
 use bevy::render::render_resource::Face;
 use thiserror::Error;
 use wow_wmo as wmo;
 
-use crate::assets::{BoundingSphere, ImageLoader, material};
+use crate::assets::{ImageLoader, material};
 // Reuse helper for normal vector normalization
 use crate::data::bundle::normalize_vec3;
 
@@ -45,7 +45,7 @@ use crate::data::bundle::normalize_vec3;
 /// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WorldModelAssetLabel {
-    Model,
+    Root,
     // group, batch
     Mesh(usize),
     Material(usize),
@@ -56,7 +56,7 @@ pub enum WorldModelAssetLabel {
 impl core::fmt::Display for WorldModelAssetLabel {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
-            WorldModelAssetLabel::Model => f.write_str("Model"),
+            WorldModelAssetLabel::Root => f.write_str("Root"),
             WorldModelAssetLabel::Mesh(index) => f.write_str(&format!("Mesh{index}")),
             WorldModelAssetLabel::Material(index) => f.write_str(&format!("Material{index}")),
             WorldModelAssetLabel::Image(index) => f.write_str(&format!("Image{index}")),
@@ -92,8 +92,6 @@ pub struct WorldModelAsset {
     pub meshes: Vec<WorldModelMesh>,
     /// Generated material handles after preparation.
     pub materials: Vec<Handle<StandardMaterial>>,
-    /// Bounding sphere computed after preparation (model space with reorientation applied).
-    pub bounding_sphere: Option<BoundingSphere>,
 }
 
 #[derive(Debug)]
@@ -111,27 +109,35 @@ pub enum WorldModelAssetLoaderError {
     Io(#[from] io::Error),
     #[error("Parse error: {0}")]
     Parse(#[from] wmo::WmoError),
+    #[error("Read error: {0}")]
+    Read(#[from] ReadAssetBytesError),
     #[error("Other error: {0}")]
     Other(#[from] anyhow::Error),
 }
 
 impl WorldModelAssetLoader {
+    pub async fn load_path(
+        model_path: &str,
+        load_context: &mut LoadContext<'_>,
+    ) -> Result<WorldModelAsset, WorldModelAssetLoaderError> {
+        let bytes = load_context.read_asset_bytes(model_path).await?;
+        Self::load_model(model_path, bytes, load_context).await
+    }
+
     async fn load_model(
+        model_path: &str,
         bytes: Vec<u8>,
         load_context: &mut LoadContext<'_>,
     ) -> Result<WorldModelAsset, WorldModelAssetLoaderError> {
         let mut cursor = io::Cursor::new(&bytes);
 
         let root = Self::load_root(&mut cursor).await?;
-        let file_path = load_context.path().to_string_lossy().into_owned();
-        let groups = Self::load_groups(&file_path, &root, load_context).await?;
+        let groups = Self::load_groups(model_path, &root, load_context).await?;
 
         let images = Self::load_images(&root, load_context).await?;
         let materials = Self::load_materials(&root, &images, load_context);
         let default_material = Self::create_default_material(load_context);
         let meshes = Self::load_meshes(&groups, &materials, default_material);
-        let mesh_iterator = meshes.iter().map(|m| &m.mesh);
-        let bounding_sphere = BoundingSphere::new(mesh_iterator);
 
         let mesh_handles: Vec<Handle<Mesh>> = meshes
             .iter()
@@ -147,12 +153,6 @@ impl WorldModelAssetLoader {
         transform.rotate_local_z(-std::f32::consts::FRAC_PI_2);
         let mut world = World::default();
         let mut root = world.spawn((transform, Visibility::default()));
-        if let Some(bounding_sphere) = bounding_sphere {
-            root.insert((BoundingSphere {
-                center: bounding_sphere.center,
-                radius: bounding_sphere.radius,
-            },));
-        }
         for mesh_index in 0..meshes.len() {
             root.with_child((
                 Mesh3d(mesh_handles[mesh_index].clone()),
@@ -162,14 +162,13 @@ impl WorldModelAssetLoader {
         let scene_loader = load_context.begin_labeled_asset();
         let loaded_scene = scene_loader.finish(Scene::new(world));
         let scene = load_context
-            .add_loaded_labeled_asset(WorldModelAssetLabel::Model.to_string(), loaded_scene);
+            .add_loaded_labeled_asset(WorldModelAssetLabel::Root.to_string(), loaded_scene);
 
         Ok(WorldModelAsset {
             scene,
             image_handles: images,
             meshes,
             materials,
-            bounding_sphere,
         })
     }
 
@@ -418,7 +417,8 @@ impl AssetLoader for WorldModelAssetLoader {
     ) -> Result<Self::Asset, Self::Error> {
         let mut bytes = Vec::new();
         reader.read_to_end(&mut bytes).await?;
-        Self::load_model(bytes, load_context).await
+        let model_path = load_context.path().to_string_lossy().into_owned();
+        Self::load_model(&model_path, bytes, load_context).await
     }
 
     fn extensions(&self) -> &[&str] {

@@ -43,7 +43,7 @@ impl CustomBundle for ModelBundle {
     }
 }
 
-#[derive(Bundle, Clone)]
+#[derive(Bundle, Clone, Debug)]
 pub struct TerrainBundle {
     pub mesh: Mesh3d,
     pub material: MeshMaterial3d<ExtendedMaterial<StandardMaterial, TerrainMaterial>>,

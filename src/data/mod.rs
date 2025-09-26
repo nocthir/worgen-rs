@@ -81,7 +81,7 @@ fn load_selected_file(
             commands.entity(entity).despawn();
         }
 
-        let model = asset_server.load(ModelAssetLabel::Model.from_asset(event.get_asset_path()));
+        let model = asset_server.load(ModelAssetLabel::Root.from_asset(event.get_asset_path()));
         commands.spawn((CurrentFile::new(event.file_path.clone()), SceneRoot(model)));
     }
     Ok(())

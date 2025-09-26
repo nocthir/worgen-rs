@@ -21,13 +21,13 @@ use std::io;
 
 use anyhow::Result;
 use bevy::asset::{AssetLoader, LoadContext, io::Reader};
-use bevy::asset::{AssetPath, RenderAssetUsages};
+use bevy::asset::{AssetPath, ReadAssetBytesError, RenderAssetUsages};
 use bevy::prelude::*;
 use bevy::render::mesh::*;
 use thiserror::Error;
 use wow_m2 as m2;
 
-use crate::assets::{BoundingSphere, ImageLoader};
+use crate::assets::ImageLoader;
 use crate::data::bundle;
 use crate::settings::Settings;
 // Reuse helper for normal vector normalization
@@ -61,7 +61,7 @@ use crate::data::bundle::normalize_vec3;
 /// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ModelAssetLabel {
-    Model,
+    Root,
     Mesh(usize),
     Material(usize),
     Image(usize),
@@ -71,7 +71,7 @@ pub enum ModelAssetLabel {
 impl core::fmt::Display for ModelAssetLabel {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
-            ModelAssetLabel::Model => f.write_str("Model"),
+            ModelAssetLabel::Root => f.write_str("Root"),
             ModelAssetLabel::Mesh(index) => f.write_str(&format!("Mesh{index}")),
             ModelAssetLabel::Material(index) => f.write_str(&format!("Material{index}")),
             ModelAssetLabel::Image(index) => f.write_str(&format!("Image{index}")),
@@ -107,8 +107,6 @@ pub struct ModelAsset {
     pub meshes: Vec<Handle<Mesh>>,
     /// Generated material handles after preparation.
     pub materials: Vec<Handle<StandardMaterial>>,
-    /// Bounding sphere computed after preparation (model space with reorientation applied).
-    pub bounding_sphere: Option<BoundingSphere>,
 }
 
 #[derive(Default)]
@@ -120,12 +118,22 @@ pub enum ModelAssetLoaderError {
     Io(#[from] io::Error),
     #[error("Parse error: {0}")]
     Parse(#[from] m2::M2Error),
+    #[error("Read error: {0}")]
+    Read(#[from] ReadAssetBytesError),
     #[error("Other error: {0}")]
     Other(#[from] anyhow::Error),
 }
 
 impl ModelAssetLoader {
-    async fn load_model(
+    pub async fn load_path(
+        path: &str,
+        load_context: &mut LoadContext<'_>,
+    ) -> Result<ModelAsset, ModelAssetLoaderError> {
+        let bytes = load_context.read_asset_bytes(path).await?;
+        Self::load_model(bytes, load_context).await
+    }
+
+    pub async fn load_model(
         bytes: Vec<u8>,
         load_context: &mut LoadContext<'_>,
     ) -> Result<ModelAsset, ModelAssetLoaderError> {
@@ -136,7 +144,10 @@ impl ModelAssetLoader {
         let mut materials = Vec::new();
         let mut meshes = Vec::new();
         Self::load_meshes(&model, &bytes, &images, &mut meshes, &mut materials)?;
-        let bounding_sphere = BoundingSphere::new(meshes.iter());
+
+        let mut transform = Transform::default();
+        transform.rotate_local_x(-std::f32::consts::FRAC_PI_2);
+        transform.rotate_local_z(-std::f32::consts::FRAC_PI_2);
 
         let meshes: Vec<Handle<Mesh>> = meshes
             .into_iter()
@@ -151,17 +162,8 @@ impl ModelAssetLoader {
             })
             .collect();
 
-        let mut transform = Transform::default();
-        transform.rotate_local_x(-std::f32::consts::FRAC_PI_2);
-        transform.rotate_local_z(-std::f32::consts::FRAC_PI_2);
         let mut world = World::default();
         let mut root = world.spawn((transform, Visibility::default()));
-        if let Some(bounding_sphere) = bounding_sphere {
-            root.insert((BoundingSphere {
-                center: bounding_sphere.center,
-                radius: bounding_sphere.radius,
-            },));
-        }
         for i in 0..meshes.len() {
             root.with_child((
                 Mesh3d(meshes[i].clone()),
@@ -171,14 +173,13 @@ impl ModelAssetLoader {
         let scene_loader = load_context.begin_labeled_asset();
         let loaded_scene = scene_loader.finish(Scene::new(world));
         let scene =
-            load_context.add_loaded_labeled_asset(ModelAssetLabel::Model.to_string(), loaded_scene);
+            load_context.add_loaded_labeled_asset(ModelAssetLabel::Root.to_string(), loaded_scene);
 
         Ok(ModelAsset {
             scene,
             image_handles: images,
             meshes,
             materials,
-            bounding_sphere,
         })
     }
 

@@ -6,11 +6,12 @@ use std::f32::consts::{FRAC_PI_2, PI, TAU};
 
 use bevy::input::mouse::{MouseMotion, MouseScrollUnit, MouseWheel};
 use bevy::prelude::*;
+use bevy::render::primitives::Aabb;
 use bevy_atmosphere::prelude::*;
-use bevy_atmosphere::settings::SkyboxCreationMode;
 use bevy_egui::EguiContexts;
 
-use crate::assets;
+use crate::assets::RootAabb;
+use crate::data::CurrentFile;
 
 /// Bundle to spawn our custom camera easily
 /// https://bevy-cheatbook.github.io/cookbook/pan-orbit-camera.html
@@ -95,13 +96,14 @@ pub struct PanOrbitCameraPlugin;
 
 impl Plugin for PanOrbitCameraPlugin {
     fn build(&self, app: &mut App) {
-        app.insert_resource(AtmosphereSettings {
-            skybox_creation_mode: SkyboxCreationMode::FromSpecifiedFar(20000.0),
-            ..default()
-        })
-        .add_plugins(AtmospherePlugin)
-        .add_systems(Startup, setup_camera)
-        .add_systems(Update, (on_model_loaded, pan_orbit_camera));
+        app
+            //.insert_resource(AtmosphereSettings {
+            //    skybox_creation_mode: SkyboxCreationMode::FromSpecifiedFar(20000.0),
+            //    ..default()
+            //})
+            //.add_plugins(AtmospherePlugin)
+            .add_systems(Startup, setup_camera)
+            .add_systems(Update, (on_model_loaded, pan_orbit_camera));
     }
 }
 
@@ -295,27 +297,29 @@ fn pan_orbit_camera(
 }
 
 fn on_model_loaded(
-    q_bounding_sphere: Query<&assets::BoundingSphere, Added<assets::BoundingSphere>>,
+    q_current: Query<&RootAabb, Added<RootAabb>>,
     mut q_camera: Query<(&mut PanOrbitState, &mut Transform)>,
 ) {
-    if let Ok(bounding_sphere) = q_bounding_sphere.single() {
-        focus_camera(bounding_sphere, &mut q_camera);
+    // Get the entity that just received the `CurrentFile` component
+    if let Ok(root_aabb) = q_current.single() {
+        info!(
+            "Focusing camera on loaded model with AABB: {:?}",
+            root_aabb.aabb
+        );
+        focus_camera(&root_aabb.aabb, &mut q_camera);
     }
 }
 
-fn focus_camera(
-    bounding_sphere: &assets::BoundingSphere,
-    q_camera: &mut Query<(&mut PanOrbitState, &mut Transform)>,
-) {
-    let center = bounding_sphere.center;
-    let mut radius = bounding_sphere.radius;
+fn focus_camera(aabb: &Aabb, q_camera: &mut Query<(&mut PanOrbitState, &mut Transform)>) {
+    let center = aabb.center;
+    let mut radius = aabb.half_extents.length();
     // Clamp to a minimal reasonable radius
     let min_radius = 0.5_f32;
     let comfort = 2.5_f32;
     radius = (radius * comfort).max(min_radius);
 
     for (mut state, mut transform) in q_camera {
-        state.center = center;
+        state.center = center.into();
         state.radius = radius;
         // Preserve current yaw/pitch encoded in transform.rotation/state; recompute position only
         transform.translation = state.center + transform.back() * state.radius;
