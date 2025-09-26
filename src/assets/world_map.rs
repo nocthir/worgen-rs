@@ -14,11 +14,7 @@ use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
 use thiserror::Error;
 use wow_adt as adt;
 
-use crate::assets::{
-    ImageLoader, ModelAsset, ModelAssetLoader, WorldModelAsset, WorldModelAssetLoader,
-};
-// Reuse helper for normal vector normalization
-use crate::data::bundle::{TerrainBundle, normalize_vec3};
+use crate::assets::*;
 use crate::material::TerrainMaterial;
 
 /// Labels that can be used to load part of a Model
@@ -113,6 +109,13 @@ impl WorldMapMesh {
             aabb: self.mesh.compute_aabb()?,
         })
     }
+}
+
+#[derive(Bundle, Clone, Debug)]
+pub struct TerrainBundle {
+    pub mesh: Mesh3d,
+    pub material: MeshMaterial3d<ExtendedMaterial<StandardMaterial, TerrainMaterial>>,
+    pub transform: Transform,
 }
 
 #[derive(Default)]
@@ -346,7 +349,7 @@ impl WorldMapAssetLoader {
             static UV_SCALE: f32 = 8.0;
             tex_coords[i] = [x / UV_SCALE, y / UV_SCALE];
             positions[i] = [x, y, chunk.height_map[i]];
-            normals[i] = Self::from_normalized_vec3_u8(chunk.normals[i]);
+            normals[i] = from_normalized_vec3_u8(chunk.normals[i]);
         }
 
         let mesh = Mesh::new(
@@ -433,22 +436,6 @@ impl WorldMapAssetLoader {
         }
 
         indices
-    }
-
-    pub fn from_normalized_vec3_u8(v: [u8; 3]) -> [f32; 3] {
-        let x = u8::cast_signed(v[0]) as f32 / 127.0;
-        let y = u8::cast_signed(v[1]) as f32 / 127.0;
-        let z = u8::cast_signed(v[2]) as f32 / 127.0;
-        normalize_vec3([x, y, z])
-    }
-
-    pub fn normalize_vec3(v: [f32; 3]) -> [f32; 3] {
-        let len = (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt();
-        if len > 0.0 {
-            [v[0] / len, v[1] / len, v[2] / len]
-        } else {
-            v
-        }
     }
 
     /// Create a combined RGBA texture from the alpha maps of a world map chunk.
@@ -715,4 +702,9 @@ impl RootAabb {
         self.aabb.center = (min + max) * 0.5;
         self.aabb.half_extents = (max - min) * 0.5;
     }
+}
+
+pub fn is_world_map_extension(filename: &str) -> bool {
+    let lower_filename = filename.to_lowercase();
+    lower_filename.ends_with(".adt")
 }

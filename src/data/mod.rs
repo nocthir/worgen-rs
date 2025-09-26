@@ -3,20 +3,17 @@
 // SPDX-License-Identifier: MIT or Apache-2.0
 
 pub mod archive;
-pub mod bundle;
 pub mod file;
-pub mod model;
-pub mod texture;
-pub mod world_map;
-pub mod world_model;
-
-use std::f32;
+//pub mod model;
+//pub mod texture;
+//pub mod world_map;
+//pub mod world_model;
 
 use bevy::prelude::*;
 
 use crate::{
     assets::ModelAssetLabel,
-    data::{archive::*, file::*},
+    data::archive::*,
     settings,
     ui::{self, FileSelected},
 };
@@ -27,7 +24,6 @@ impl Plugin for DataPlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(archive::ArchiveInfoMap::default())
             .insert_resource(file::FileInfoMap::default())
-            .insert_resource(file::LoadingFileTasks::default())
             .add_systems(
                 PreStartup,
                 (
@@ -43,7 +39,7 @@ impl Plugin for DataPlugin {
                 Update,
                 archive::check_archive_loading.run_if(resource_exists::<LoadArchiveTasks>),
             )
-            .add_systems(Update, (load_selected_file, file::check_file_loading));
+            .add_systems(Update, load_selected_file);
     }
 }
 

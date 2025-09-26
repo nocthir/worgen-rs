@@ -53,22 +53,3 @@ pub fn is_model_extension(filename: &str) -> bool {
         || lower_filename.ends_with(".mdx")
         || lower_filename.ends_with(".mdl")
 }
-
-pub fn loading_model_task(task: file::LoadFileTask) -> Task<file::LoadFileTask> {
-    info!("Starting to load model: {}", task.file.path);
-    tasks::IoTaskPool::get().spawn(load_model(task))
-}
-
-async fn load_model(mut task: file::LoadFileTask) -> file::LoadFileTask {
-    match ModelInfo::new(&task.file.path, &task.file.archive_path) {
-        Ok(model_info) => {
-            task.file.set_model(model_info);
-            info!("Loaded model: {}", task.file.path);
-        }
-        Err(e) => {
-            error!("Failed to load model {}: {}", task.file.path, e);
-            task.file.state = file::FileInfoState::Error(e.to_string());
-        }
-    }
-    task
-}

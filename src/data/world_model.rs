@@ -81,25 +81,6 @@ fn read_groups(
     Ok(groups)
 }
 
-pub fn loading_world_model_task(task: file::LoadFileTask) -> tasks::Task<file::LoadFileTask> {
-    info!("Starting to load world model: {}", task.file.path);
-    tasks::IoTaskPool::get().spawn(load_world_model(task))
-}
-
-async fn load_world_model(mut task: file::LoadFileTask) -> file::LoadFileTask {
-    match WorldModelInfo::new(&task.file.path, &task.file.archive_path) {
-        Ok(world_model_info) => {
-            task.file.set_world_model(world_model_info);
-            info!("Loaded world model: {}", task.file.path);
-        }
-        Err(e) => {
-            error!("Failed to load world model {}: {}", task.file.path, e);
-            task.file.state = file::FileInfoState::Error(e.to_string());
-        }
-    }
-    task
-}
-
 fn read_group(file_path: &str, group_index: u32) -> Result<wmo::group_parser::WmoGroup> {
     let group_filename = get_wmo_group_filename(file_path, group_index);
     let file_archive_map = file::FileArchiveMap::get();

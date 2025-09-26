@@ -102,22 +102,3 @@ pub fn is_world_map_extension(filename: &str) -> bool {
     let lower_filename = filename.to_lowercase();
     lower_filename.ends_with(".adt")
 }
-
-pub fn loading_world_map_task(task: file::LoadFileTask) -> tasks::Task<file::LoadFileTask> {
-    info!("Starting to load world map: {}", task.file.path);
-    tasks::IoTaskPool::get().spawn(load_world_map(task))
-}
-
-async fn load_world_map(mut task: file::LoadFileTask) -> file::LoadFileTask {
-    match WorldMapInfo::new(&task.file.path, &task.file.archive_path) {
-        Ok(world_map_info) => {
-            task.file.set_world_map(world_map_info);
-            info!("Loaded world map: {}", task.file.path);
-        }
-        Err(e) => {
-            error!("Failed to load world map {}: {}", task.file.path, e);
-            task.file.state = file::FileInfoState::Error(e.to_string());
-        }
-    }
-    task
-}

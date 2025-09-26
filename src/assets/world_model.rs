@@ -13,9 +13,7 @@ use bevy::render::render_resource::Face;
 use thiserror::Error;
 use wow_wmo as wmo;
 
-use crate::assets::{ImageLoader, material};
-// Reuse helper for normal vector normalization
-use crate::data::bundle::normalize_vec3;
+use crate::assets::*;
 
 /// Labels that can be used to load part of a Model
 ///
@@ -420,4 +418,32 @@ impl AssetLoader for WorldModelAssetLoader {
     fn extensions(&self) -> &[&str] {
         &["wmo"]
     }
+}
+
+pub fn is_world_model_root_path(file_path: &str) -> bool {
+    if !is_world_model_extension(file_path) {
+        return false;
+    }
+    !is_world_model_group_path(file_path)
+}
+
+fn is_world_model_group_path(file_path: &str) -> bool {
+    if !is_world_model_extension(file_path) {
+        return false;
+    }
+    let file_path = Path::new(file_path);
+    let file_stem = file_path
+        .file_stem()
+        .unwrap_or_default()
+        .to_str()
+        .unwrap_or_default();
+    file_stem
+        .split('_')
+        .next_back()
+        .is_some_and(|s| s.len() == 3 && s.chars().all(|c| c.is_ascii_digit()))
+}
+
+pub fn is_world_model_extension(file_path: &str) -> bool {
+    let lower = file_path.to_lowercase();
+    lower.ends_with(".wmo")
 }

@@ -12,11 +12,9 @@ use bevy::prelude::*;
 use bevy::tasks;
 use wow_mpq as mpq;
 
-use crate::data::archive;
+use crate::assets::{model, world_map, world_model};
 use crate::data::file::FileInfoMap;
-use crate::data::model;
-use crate::data::world_map;
-use crate::data::world_model;
+use crate::data::*;
 use crate::settings;
 
 pub static mut ARCHIVE_MAP: ArchiveMap = ArchiveMap::new();

@@ -163,49 +163,49 @@ fn file_info_header(
     file_info: &file::FileInfo,
     ui: &mut egui::Ui,
 ) -> egui::collapsing_header::CollapsingResponse<()> {
-    let file_state = file_info.state.clone();
-    let mut error_message = None;
-    if let file::FileInfoState::Error(err) = &file_info.state {
-        error_message.replace(err.clone());
-    }
+    //let file_state = file_info.state.clone();
+    //let mut error_message = None;
+    //if let file::FileInfoState::Error(err) = &file_info.state {
+    //    error_message.replace(err.clone());
+    //}
 
-    let file_icon = get_file_icon(file_info.data_type);
+    let file_icon = "❓"; //get_file_icon(file_info.data_type);
     egui::CollapsingHeader::new(format!("{} {}", file_icon, file_info.path))
         .icon(move |ui, _, response| {
-            let pos = response.rect.center();
-            let anchor = egui::Align2::CENTER_CENTER;
-            let font_id = egui::TextStyle::Button.resolve(ui.style());
-            let text_color = ui.style().visuals.text_color();
-            match file_state {
-                file::FileInfoState::Unloaded => {
-                    ui.painter().text(pos, anchor, "▶", font_id, text_color);
-                }
-                file::FileInfoState::Loading => {
-                    ui.painter().text(pos, anchor, "⏳", font_id, text_color);
-                }
-                file::FileInfoState::Loaded => {
-                    ui.painter()
-                        .text(pos, anchor, "✔", font_id, egui::Color32::CYAN);
-                }
-                file::FileInfoState::Error(_) => {
-                    ui.painter()
-                        .text(pos, anchor, "✖", font_id, egui::Color32::RED);
-                }
-            };
+            //let pos = response.rect.center();
+            //let anchor = egui::Align2::CENTER_CENTER;
+            //let font_id = egui::TextStyle::Button.resolve(ui.style());
+            //let text_color = ui.style().visuals.text_color();
+            //match file_state {
+            //    file::FileInfoState::Unloaded => {
+            //        ui.painter().text(pos, anchor, "▶", font_id, text_color);
+            //    }
+            //    file::FileInfoState::Loading => {
+            //        ui.painter().text(pos, anchor, "⏳", font_id, text_color);
+            //    }
+            //    file::FileInfoState::Loaded => {
+            //        ui.painter()
+            //            .text(pos, anchor, "✔", font_id, egui::Color32::CYAN);
+            //    }
+            //    file::FileInfoState::Error(_) => {
+            //        ui.painter()
+            //            .text(pos, anchor, "✖", font_id, egui::Color32::RED);
+            //    }
+            //};
         })
         .show(ui, |ui| {
-            if let Some(msg) = error_message {
-                ui.colored_label(egui::Color32::RED, msg);
-            }
+            //if let Some(msg) = error_message {
+            //    ui.colored_label(egui::Color32::RED, msg);
+            //}
         })
 }
 
-fn get_file_icon(data_type: file::DataType) -> &'static str {
-    match data_type {
-        file::DataType::Texture => "🖼",
-        file::DataType::Model => "📦",
-        file::DataType::WorldModel => "🏰",
-        file::DataType::WorldMap => "🗺",
-        file::DataType::Unknown => "❓",
-    }
-}
+//fn get_file_icon(data_type: file::DataType) -> &'static str {
+//    match data_type {
+//        file::DataType::Texture => "🖼",
+//        file::DataType::Model => "📦",
+//        file::DataType::WorldModel => "🏰",
+//        file::DataType::WorldMap => "🗺",
+//        file::DataType::Unknown => "❓",
+//    }
+//}

@@ -64,3 +64,19 @@ pub fn color_from_world_model(bgra: [u8; 4]) -> Color {
         a as f32 / 255.0,
     )
 }
+
+pub fn from_normalized_vec3_u8(v: [u8; 3]) -> [f32; 3] {
+    let x = u8::cast_signed(v[0]) as f32 / 127.0;
+    let y = u8::cast_signed(v[1]) as f32 / 127.0;
+    let z = u8::cast_signed(v[2]) as f32 / 127.0;
+    normalize_vec3([x, y, z])
+}
+
+pub fn normalize_vec3(v: [f32; 3]) -> [f32; 3] {
+    let len = (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt();
+    if len > 0.0 {
+        [v[0] / len, v[1] / len, v[2] / len]
+    } else {
+        v
+    }
+}

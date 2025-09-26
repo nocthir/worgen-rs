@@ -27,11 +27,8 @@ use bevy::render::mesh::*;
 use thiserror::Error;
 use wow_m2 as m2;
 
-use crate::assets::ImageLoader;
-use crate::data::bundle;
+use crate::assets::*;
 use crate::settings::Settings;
-// Reuse helper for normal vector normalization
-use crate::data::bundle::normalize_vec3;
 
 /// Labels that can be used to load part of a Model
 ///
@@ -266,7 +263,7 @@ impl ModelAssetLoader {
         // Determine alpha mode from material blend mode.
         // Note that multiple batches can share the same material.
         let model_material = &model.materials[batch.material_index as usize];
-        let alpha_mode = bundle::alpha_mode_from_model_blend_mode(model_material.blend_mode);
+        let alpha_mode = alpha_mode_from_model_blend_mode(model_material.blend_mode);
 
         let material = StandardMaterial {
             base_color_texture: Some(image.clone()),
@@ -344,4 +341,11 @@ impl VertexAttributes {
             tex_coords_0: Vec::with_capacity(capacity),
         }
     }
+}
+
+pub fn is_model_extension(filename: &str) -> bool {
+    let lower_filename = filename.to_lowercase();
+    lower_filename.ends_with(".m2")
+        || lower_filename.ends_with(".mdx")
+        || lower_filename.ends_with(".mdl")
 }
