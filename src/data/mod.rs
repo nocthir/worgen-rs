@@ -28,7 +28,6 @@ impl Plugin for DataPlugin {
                 PreStartup,
                 (
                     settings::Settings::init,
-                    archive::ArchiveMap::init,
                     file::FileMap::init,
                     ui::select_default_model,
                 )

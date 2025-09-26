@@ -10,6 +10,7 @@ use std::{
 };
 
 use bevy::{ecs::system::SystemParam, pbr::ExtendedMaterial, prelude::*};
+use wow_mpq as mpq;
 
 use crate::data::*;
 use crate::material::TerrainMaterial;
@@ -44,10 +45,10 @@ impl FileMap {
 
     fn fill(&mut self) -> Result<()> {
         let mut map = HashMap::new();
-        for archive_path in archive::ArchiveMap::get().get_archive_paths() {
-            let mut archive = archive::get_archive!(archive_path)?;
+        for archive_path in archive::get_archive_paths()? {
+            let mut archive = mpq::Archive::open(&archive_path)?;
             for file_path in archive.list()? {
-                let info = FileInfo::new(file_path.name.clone(), archive_path);
+                let info = FileInfo::new(file_path.name.clone(), &archive_path);
                 map.insert(file_path.name.to_lowercase(), info);
             }
         }
@@ -144,7 +145,7 @@ impl FileInfoMap {
     // Actually used in tests
     #[allow(unused)]
     pub fn fill(&mut self, archive_info: &mut ArchiveInfo) -> Result<()> {
-        let mut archive = archive::get_archive!(&archive_info.path)?;
+        let mut archive = mpq::Archive::open(&archive_info.path)?;
         for file_path in archive.list()? {
             let file_path = file_path.name;
             let texture_info = FileInfo::new(file_path.clone(), &archive_info.path);

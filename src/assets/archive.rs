@@ -2,15 +2,16 @@
 // Author: Nocthir <nocthir@proton.me>
 // SPDX-License-Identifier: MIT or Apache-2.0
 
+use std::io;
+use std::path::Path;
+
 use bevy::asset::io::Reader;
 use bevy::asset::io::{
     AssetReader, AssetReaderError, AssetSource, AssetSourceId, PathStream, VecReader,
 };
 use bevy::prelude::*;
-use std::io;
-use std::path::Path;
+use wow_mpq as mpq;
 
-use crate::data::archive;
 use crate::data::file::FileMap;
 
 #[derive(Default)]
@@ -20,7 +21,7 @@ impl ArchiveAssetReader {
     pub fn read_file<P: AsRef<Path>>(&self, file_path: P) -> Result<Vec<u8>> {
         let file_name = file_path.as_ref().to_str().ok_or("Invalid file path")?;
         let file = FileMap::get().get_file(file_name)?;
-        let mut archive = archive::get_archive!(&file.archive_path)?;
+        let mut archive = mpq::Archive::open(&file.archive_path)?;
         Ok(archive.read_file(&file.path)?)
     }
 

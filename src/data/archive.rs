@@ -5,79 +5,30 @@
 use std::collections::HashMap;
 use std::path::Path;
 use std::path::PathBuf;
-use std::ptr::addr_of;
-use std::sync::Once;
 
 use bevy::prelude::*;
 use bevy::tasks;
 use wow_mpq as mpq;
 
 use crate::assets::{model, world_map, world_model};
-use crate::data::file::FileInfoMap;
-use crate::data::*;
+use crate::data::file;
 use crate::settings;
 
-pub static mut ARCHIVE_MAP: ArchiveMap = ArchiveMap::new();
-static ARCHIVE_INIT: Once = Once::new();
+pub fn get_archive_paths() -> Result<Vec<PathBuf>> {
+    let game_path = PathBuf::from(&settings::Settings::get().game_path);
+    let data_path = game_path.join("Data");
 
-macro_rules! get_archive {
-    ($path:expr) => {
-        $crate::data::archive::ArchiveMap::get().get_archive($path)
-    };
-}
-pub(crate) use get_archive;
+    let mut ret = Vec::new();
 
-#[derive(Default, Resource)]
-pub struct ArchiveMap {
-    pub map: Option<HashMap<PathBuf, mpq::Archive>>,
-}
-
-impl ArchiveMap {
-    pub const fn new() -> Self {
-        Self { map: None }
-    }
-
-    pub fn get() -> &'static Self {
-        debug_assert!(ARCHIVE_INIT.is_completed());
-        // SAFETY: no mut references exist at this point
-        unsafe { &*addr_of!(ARCHIVE_MAP) }
-    }
-
-    pub fn get_archive_paths(&self) -> impl Iterator<Item = &PathBuf> {
-        self.map.as_ref().unwrap().keys()
-    }
-
-    pub fn get_archive<P: AsRef<Path>>(&self, path: P) -> Result<mpq::Archive> {
-        Ok(mpq::Archive::open(path)?)
-    }
-
-    pub fn load(&mut self) -> Result<()> {
-        let game_path = PathBuf::from(&settings::Settings::get().game_path);
-        let data_path = game_path.join("Data");
-
-        let mut map = HashMap::new();
-
-        for file in data_path.read_dir()? {
-            let file = file?;
-            let file_path = file.path();
-            if is_archive_extension(&file_path) {
-                let archive = mpq::Archive::open(&file_path)?;
-                map.insert(file_path, archive);
-            }
+    for file in data_path.read_dir()? {
+        let file = file?;
+        let file_path = file.path();
+        if is_archive_extension(&file_path) {
+            ret.push(file_path);
         }
-
-        self.map.replace(map);
-
-        Ok(())
     }
 
-    pub fn init() {
-        // SAFETY: no concurrent static mut access due to std::Once
-        #[allow(static_mut_refs)]
-        ARCHIVE_INIT.call_once(|| {
-            unsafe { ARCHIVE_MAP.load().expect("Failed to load archives") };
-        });
-    }
+    Ok(ret)
 }
 
 #[derive(Default, Resource)]
@@ -95,7 +46,7 @@ pub struct ArchiveInfo {
 
 impl ArchiveInfo {
     pub fn new<P: AsRef<Path>>(path: P) -> Result<Self> {
-        let mut archive = archive::get_archive!(&path)?;
+        let mut archive = mpq::Archive::open(&path)?;
         let texture_paths = Self::get_texture_paths(&mut archive)?;
         let model_paths = Self::get_model_paths(&mut archive)?;
         let world_model_paths = Self::get_world_model_paths(&mut archive)?;
@@ -168,13 +119,14 @@ pub struct LoadArchiveTasks {
     tasks: Vec<tasks::Task<Result<ArchiveInfo>>>,
 }
 
-pub fn start_loading(mut commands: Commands) {
+pub fn start_loading(mut commands: Commands) -> Result<()> {
     let mut tasks = LoadArchiveTasks::default();
-    for archive_path in ArchiveMap::get().get_archive_paths() {
+    for archive_path in get_archive_paths()? {
         let task = tasks::IoTaskPool::get().spawn(load_archive(archive_path.clone()));
         tasks.tasks.push(task);
     }
     commands.insert_resource(tasks);
+    Ok(())
 }
 
 pub fn is_archive_extension<P: AsRef<Path>>(path: P) -> bool {
@@ -190,7 +142,7 @@ async fn load_archive(archive_path: PathBuf) -> Result<ArchiveInfo> {
 pub fn check_archive_loading(
     mut exit: EventWriter<AppExit>,
     mut load_task: ResMut<LoadArchiveTasks>,
-    mut file_info_map: ResMut<FileInfoMap>,
+    mut file_info_map: ResMut<file::FileInfoMap>,
     mut archive_info_map: ResMut<ArchiveInfoMap>,
 ) -> Result<()> {
     let mut tasks = Vec::new();
