@@ -195,8 +195,8 @@ impl WorldMapAssetLoader {
         load_context: &mut LoadContext<'_>,
     ) -> Result<Vec<Handle<Image>>> {
         let mut images = Vec::new();
-        for (index, image_path) in Self::get_image_asset_paths(world_map).iter().enumerate() {
-            let image = ImageLoader::load_image(image_path, load_context).await?;
+        for (index, &image_path) in Self::get_image_paths(world_map).iter().enumerate() {
+            let image = ImageLoader::load_path(image_path, load_context).await?;
             let handle =
                 load_context.add_labeled_asset(WorldMapAssetLabel::Image(index).to_string(), image);
             images.push(handle);
@@ -204,11 +204,11 @@ impl WorldMapAssetLoader {
         Ok(images)
     }
 
-    fn get_image_asset_paths(world_map: &adt::Adt) -> Vec<String> {
+    fn get_image_paths(world_map: &adt::Adt) -> Vec<&String> {
         let mut paths = Vec::new();
         if let Some(mtex) = &world_map.mtex {
             for filename in &mtex.filenames {
-                paths.push(format!("archive://{}", filename));
+                paths.push(filename);
             }
         }
         paths

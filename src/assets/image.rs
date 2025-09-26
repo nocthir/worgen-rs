@@ -38,7 +38,7 @@ impl AssetLoader for ImageLoader {
     ) -> Result<Self::Asset, Self::Error> {
         let mut bytes = Vec::new();
         reader.read_to_end(&mut bytes).await?;
-        Self::load_image_impl(&bytes).await
+        Self::load_image(&bytes)
     }
 
     fn extensions(&self) -> &[&str] {
@@ -52,18 +52,11 @@ impl ImageLoader {
         load_context: &mut LoadContext<'_>,
     ) -> Result<Image, ImageLoaderError> {
         let asset_path = format!("archive://{}", path.into());
-        Self::load_image(&asset_path, load_context).await
-    }
-
-    pub async fn load_image(
-        asset_path: &str,
-        load_context: &mut LoadContext<'_>,
-    ) -> Result<Image, ImageLoaderError> {
         let bytes = load_context.read_asset_bytes(asset_path).await?;
-        Self::load_image_impl(&bytes).await
+        Self::load_image(&bytes)
     }
 
-    async fn load_image_impl(bytes: &[u8]) -> Result<Image, ImageLoaderError> {
+    fn load_image(bytes: &[u8]) -> Result<Image, ImageLoaderError> {
         let image = blp::parser::load_blp_from_buf(bytes)?;
         let dyn_image = blp::convert::blp_to_image(&image, 0)?;
         let extent = Extent3d {

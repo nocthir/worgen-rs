@@ -211,10 +211,10 @@ impl WorldModelAssetLoader {
         load_context: &mut LoadContext<'_>,
     ) -> Result<Vec<Handle<Image>>> {
         let mut images = Vec::new();
-        for image_path in Self::get_image_asset_paths(root) {
+        for image_path in Self::get_image_paths(root) {
             // At this point we do not know which archive contains this texture.
             // But we have built a map of blp paths to their respective archives.
-            let image = ImageLoader::load_image(&image_path, load_context).await?;
+            let image = ImageLoader::load_path(image_path, load_context).await?;
             images.push(image);
         }
 
@@ -239,11 +239,8 @@ impl WorldModelAssetLoader {
         Ok(image_handles)
     }
 
-    fn get_image_asset_paths(root: &wmo::root_parser::WmoRoot) -> Vec<String> {
-        root.textures
-            .iter()
-            .map(|texture| format!("archive://{}", texture))
-            .collect()
+    fn get_image_paths(root: &wmo::root_parser::WmoRoot) -> &[String] {
+        &root.textures
     }
 
     fn load_materials(
