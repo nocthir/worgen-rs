@@ -4,18 +4,10 @@
 
 pub mod archive;
 pub mod file;
-//pub mod model;
-//pub mod texture;
-//pub mod world_map;
-//pub mod world_model;
 
 use bevy::prelude::*;
 
-use crate::{
-    assets::ModelAssetLabel,
-    data::archive::*,
-    ui::{self, FileSelected},
-};
+use crate::{assets::ModelAssetLabel, data::archive::*, ui};
 
 pub struct DataPlugin;
 
@@ -49,7 +41,7 @@ impl CurrentFile {
 }
 
 fn load_selected_file(
-    mut event_reader: EventReader<FileSelected>,
+    mut event_reader: EventReader<ui::FileSelected>,
     current_query: Query<&CurrentFile>,
     entity_query: Query<Entity, With<CurrentFile>>,
     mut commands: Commands,

@@ -7,14 +7,11 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use bevy::{
-    asset::RecursiveDependencyLoadState, ecs::system::SystemParam, pbr::ExtendedMaterial,
-    prelude::*,
-};
+use bevy::{asset::RecursiveDependencyLoadState, prelude::*};
 use wow_mpq as mpq;
 
+use crate::assets;
 use crate::assets::{ModelAsset, WorldMapAsset, WorldModelAsset};
-use crate::{assets, material::TerrainMaterial};
 
 pub struct FileInfo {
     pub path: String,
@@ -163,15 +160,4 @@ impl FileInfoMap {
             .get_mut(&lowercase_name)
             .ok_or(format!("File `{}` not found", file_path).into())
     }
-}
-#[derive(SystemParam)]
-pub struct SceneAssets<'w> {
-    pub images: ResMut<'w, Assets<Image>>,
-    pub meshes: ResMut<'w, Assets<Mesh>>,
-    pub terrain_materials: ResMut<'w, Assets<ExtendedMaterial<StandardMaterial, TerrainMaterial>>>,
-    pub materials: ResMut<'w, Assets<StandardMaterial>>,
-}
-
-impl<'w> SceneAssets<'w> {
-    // Intentionally no manual constructor: acquire via SystemState in systems/tests.
 }
