@@ -119,10 +119,11 @@ pub enum ModelAssetLoaderError {
 
 impl ModelAssetLoader {
     pub async fn load_path(
-        path: &str,
+        model_path: &str,
         load_context: &mut LoadContext<'_>,
     ) -> Result<ModelAsset, ModelAssetLoaderError> {
-        let bytes = load_context.read_asset_bytes(path).await?;
+        let model_asset_path = format!("archive://{}", model_path);
+        let bytes = load_context.read_asset_bytes(&model_asset_path).await?;
         Self::load_model(bytes, load_context).await
     }
 

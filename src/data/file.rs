@@ -7,7 +7,10 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use bevy::{ecs::system::SystemParam, pbr::ExtendedMaterial, prelude::*};
+use bevy::{
+    asset::RecursiveDependencyLoadState, ecs::system::SystemParam, pbr::ExtendedMaterial,
+    prelude::*,
+};
 use wow_mpq as mpq;
 
 use crate::assets::{ModelAsset, WorldMapAsset, WorldModelAsset};
@@ -40,6 +43,10 @@ impl FileInfo {
     pub fn unload(&mut self) {
         self.data_type.unload();
     }
+
+    pub fn get_load_state(&self, asset_server: &AssetServer) -> RecursiveDependencyLoadState {
+        self.data_type.state(asset_server)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -52,16 +59,6 @@ pub enum DataType {
 }
 
 impl DataType {
-    pub fn has_handle(&self) -> bool {
-        match self {
-            DataType::Texture(handle) => handle.is_weak(),
-            DataType::Model(handle) => handle.is_weak(),
-            DataType::WorldModel(handle) => handle.is_weak(),
-            DataType::WorldMap(handle) => handle.is_weak(),
-            DataType::Unknown => false,
-        }
-    }
-
     pub fn set_handle<H: Into<UntypedHandle>>(&mut self, handle: H) {
         let handle = handle.into();
         match self {
@@ -74,9 +71,7 @@ impl DataType {
     }
 
     pub fn load(&mut self, path: String, asset_server: &mut AssetServer) {
-        if self.has_handle() {
-            return;
-        }
+        info!("Loading file: {}", path);
         match self {
             DataType::Texture(handle) => *handle = asset_server.load(path),
             DataType::Model(handle) => *handle = asset_server.load(path),
@@ -94,6 +89,19 @@ impl DataType {
             DataType::WorldMap(handle) => *handle = Handle::default(),
             DataType::Unknown => (),
         };
+    }
+
+    pub fn state(&self, asset_server: &AssetServer) -> RecursiveDependencyLoadState {
+        let ret = match self {
+            DataType::Texture(handle) => asset_server.get_recursive_dependency_load_state(handle),
+            DataType::Model(handle) => asset_server.get_recursive_dependency_load_state(handle),
+            DataType::WorldModel(handle) => {
+                asset_server.get_recursive_dependency_load_state(handle)
+            }
+            DataType::WorldMap(handle) => asset_server.get_recursive_dependency_load_state(handle),
+            DataType::Unknown => None,
+        };
+        ret.unwrap_or(RecursiveDependencyLoadState::NotLoaded)
     }
 }
 

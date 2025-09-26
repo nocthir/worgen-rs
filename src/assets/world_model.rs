@@ -114,7 +114,8 @@ impl WorldModelAssetLoader {
         model_path: &str,
         load_context: &mut LoadContext<'_>,
     ) -> Result<WorldModelAsset, WorldModelAssetLoaderError> {
-        let bytes = load_context.read_asset_bytes(model_path).await?;
+        let model_asset_path = format!("archive://{}", model_path);
+        let bytes = load_context.read_asset_bytes(&model_asset_path).await?;
         Self::load_model(model_path, bytes, load_context).await
     }
 

@@ -89,10 +89,14 @@ impl WorldMapAssetLabel {
 pub struct WorldMapAsset {
     /// Scene loaded from the model, with reorientation applied.
     pub scene: Handle<Scene>,
-    /// Image handles requested during load (populated by the loader).
-    pub image_handles: Vec<Handle<Image>>,
+    /// Image handles requested during load.
+    pub images: Vec<Handle<Image>>,
     /// Terrain bundles created from chunks.
-    pub terrain_bundles: Vec<TerrainBundle>,
+    pub terrain: Vec<TerrainBundle>,
+    /// Model handles requested during load.
+    pub models: Vec<Handle<ModelAsset>>,
+    /// World model handles requested during load.
+    pub world_models: Vec<Handle<WorldModelAsset>>,
     /// Bounding box
     pub aabb: RootAabb,
 }
@@ -147,8 +151,8 @@ impl WorldMapAssetLoader {
         let world_models = Self::load_world_models(&world_map, load_context).await?;
 
         let terrain = Self::process_terrain(&world_map, terrain, &images, load_context)?;
-        //let models = Self::process_models(models, load_context);
-        //let world_models = Self::process_world_models(world_models, load_context)?;
+        let models = Self::process_models(models, load_context);
+        let world_models = Self::process_world_models(world_models, load_context)?;
 
         let mut transform = Transform::default();
         transform.rotate_local_x(-std::f32::consts::FRAC_PI_2);
@@ -168,8 +172,10 @@ impl WorldMapAssetLoader {
 
         Ok(WorldMapAsset {
             scene,
-            image_handles: images,
-            terrain_bundles: terrain,
+            images,
+            terrain,
+            models,
+            world_models,
             aabb,
         })
     }
@@ -484,7 +490,7 @@ impl WorldMapAssetLoader {
         load_context: &mut LoadContext<'_>,
     ) -> Result<Vec<ModelAsset>> {
         let mut models = Vec::new();
-        for model_path in Self::get_model_asset_paths(world_map) {
+        for model_path in Self::get_model_paths(world_map) {
             let model = ModelAssetLoader::load_path(&model_path, load_context).await?;
             models.push(model);
         }
@@ -504,16 +510,15 @@ impl WorldMapAssetLoader {
         handles
     }
 
-    fn get_model_asset_paths(world_map: &adt::Adt) -> Vec<String> {
+    fn get_model_paths(world_map: &adt::Adt) -> Vec<String> {
         let mut models = Vec::new();
         if let Some(mmdx) = &world_map.mmdx {
-            models.extend(mmdx.filenames.iter().filter_map(|f| {
-                if f.ends_with(".m2") {
-                    Some(format!("archive://{}", f))
-                } else {
-                    None
-                }
-            }));
+            models.extend(
+                mmdx.filenames
+                    .iter()
+                    .filter(|f| f.ends_with(".m2"))
+                    .cloned(),
+            );
         }
         models
     }
@@ -523,7 +528,7 @@ impl WorldMapAssetLoader {
         load_context: &mut LoadContext<'_>,
     ) -> Result<Vec<WorldModelAsset>> {
         let mut world_models = Vec::new();
-        for world_model_path in Self::get_world_model_asset_paths(world_map) {
+        for world_model_path in Self::get_world_model_paths(world_map) {
             let world_model =
                 WorldModelAssetLoader::load_path(&world_model_path, load_context).await?;
             world_models.push(world_model);
@@ -546,7 +551,7 @@ impl WorldMapAssetLoader {
         Ok(handles)
     }
 
-    fn get_world_model_asset_paths(world_map: &adt::Adt) -> Vec<String> {
+    fn get_world_model_paths(world_map: &adt::Adt) -> Vec<String> {
         let mut paths = Vec::new();
         if let Some(modf) = &world_map.modf
             && let Some(mwmo) = &world_map.mwmo
@@ -554,7 +559,7 @@ impl WorldMapAssetLoader {
             let filenames = &mwmo.filenames;
             for model in &modf.models {
                 if let Some(filename) = filenames.get(model.name_id as usize) {
-                    paths.push(format!("archive://{}", filename));
+                    paths.push(filename.clone());
                 }
             }
         }

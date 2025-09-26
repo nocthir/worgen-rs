@@ -2,7 +2,7 @@
 // Author: Nocthir <nocthir@proton.me>
 // SPDX-License-Identifier: MIT or Apache-2.0
 
-use bevy::prelude::*;
+use bevy::{asset::RecursiveDependencyLoadState, prelude::*};
 use bevy_egui::*;
 
 use crate::{
@@ -53,12 +53,19 @@ fn data_info(
     data_info: Res<archive::ArchiveInfoMap>,
     file_info_map: Res<file::FileInfoMap>,
     mut event_writer: EventWriter<FileSelected>,
+    asset_server: Res<AssetServer>,
 ) -> Result<()> {
     egui::Window::new("Info")
         .scroll([false, true])
         .show(contexts.ctx_mut()?, |ui| {
             for archive in data_info.map.values() {
-                archive_info(archive, &file_info_map, ui, &mut event_writer)?;
+                archive_info(
+                    archive,
+                    &file_info_map,
+                    ui,
+                    &mut event_writer,
+                    &asset_server,
+                )?;
             }
             Ok::<(), BevyError>(())
         });
@@ -70,6 +77,7 @@ fn archive_info(
     file_info_map: &file::FileInfoMap,
     ui: &mut egui::Ui,
     event_writer: &mut EventWriter<FileSelected>,
+    asset_server: &AssetServer,
 ) -> Result<()> {
     let texture_paths = &archive.texture_paths;
     let model_paths = &archive.model_paths;
@@ -84,7 +92,7 @@ fn archive_info(
                 .show(ui, |ui| {
                     for path in texture_paths {
                         let file_info = file_info_map.get_file(path)?;
-                        file_info_header(file_info, ui);
+                        file_info_header(file_info, ui, asset_server);
                     }
                     Ok::<(), BevyError>(())
                 });
@@ -93,7 +101,7 @@ fn archive_info(
                 .show(ui, |ui| {
                     for path in model_paths {
                         let file_info = file_info_map.get_file(path)?;
-                        model_info(file_info, ui, event_writer);
+                        model_info(file_info, ui, event_writer, asset_server);
                     }
                     Ok::<(), BevyError>(())
                 });
@@ -102,7 +110,7 @@ fn archive_info(
                 .show(ui, |ui| {
                     for path in world_model_paths {
                         let file_info = file_info_map.get_file(path)?;
-                        world_model_info(file_info, ui, event_writer);
+                        world_model_info(file_info, ui, event_writer, asset_server);
                     }
                     Ok::<(), BevyError>(())
                 });
@@ -111,7 +119,7 @@ fn archive_info(
                 .show(ui, |ui| {
                     for path in world_map_paths {
                         let file_info = file_info_map.get_file(path)?;
-                        world_map_info(file_info, ui, event_writer);
+                        world_map_info(file_info, ui, event_writer, asset_server);
                     }
                     Ok::<(), BevyError>(())
                 });
@@ -124,8 +132,9 @@ fn model_info(
     file_info: &file::FileInfo,
     ui: &mut egui::Ui,
     event_writer: &mut EventWriter<FileSelected>,
+    asset_server: &AssetServer,
 ) {
-    let header = file_info_header(file_info, ui);
+    let header = file_info_header(file_info, ui, asset_server);
     if header.header_response.clicked() && !header.header_response.is_tooltip_open() {
         event_writer.write(FileSelected {
             file_path: file_info.path.to_owned(),
@@ -137,8 +146,9 @@ fn world_model_info(
     file_info: &file::FileInfo,
     ui: &mut egui::Ui,
     event_writer: &mut EventWriter<FileSelected>,
+    asset_server: &AssetServer,
 ) {
-    let header = file_info_header(file_info, ui);
+    let header = file_info_header(file_info, ui, asset_server);
     if header.header_response.clicked() && !header.header_response.is_tooltip_open() {
         event_writer.write(FileSelected {
             file_path: file_info.path.to_owned(),
@@ -150,8 +160,9 @@ fn world_map_info(
     file_info: &file::FileInfo,
     ui: &mut egui::Ui,
     event_writer: &mut EventWriter<FileSelected>,
+    asset_server: &AssetServer,
 ) {
-    let header = file_info_header(file_info, ui);
+    let header = file_info_header(file_info, ui, asset_server);
     if header.header_response.clicked() && !header.header_response.is_tooltip_open() {
         event_writer.write(FileSelected {
             file_path: file_info.path.to_owned(),
@@ -162,41 +173,42 @@ fn world_map_info(
 fn file_info_header(
     file_info: &file::FileInfo,
     ui: &mut egui::Ui,
+    asset_server: &AssetServer,
 ) -> egui::collapsing_header::CollapsingResponse<()> {
-    //let file_state = file_info.state.clone();
-    //let mut error_message = None;
-    //if let file::FileInfoState::Error(err) = &file_info.state {
-    //    error_message.replace(err.clone());
-    //}
+    let load_state = file_info.get_load_state(asset_server);
+    let mut error_message = None;
+    if let RecursiveDependencyLoadState::Failed(err) = &load_state {
+        error_message.replace(err.to_string());
+    }
 
     let file_icon = get_file_icon(&file_info.data_type);
     egui::CollapsingHeader::new(format!("{} {}", file_icon, file_info.path))
         .icon(move |ui, _, response| {
-            //let pos = response.rect.center();
-            //let anchor = egui::Align2::CENTER_CENTER;
-            //let font_id = egui::TextStyle::Button.resolve(ui.style());
-            //let text_color = ui.style().visuals.text_color();
-            //match file_state {
-            //    file::FileInfoState::Unloaded => {
-            //        ui.painter().text(pos, anchor, "▶", font_id, text_color);
-            //    }
-            //    file::FileInfoState::Loading => {
-            //        ui.painter().text(pos, anchor, "⏳", font_id, text_color);
-            //    }
-            //    file::FileInfoState::Loaded => {
-            //        ui.painter()
-            //            .text(pos, anchor, "✔", font_id, egui::Color32::CYAN);
-            //    }
-            //    file::FileInfoState::Error(_) => {
-            //        ui.painter()
-            //            .text(pos, anchor, "✖", font_id, egui::Color32::RED);
-            //    }
-            //};
+            let pos = response.rect.center();
+            let anchor = egui::Align2::CENTER_CENTER;
+            let font_id = egui::TextStyle::Button.resolve(ui.style());
+            let text_color = ui.style().visuals.text_color();
+            match load_state {
+                RecursiveDependencyLoadState::NotLoaded => {
+                    ui.painter().text(pos, anchor, "▶", font_id, text_color);
+                }
+                RecursiveDependencyLoadState::Loading => {
+                    ui.painter().text(pos, anchor, "⏳", font_id, text_color);
+                }
+                RecursiveDependencyLoadState::Loaded => {
+                    ui.painter()
+                        .text(pos, anchor, "✔", font_id, egui::Color32::CYAN);
+                }
+                RecursiveDependencyLoadState::Failed(_) => {
+                    ui.painter()
+                        .text(pos, anchor, "✖", font_id, egui::Color32::RED);
+                }
+            };
         })
         .show(ui, |ui| {
-            //if let Some(msg) = error_message {
-            //    ui.colored_label(egui::Color32::RED, msg);
-            //}
+            if let Some(msg) = error_message {
+                ui.colored_label(egui::Color32::RED, msg);
+            }
         })
 }
 
