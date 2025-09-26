@@ -55,19 +55,32 @@ fn data_info(
     mut event_writer: EventWriter<FileSelected>,
     asset_server: Res<AssetServer>,
 ) -> Result<()> {
-    egui::Window::new("Info")
-        .scroll([false, true])
+    // Left side panel replacing the floating "Info" window.
+    egui::SidePanel::left("info_panel")
+        .resizable(true)
+        .min_width(220.0)
+        .default_width(260.0)
         .show(contexts.ctx_mut()?, |ui| {
-            for archive in data_info.map.values() {
-                archive_info(
-                    archive,
-                    &file_info_map,
-                    ui,
-                    &mut event_writer,
-                    &asset_server,
-                )?;
-            }
-            Ok::<(), BevyError>(())
+            ui.heading("Info");
+            ui.separator();
+            // Single scroll area with both vertical and horizontal scrolling so
+            // the horizontal scrollbar is rendered at the bottom of the panel.
+            egui::ScrollArea::both()
+                .auto_shrink([false, false])
+                .id_salt("info_scroll")
+                .show(ui, |ui| {
+                    for archive in data_info.map.values() {
+                        if let Err(err) = archive_info(
+                            archive,
+                            &file_info_map,
+                            ui,
+                            &mut event_writer,
+                            &asset_server,
+                        ) {
+                            ui.colored_label(egui::Color32::RED, format!("{err}"));
+                        }
+                    }
+                });
         });
     Ok(())
 }
