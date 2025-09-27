@@ -4,8 +4,34 @@
 
 use std::{fs, io, ptr::addr_of, sync::Once};
 
-use bevy::prelude::*;
+use bevy::{pbr::ExtendedMaterial, prelude::*};
 use serde::{Deserialize, Serialize};
+
+use crate::material::TerrainMaterial;
+
+pub struct SettingsPlugin;
+
+impl Plugin for SettingsPlugin {
+    fn build(&self, app: &mut App) {
+        app.insert_resource(TerrainSettings::default())
+            .add_systems(Update, apply_terrain_settings);
+    }
+}
+
+fn apply_terrain_settings(
+    terrain_settings: Res<TerrainSettings>,
+    mut materials: ResMut<Assets<ExtendedMaterial<StandardMaterial, TerrainMaterial>>>,
+) {
+    if terrain_settings.is_changed() {
+        for (_idx, material) in materials.iter_mut() {
+            let level_mask = (if terrain_settings.level0 { 1 } else { 0 })
+                | (if terrain_settings.level1 { 2 } else { 0 })
+                | (if terrain_settings.level2 { 4 } else { 0 })
+                | (if terrain_settings.level3 { 8 } else { 0 });
+            material.extension.level_mask = level_mask;
+        }
+    }
+}
 
 pub static mut SETTINGS: Settings = Settings::new();
 static SETTINGS_ONCE: Once = Once::new();
@@ -77,4 +103,12 @@ impl TestSettings {
         let settings: TestSettings = serde_json::from_reader(reader)?;
         Ok(settings)
     }
+}
+
+#[derive(Resource, Default, Debug, Clone, Copy)]
+pub struct TerrainSettings {
+    pub level0: bool,
+    pub level1: bool,
+    pub level2: bool,
+    pub level3: bool,
 }

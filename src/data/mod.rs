@@ -15,7 +15,6 @@ impl Plugin for DataPlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(archive::ArchiveInfoMap::default())
             .insert_resource(file::FileInfoMap::new().expect("Failed to create FileInfoMap"))
-            .insert_resource(file::TerrainSettings::default())
             .add_systems(Startup, (archive::start_loading, ui::select_default_model))
             .add_systems(
                 Update,
@@ -48,7 +47,6 @@ fn load_selected_file(
     mut commands: Commands,
     mut asset_server: ResMut<AssetServer>,
     mut file_map: ResMut<file::FileInfoMap>,
-    terrain_settings: Res<file::TerrainSettings>,
 ) -> Result {
     // Ignore all but the last event
     if let Some(event) = event_reader.read().last() {
@@ -66,7 +64,7 @@ fn load_selected_file(
 
         file_map
             .get_file_mut(&event.file_path)?
-            .load(*terrain_settings, &mut asset_server);
+            .load(&mut asset_server);
         let model =
             asset_server.load(model::ModelAssetLabel::Root.from_asset(event.get_asset_path()));
         commands.spawn((CurrentFile::new(event.file_path.clone()), SceneRoot(model)));
