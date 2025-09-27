@@ -105,6 +105,7 @@ struct InfoParams<'w, 's> {
 fn data_info(
     mut contexts: EguiContexts,
     mut info: InfoParams,
+    mut terrain_settings: ResMut<file::TerrainSettings>,
     assets: AssetParams,
     // Window + camera for viewport adjustment so 3D scene doesn't render under panel
     window_camera: WindowParams,
@@ -112,7 +113,7 @@ fn data_info(
     // Acquire egui context once
     let ctx = contexts.ctx_mut()?;
 
-    let left_panel_response = left_panel(&mut info, ctx);
+    let left_panel_response = left_panel(&mut info, &mut terrain_settings, ctx);
 
     let right_panel_response = right_panel(&mut info, &assets, ctx);
 
@@ -151,12 +152,28 @@ fn data_info(
     Ok(())
 }
 
-fn left_panel(info: &mut InfoParams, ctx: &mut egui::Context) -> egui::InnerResponse<()> {
+fn left_panel(
+    info: &mut InfoParams,
+    terrain_settings: &mut file::TerrainSettings,
+    ctx: &mut egui::Context,
+) -> egui::InnerResponse<()> {
     egui::SidePanel::left("info_panel")
         .resizable(true)
         .min_width(220.0)
         .default_width(260.0)
         .show(ctx, |ui| {
+            egui::CollapsingHeader::new("Terrain Settings")
+                .default_open(false)
+                .show(ui, |ui| {
+                    ui.add(
+                        egui::Slider::new(&mut terrain_settings.uv_scale, 1.0..=32.0)
+                            .text("UV Scale")
+                            .clamping(egui::SliderClamping::Always)
+                            .step_by(1.0)
+                            .show_value(true),
+                    );
+                });
+
             // Single scroll area with both vertical and horizontal scrolling so
             // the horizontal scrollbar is rendered at the bottom of the panel.
             egui::ScrollArea::both()

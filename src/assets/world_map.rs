@@ -11,6 +11,7 @@ use bevy::pbr::ExtendedMaterial;
 use bevy::prelude::*;
 use bevy::render::mesh::*;
 use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use wow_adt as adt;
 
@@ -124,6 +125,7 @@ pub enum WorldMapAssetLoaderError {
 impl WorldMapAssetLoader {
     async fn load_model(
         bytes: Vec<u8>,
+        settings: &WorldMapLoaderSettings,
         load_context: &mut LoadContext<'_>,
     ) -> Result<WorldMapAsset, WorldMapAssetLoaderError> {
         let mut cursor = io::Cursor::new(&bytes);
@@ -131,7 +133,7 @@ impl WorldMapAssetLoader {
 
         Self::fix_model_extensions(&mut world_map);
         let images = Self::load_images(&world_map, load_context).await?;
-        let terrain = Self::load_terrain(&world_map).await;
+        let terrain = Self::load_terrain(&world_map, settings).await;
         let aabb = RootAabb::from_transformed_meshes(terrain.iter());
         let models = Self::load_models(&world_map, load_context);
         let world_models = Self::load_world_models(&world_map, load_context);
@@ -203,10 +205,13 @@ impl WorldMapAssetLoader {
             .collect()
     }
 
-    async fn load_terrain(world_map: &adt::Adt) -> Vec<TransformMesh> {
+    async fn load_terrain(
+        world_map: &adt::Adt,
+        settings: &WorldMapLoaderSettings,
+    ) -> Vec<TransformMesh> {
         let mut meshes = Vec::new();
         for chunk in &world_map.mcnk_chunks {
-            let mesh = Self::create_mesh_from_world_map_chunk(chunk);
+            let mesh = Self::create_mesh_from_world_map_chunk(chunk, settings);
             meshes.push(mesh);
         }
         meshes
@@ -314,7 +319,10 @@ impl WorldMapAssetLoader {
     ///   per quad using the middle (odd-row) vertex as the center. The triangles are emitted
     ///   with counter-clockwise (CCW) winding so front faces are consistent with the engine's
     ///   default.
-    pub fn create_mesh_from_world_map_chunk(chunk: &adt::McnkChunk) -> TransformMesh {
+    pub fn create_mesh_from_world_map_chunk(
+        chunk: &adt::McnkChunk,
+        settings: &WorldMapLoaderSettings,
+    ) -> TransformMesh {
         static VERTEX_COUNT: usize = 145; // 8*8 + 9*9
         let mut positions = vec![[0.0, 0.0, 0.0]; VERTEX_COUNT];
         let mut normals = vec![[0.0, 0.0, 0.0]; VERTEX_COUNT];
@@ -340,8 +348,7 @@ impl WorldMapAssetLoader {
             let x = x_offset + x_suboffset;
             let z = z_offset + z_suboffset;
 
-            static UV_SCALE: f32 = 8.0;
-            tex_coords[i] = [(1.0 - x / UV_SCALE), (1.0 - z / UV_SCALE)];
+            tex_coords[i] = [(1.0 - x / settings.uv_scale), (1.0 - z / settings.uv_scale)];
             positions[i] = [-x, chunk.height_map[i], -z];
             normals[i] = from_normalized_vec3_u8(chunk.normals[i]);
         }
@@ -523,20 +530,31 @@ impl WorldMapAssetLoader {
     }
 }
 
+#[derive(Serialize, Deserialize)]
+pub struct WorldMapLoaderSettings {
+    pub uv_scale: f32,
+}
+
+impl Default for WorldMapLoaderSettings {
+    fn default() -> Self {
+        Self { uv_scale: 8.0 }
+    }
+}
+
 impl AssetLoader for WorldMapAssetLoader {
     type Asset = WorldMapAsset;
-    type Settings = (); // No custom settings yet
+    type Settings = WorldMapLoaderSettings;
     type Error = WorldMapAssetLoaderError;
 
     async fn load(
         &self,
         reader: &mut dyn Reader,
-        _settings: &Self::Settings,
+        settings: &Self::Settings,
         load_context: &mut LoadContext<'_>,
     ) -> Result<Self::Asset, Self::Error> {
         let mut bytes = Vec::new();
         reader.read_to_end(&mut bytes).await?;
-        Self::load_model(bytes, load_context).await
+        Self::load_model(bytes, settings, load_context).await
     }
 
     fn extensions(&self) -> &[&str] {

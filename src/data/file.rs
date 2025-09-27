@@ -10,7 +10,18 @@ use std::{
 use bevy::{asset::RecursiveDependencyLoadState, prelude::*};
 use wow_mpq as mpq;
 
-use crate::assets::*;
+use crate::assets::{world_map::WorldMapLoaderSettings, *};
+
+#[derive(Resource, Debug, Clone, Copy)]
+pub struct TerrainSettings {
+    pub uv_scale: f32,
+}
+
+impl Default for TerrainSettings {
+    fn default() -> Self {
+        Self { uv_scale: 8.0 }
+    }
+}
 
 pub struct FileInfo {
     pub path: String,
@@ -32,8 +43,9 @@ impl FileInfo {
         format!("archive://{}", self.path)
     }
 
-    pub fn load(&mut self, asset_server: &mut AssetServer) {
-        self.data_type.load(self.get_asset_path(), asset_server);
+    pub fn load(&mut self, terrain_settings: TerrainSettings, asset_server: &mut AssetServer) {
+        self.data_type
+            .load(self.get_asset_path(), terrain_settings, asset_server);
     }
 
     pub fn unload(&mut self) {
@@ -66,13 +78,25 @@ impl DataType {
         }
     }
 
-    pub fn load(&mut self, path: String, asset_server: &mut AssetServer) {
+    pub fn load(
+        &mut self,
+        path: String,
+        terrain_settings: TerrainSettings,
+        asset_server: &mut AssetServer,
+    ) {
         info!("Loading file: {}", path);
         match self {
             DataType::Texture(handle) => *handle = asset_server.load(path),
             DataType::Model(handle) => *handle = asset_server.load(path),
             DataType::WorldModel(handle) => *handle = asset_server.load(path),
-            DataType::WorldMap(handle) => *handle = asset_server.load(path),
+            DataType::WorldMap(handle) => {
+                *handle = asset_server.load_with_settings(
+                    path,
+                    move |settings: &mut WorldMapLoaderSettings| {
+                        settings.uv_scale = terrain_settings.uv_scale;
+                    },
+                )
+            }
             DataType::Unknown => (),
         };
     }
