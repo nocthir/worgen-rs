@@ -2,6 +2,8 @@
 // Author: Nocthir <nocthir@proton.me>
 // SPDX-License-Identifier: MIT or Apache-2.0
 
+use std::fmt;
+
 use bevy::{
     prelude::*,
     render::{mesh::MeshAabb, primitives::Aabb},
@@ -98,5 +100,20 @@ impl RootAabb {
         let max = max_a.max(max_b);
         to_extend.center = (min + max) * 0.5;
         to_extend.half_extents = (max - min) * 0.5;
+    }
+}
+
+impl fmt::Display for RootAabb {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "Center: ({:.2}, {:.2}, {:.2}), Half Extents: ({:.2}, {:.2}, {:.2})",
+            self.aabb.center.x,
+            self.aabb.center.y,
+            self.aabb.center.z,
+            self.aabb.half_extents.x,
+            self.aabb.half_extents.y,
+            self.aabb.half_extents.z
+        )
     }
 }

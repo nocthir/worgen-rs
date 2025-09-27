@@ -26,7 +26,7 @@ impl Plugin for DataPlugin {
 
 #[derive(Component)]
 pub struct CurrentFile {
-    path: String,
+    pub path: String,
 }
 
 impl CurrentFile {

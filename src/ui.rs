@@ -4,14 +4,16 @@
 
 use bevy::{
     asset::RecursiveDependencyLoadState,
+    ecs::system::SystemParam,
     prelude::*,
-    render::{camera::Viewport, view::RenderLayers},
+    render::{camera::Viewport, mesh::VertexAttributeValues, view::RenderLayers},
     window::PrimaryWindow,
 };
 use bevy_egui::*;
 
 use crate::{
-    data::{archive, file},
+    assets::{model, world_map, world_model},
+    data::{self, archive, file},
     settings::{self, FileSettings},
 };
 
@@ -72,53 +74,64 @@ pub fn select_default_model(mut event_writer: EventWriter<FileSelected>) {
     event_writer.write(FileSelected::new(default_model_path));
 }
 
+#[derive(SystemParam)]
+struct AssetParams<'w> {
+    images: Res<'w, Assets<Image>>,
+    materials: Res<'w, Assets<StandardMaterial>>,
+    meshes: Res<'w, Assets<Mesh>>,
+    models: Res<'w, Assets<model::ModelAsset>>,
+    world_models: Res<'w, Assets<world_model::WorldModelAsset>>,
+    world_maps: Res<'w, Assets<world_map::WorldMapAsset>>,
+}
+
+#[derive(SystemParam)]
+struct WindowParams<'w> {
+    window: Single<'w, &'static Window, With<PrimaryWindow>>,
+    camera: Single<'w, &'static mut Camera, Without<EguiContext>>,
+}
+
+#[derive(SystemParam)]
+struct InfoParams<'w, 's> {
+    data_info: Res<'w, archive::ArchiveInfoMap>,
+    file_info_map: Res<'w, file::FileInfoMap>,
+    asset_server: Res<'w, AssetServer>,
+    current_file: Query<'w, 's, &'static data::CurrentFile, With<data::CurrentFile>>,
+    event_writer: EventWriter<'w, FileSelected>,
+}
+
 fn data_info(
     mut contexts: EguiContexts,
-    data_info: Res<archive::ArchiveInfoMap>,
-    file_info_map: Res<file::FileInfoMap>,
-    mut event_writer: EventWriter<FileSelected>,
-    asset_server: Res<AssetServer>,
+    mut info: InfoParams,
+    assets: AssetParams,
     // Window + camera for viewport adjustment so 3D scene doesn't render under panel
-    window: Single<&Window, With<PrimaryWindow>>,
-    mut camera: Single<&mut Camera, Without<EguiContext>>,
+    window_camera: WindowParams,
 ) -> Result<()> {
     // Acquire egui context once
     let ctx = contexts.ctx_mut()?;
 
-    // Left side panel replacing the floating "Info" window.
-    let panel_response = egui::SidePanel::left("info_panel")
-        .resizable(true)
-        .min_width(220.0)
-        .default_width(260.0)
-        .show(ctx, |ui| {
-            // Single scroll area with both vertical and horizontal scrolling so
-            // the horizontal scrollbar is rendered at the bottom of the panel.
-            egui::ScrollArea::both()
-                .auto_shrink([false, false])
-                .id_salt("info_scroll")
-                .show(ui, |ui| {
-                    for archive in data_info.map.values() {
-                        if let Err(err) = archive_info(
-                            archive,
-                            &file_info_map,
-                            ui,
-                            &mut event_writer,
-                            &asset_server,
-                        ) {
-                            ui.colored_label(egui::Color32::RED, format!("{err}"));
-                        }
-                    }
-                });
-        });
+    let left_panel_response = left_panel(&mut info, ctx);
+
+    let right_panel_response = right_panel(&mut info, &assets, ctx);
 
     // Adjust world camera viewport so scene starts to the right of the panel (avoid rendering beneath UI)
-    let left_width_logical = panel_response.response.rect.width();
+    let left_width_logical = left_panel_response.response.rect.width();
+
+    let window = window_camera.window;
+    let mut camera = window_camera.camera;
+
     let scale = window.scale_factor();
     let left_phys = (left_width_logical * scale)
         .round()
         .clamp(0.0, window.physical_width() as f32) as u32;
+
+    let right_width_logical = right_panel_response.response.rect.width();
+    let right_phys = (right_width_logical * scale)
+        .round()
+        .clamp(0.0, window.physical_width() as f32) as u32;
+    let viewport_width = window.physical_width() - right_phys - left_phys;
+
     let pos = UVec2::new(left_phys, 0);
-    let size = UVec2::new(window.physical_width(), window.physical_height()) - pos;
+    let size = UVec2::new(viewport_width, window.physical_height());
     // Only update if changed to avoid unnecessary render graph invalidation.
     let needs_update = match &camera.viewport {
         Some(vp) => vp.physical_position != pos || vp.physical_size != size,
@@ -135,8 +148,70 @@ fn data_info(
     Ok(())
 }
 
-// Viewport adjustment removed: rendering under the panel is acceptable for now; if needed later,
-// implement with a dedicated scene camera and separate UI camera to avoid shifting egui.
+fn left_panel(info: &mut InfoParams, ctx: &mut egui::Context) -> egui::InnerResponse<()> {
+    egui::SidePanel::left("info_panel")
+        .resizable(true)
+        .min_width(220.0)
+        .default_width(260.0)
+        .show(ctx, |ui| {
+            // Single scroll area with both vertical and horizontal scrolling so
+            // the horizontal scrollbar is rendered at the bottom of the panel.
+            egui::ScrollArea::both()
+                .auto_shrink([false, false])
+                .id_salt("info_scroll")
+                .show(ui, |ui| {
+                    for archive in info.data_info.map.values() {
+                        if let Err(err) = archive_info(
+                            archive,
+                            &info.file_info_map,
+                            ui,
+                            &mut info.event_writer,
+                            &info.asset_server,
+                        ) {
+                            ui.colored_label(egui::Color32::RED, format!("{err}"));
+                        }
+                    }
+                });
+        })
+}
+
+fn right_panel(
+    info: &mut InfoParams,
+    assets: &AssetParams,
+    ctx: &mut egui::Context,
+) -> egui::InnerResponse<()> {
+    let side_panel = egui::SidePanel::right("current_file_panel");
+    if let Ok(current_file) = info.current_file.single() {
+        side_panel
+            .resizable(true)
+            .min_width(220.0)
+            .default_width(260.0)
+            .show(ctx, |ui| {
+                // Single scroll area with both vertical and horizontal scrolling so
+                // the horizontal scrollbar is rendered at the bottom of the panel.
+                egui::ScrollArea::both()
+                    .auto_shrink([false, false])
+                    .id_salt("current_file_scroll")
+                    .show(ui, |ui| {
+                        if let Ok(file_info) = info.file_info_map.get_file(&current_file.path) {
+                            ui.label(&file_info.path);
+                            data_type_info(&file_info.data_type, assets, ui);
+                        } else {
+                            ui.colored_label(
+                                egui::Color32::RED,
+                                format!("Failed to get info for {}", current_file.path),
+                            );
+                        }
+                    });
+            })
+    } else {
+        // Empty panel when no file is selected
+        side_panel
+            .resizable(false)
+            .exact_width(0.0)
+            .show(ctx, |_ui| {})
+    }
+}
 
 fn archive_info(
     archive: &archive::ArchiveInfo,
@@ -285,5 +360,179 @@ fn get_file_icon(data_type: &file::DataType) -> &'static str {
         file::DataType::WorldModel(_) => "🏰",
         file::DataType::WorldMap(_) => "🗺",
         file::DataType::Unknown => "❓",
+    }
+}
+
+fn data_type_info(data_type: &file::DataType, assets: &AssetParams, ui: &mut egui::Ui) {
+    match data_type {
+        file::DataType::Texture(_) => {
+            egui::CollapsingHeader::new("Texture")
+                .default_open(true)
+                .show(ui, |ui| {
+                    ui.label("A 2D image used for texturing 3D models.");
+                });
+        }
+        file::DataType::Model(handle) => {
+            model_type_info(handle, assets, ui);
+        }
+        file::DataType::WorldModel(_) => {
+            egui::CollapsingHeader::new("World Model")
+                .default_open(true)
+                .show(ui, |ui| {
+                    ui.label("A complex 3D model used for large structures or environments.");
+                });
+        }
+        file::DataType::WorldMap(_) => {
+            egui::CollapsingHeader::new("World Map")
+                .default_open(true)
+                .show(ui, |ui| {
+                    ui.label("A map representing the game world or a specific area.");
+                });
+        }
+        file::DataType::Unknown => {
+            egui::CollapsingHeader::new("Unknown")
+                .default_open(true)
+                .show(ui, |ui| {
+                    ui.label("The type of this file is unknown.");
+                });
+        }
+    }
+}
+
+fn model_type_info(handle: &Handle<model::ModelAsset>, assets: &AssetParams, ui: &mut egui::Ui) {
+    if let Some(model) = assets.models.get(handle) {
+        egui::CollapsingHeader::new("Details")
+            .default_open(false)
+            .show(ui, |ui| {
+                egui::CollapsingHeader::new("Images")
+                    .default_open(false)
+                    .show(ui, |ui| {
+                        for image in &model.images {
+                            image_type_info(image, assets, ui);
+                        }
+                    });
+
+                egui::CollapsingHeader::new("Materials")
+                    .default_open(false)
+                    .show(ui, |ui| {
+                        for (index, material) in model.materials.iter().enumerate() {
+                            material_type_info(material, index, assets, ui);
+                        }
+                    });
+
+                egui::CollapsingHeader::new("Meshes")
+                    .default_open(false)
+                    .show(ui, |ui| {
+                        for (index, mesh) in model.meshes.iter().enumerate() {
+                            mesh_type_info(mesh, index, assets, ui);
+                        }
+                    });
+
+                ui.label(format!("Aabb: {}", model.aabb));
+            });
+    } else {
+        ui.colored_label(egui::Color32::YELLOW, "Model not loaded");
+    }
+}
+
+fn image_type_info(handle: &Handle<Image>, assets: &AssetParams, ui: &mut egui::Ui) {
+    if let Some(image) = assets.images.get(handle) {
+        let label = image.texture_descriptor.label.unwrap_or("Image");
+        egui::CollapsingHeader::new(label)
+            .default_open(false)
+            .show(ui, |ui| {
+                ui.label(format!(
+                    "Size: {}x{}",
+                    image.texture_descriptor.size.width, image.texture_descriptor.size.height
+                ));
+                ui.label(format!("Format: {:?}", image.texture_descriptor.format));
+                ui.label(format!(
+                    "Mip Levels: {}",
+                    image.texture_descriptor.mip_level_count
+                ));
+            });
+    } else {
+        ui.colored_label(egui::Color32::YELLOW, "Image not loaded");
+    }
+}
+
+fn material_type_info(
+    material: &Handle<StandardMaterial>,
+    material_index: usize,
+    assets: &AssetParams,
+    ui: &mut egui::Ui,
+) {
+    if let Some(material) = assets.materials.get(material) {
+        let label: String = format!("Material{}", material_index);
+        egui::CollapsingHeader::new(label)
+            .default_open(false)
+            .show(ui, |ui| {
+                ui.label(format!("Base Color: {:?}", material.base_color));
+                if let Some(base_color_texture) = &material.base_color_texture {
+                    ui.label(format!(
+                        "Base Color Texture: {}",
+                        base_color_texture.path().as_ref().unwrap()
+                    ));
+                }
+                ui.label(format!("Emissive Color: {:?}", material.emissive));
+                ui.label(format!("Alpha Mode: {:?}", material.alpha_mode));
+                ui.label(format!("Double Sided: {}", material.double_sided));
+            });
+    } else {
+        ui.colored_label(egui::Color32::YELLOW, "Material not loaded");
+    }
+}
+
+fn mesh_type_info(
+    handle: &Handle<Mesh>,
+    mesh_index: usize,
+    assets: &AssetParams,
+    ui: &mut egui::Ui,
+) {
+    if let Some(mesh) = assets.meshes.get(handle) {
+        let label: String = format!("Mesh{}", mesh_index);
+        egui::CollapsingHeader::new(label)
+            .default_open(false)
+            .show(ui, |ui| {
+                for (attribute_name, attribute_value) in mesh.attributes() {
+                    egui::CollapsingHeader::new(format!("{:?}", attribute_name.name))
+                        .default_open(false)
+                        .show(ui, |ui| {
+                            attribute_value_info(attribute_value, ui);
+                        });
+                }
+            });
+    } else {
+        ui.colored_label(egui::Color32::YELLOW, "Mesh not loaded");
+    }
+}
+
+fn attribute_value_info(attribute_value: &VertexAttributeValues, ui: &mut egui::Ui) {
+    match attribute_value {
+        VertexAttributeValues::Float32x3(values) => {
+            if !values.is_empty() {
+                let preview_count = values.len().min(5);
+                for v in values.iter().take(preview_count) {
+                    ui.label(format!("{:?} ", v));
+                }
+                if values.len() > preview_count {
+                    ui.label("  ...");
+                }
+            }
+        }
+        VertexAttributeValues::Float32x2(values) => {
+            if !values.is_empty() {
+                let preview_count = values.len().min(5);
+                for v in values.iter().take(preview_count) {
+                    ui.label(format!("{:?} ", v));
+                }
+                if values.len() > preview_count {
+                    ui.label("  ...");
+                }
+            }
+        }
+        _ => {
+            ui.label("Unsupported attribute type");
+        }
     }
 }
