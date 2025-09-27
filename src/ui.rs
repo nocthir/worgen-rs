@@ -2,6 +2,8 @@
 // Author: Nocthir <nocthir@proton.me>
 // SPDX-License-Identifier: MIT or Apache-2.0
 
+use std::collections::HashMap;
+
 use bevy::{
     asset::RecursiveDependencyLoadState,
     ecs::system::SystemParam,
@@ -78,7 +80,7 @@ pub fn select_default_model(mut event_writer: EventWriter<FileSelected>) {
 
 #[derive(SystemParam)]
 struct AssetParams<'w> {
-    images: Res<'w, Assets<Image>>,
+    images: ResMut<'w, Assets<Image>>,
     materials: Res<'w, Assets<StandardMaterial>>,
     terrain_materials: Res<'w, Assets<ExtendedMaterial<StandardMaterial, TerrainMaterial>>>,
     meshes: Res<'w, Assets<Mesh>>,
@@ -110,12 +112,20 @@ fn data_info(
     // Window + camera for viewport adjustment so 3D scene doesn't render under panel
     window_camera: WindowParams,
 ) -> Result<()> {
+    // Get egui image handles
+    let image_handles = get_image_handles(
+        &info.current_file,
+        &info.file_info_map,
+        &assets,
+        &mut contexts,
+    );
+
     // Acquire egui context once
     let ctx = contexts.ctx_mut()?;
 
     let left_panel_response = left_panel(&mut info, &mut terrain_settings, ctx);
 
-    let right_panel_response = right_panel(&mut info, &assets, ctx);
+    let right_panel_response = right_panel(&mut info, &assets, image_handles, ctx);
 
     // Adjust world camera viewport so scene starts to the right of the panel (avoid rendering beneath UI)
     let left_width_logical = left_panel_response.response.rect.width();
@@ -150,6 +160,34 @@ fn data_info(
     }
 
     Ok(())
+}
+
+fn get_image_handles(
+    current_file: &Query<&data::CurrentFile, With<data::CurrentFile>>,
+    file_info_map: &file::FileInfoMap,
+    assets: &AssetParams,
+    contexts: &mut EguiContexts,
+) -> HashMap<Handle<Image>, egui::TextureId> {
+    let mut image_handles = HashMap::new();
+    if let Ok(current_file) = current_file.single() {
+        let file = file_info_map.get_file(&current_file.path).unwrap();
+        match &file.data_type {
+            file::DataType::Texture(image_handle) => {
+                let texture_id = contexts.add_image(image_handle.clone_weak());
+                image_handles.insert(image_handle.clone(), texture_id);
+            }
+            file::DataType::WorldMap(world_map_handle) => {
+                if let Some(world_map) = assets.world_maps.get(world_map_handle) {
+                    for image in &world_map.images {
+                        let texture_id = contexts.add_image(image.clone_weak());
+                        image_handles.insert(image.clone(), texture_id);
+                    }
+                }
+            }
+            _ => (),
+        }
+    }
+    image_handles
 }
 
 fn left_panel(
@@ -200,6 +238,7 @@ fn terrain_settings_widget(terrain_settings: &mut settings::TerrainSettings, ui:
 fn right_panel(
     info: &mut InfoParams,
     assets: &AssetParams,
+    image_map: HashMap<Handle<Image>, egui::TextureId>,
     ctx: &mut egui::Context,
 ) -> egui::InnerResponse<()> {
     let side_panel = egui::SidePanel::right("current_file_panel");
@@ -217,7 +256,7 @@ fn right_panel(
                     .show(ui, |ui| {
                         if let Ok(file_info) = info.file_info_map.get_file(&current_file.path) {
                             ui.label(&file_info.path);
-                            data_type_info(&file_info.data_type, assets, ui);
+                            data_type_info(&file_info.data_type, assets, &image_map, ui);
                         } else {
                             ui.colored_label(
                                 egui::Color32::RED,
@@ -385,19 +424,24 @@ fn get_file_icon(data_type: &file::DataType) -> &'static str {
     }
 }
 
-fn data_type_info(data_type: &file::DataType, assets: &AssetParams, ui: &mut egui::Ui) {
+fn data_type_info(
+    data_type: &file::DataType,
+    assets: &AssetParams,
+    image_map: &HashMap<Handle<Image>, egui::TextureId>,
+    ui: &mut egui::Ui,
+) {
     match data_type {
         file::DataType::Texture(image) => {
-            image_type_info(image, assets, ui);
+            image_type_info(image, assets, image_map, ui);
         }
         file::DataType::Model(handle) => {
-            model_type_info(handle, 0, assets, ui);
+            model_type_info(handle, 0, assets, image_map, ui);
         }
         file::DataType::WorldModel(handle) => {
-            world_model_type_info(handle, 0, assets, ui);
+            world_model_type_info(handle, 0, assets, image_map, ui);
         }
         file::DataType::WorldMap(handle) => {
-            world_map_type_info(handle, assets, ui);
+            world_map_type_info(handle, assets, image_map, ui);
         }
         file::DataType::Unknown => {
             ui.label("The type of this file is unknown.");
@@ -409,13 +453,14 @@ fn model_type_info(
     handle: &Handle<model::ModelAsset>,
     index: usize,
     assets: &AssetParams,
+    image_map: &HashMap<Handle<Image>, egui::TextureId>,
     ui: &mut egui::Ui,
 ) {
     if let Some(model) = assets.models.get(handle) {
         egui::CollapsingHeader::new(format!("Model {}", index))
             .default_open(false)
             .show(ui, |ui| {
-                images_type_info(&model.images, assets, ui);
+                images_type_info(&model.images, assets, image_map, ui);
                 materials_type_info(&model.materials, assets, ui);
                 meshes_type_info(&model.meshes, assets, ui);
                 ui.label(format!("Aabb: {}", model.aabb));
@@ -429,13 +474,14 @@ fn world_model_type_info(
     handle: &Handle<world_model::WorldModelAsset>,
     index: usize,
     assets: &AssetParams,
+    image_map: &HashMap<Handle<Image>, egui::TextureId>,
     ui: &mut egui::Ui,
 ) {
     if let Some(world_model) = assets.world_models.get(handle) {
         egui::CollapsingHeader::new(format!("World Model {}", index))
             .default_open(false)
             .show(ui, |ui| {
-                images_type_info(&world_model.images, assets, ui);
+                images_type_info(&world_model.images, assets, image_map, ui);
                 materials_type_info(&world_model.materials, assets, ui);
                 meshes_type_info(&world_model.meshes, assets, ui);
                 ui.label(format!("Aabb: {}", world_model.aabb));
@@ -448,16 +494,17 @@ fn world_model_type_info(
 fn world_map_type_info(
     handle: &Handle<world_map::WorldMapAsset>,
     assets: &AssetParams,
+    image_map: &HashMap<Handle<Image>, egui::TextureId>,
     ui: &mut egui::Ui,
 ) {
     if let Some(world_map) = assets.world_maps.get(handle) {
         egui::CollapsingHeader::new("World Map")
             .default_open(false)
             .show(ui, |ui| {
-                images_type_info(&world_map.images, assets, ui);
-                terrains_type_info(&world_map.terrain, assets, ui);
-                models_type_info(&world_map.models, assets, ui);
-                world_models_type_info(&world_map.world_models, assets, ui);
+                images_type_info(&world_map.images, assets, image_map, ui);
+                terrains_type_info(&world_map.terrain, assets, image_map, ui);
+                models_type_info(&world_map.models, assets, image_map, ui);
+                world_models_type_info(&world_map.world_models, assets, image_map, ui);
                 ui.label(format!("Aabb: {}", world_map.aabb));
             });
     } else {
@@ -465,13 +512,18 @@ fn world_map_type_info(
     }
 }
 
-fn images_type_info(images: &[Handle<Image>], assets: &AssetParams, ui: &mut egui::Ui) {
+fn images_type_info(
+    images: &[Handle<Image>],
+    assets: &AssetParams,
+    image_map: &HashMap<Handle<Image>, egui::TextureId>,
+    ui: &mut egui::Ui,
+) {
     if !images.is_empty() {
         egui::CollapsingHeader::new("Images")
             .default_open(false)
             .show(ui, |ui| {
                 for handle in images {
-                    image_type_info(handle, assets, ui);
+                    image_type_info(handle, assets, image_map, ui);
                 }
             });
     }
@@ -505,13 +557,18 @@ fn meshes_type_info(meshes: &[Handle<Mesh>], assets: &AssetParams, ui: &mut egui
     }
 }
 
-fn models_type_info(models: &[Handle<model::ModelAsset>], assets: &AssetParams, ui: &mut egui::Ui) {
+fn models_type_info(
+    models: &[Handle<model::ModelAsset>],
+    assets: &AssetParams,
+    image_map: &HashMap<Handle<Image>, egui::TextureId>,
+    ui: &mut egui::Ui,
+) {
     if !models.is_empty() {
         egui::CollapsingHeader::new("Models")
             .default_open(false)
             .show(ui, |ui| {
                 for (index, model) in models.iter().enumerate() {
-                    model_type_info(model, index, assets, ui);
+                    model_type_info(model, index, assets, image_map, ui);
                 }
             });
     }
@@ -520,6 +577,7 @@ fn models_type_info(models: &[Handle<model::ModelAsset>], assets: &AssetParams, 
 fn world_models_type_info(
     world_models: &[Handle<world_model::WorldModelAsset>],
     assets: &AssetParams,
+    image_map: &HashMap<Handle<Image>, egui::TextureId>,
     ui: &mut egui::Ui,
 ) {
     if !world_models.is_empty() {
@@ -527,7 +585,7 @@ fn world_models_type_info(
             .default_open(false)
             .show(ui, |ui| {
                 for (index, world_model) in world_models.iter().enumerate() {
-                    world_model_type_info(world_model, index, assets, ui);
+                    world_model_type_info(world_model, index, assets, image_map, ui);
                 }
             });
     }
@@ -536,6 +594,7 @@ fn world_models_type_info(
 fn terrains_type_info(
     terrains: &[world_map::TerrainBundle],
     assets: &AssetParams,
+    image_map: &HashMap<Handle<Image>, egui::TextureId>,
     ui: &mut egui::Ui,
 ) {
     if !terrains.is_empty() {
@@ -543,7 +602,7 @@ fn terrains_type_info(
             .default_open(false)
             .show(ui, |ui| {
                 for (index, terrain) in terrains.iter().enumerate() {
-                    terrain_type_info(terrain, index, assets, ui);
+                    terrain_type_info(terrain, index, assets, image_map, ui);
                 }
             });
     }
@@ -553,32 +612,41 @@ fn terrain_type_info(
     terrain: &world_map::TerrainBundle,
     terrain_index: usize,
     assets: &AssetParams,
+    image_map: &HashMap<Handle<Image>, egui::TextureId>,
     ui: &mut egui::Ui,
 ) {
     egui::CollapsingHeader::new(format!("Terrain {}", terrain_index))
         .default_open(false)
         .show(ui, |ui| {
-            terrain_material_type_info(&terrain.material, assets, ui);
+            terrain_material_type_info(&terrain.material, assets, image_map, ui);
             mesh_type_info(&terrain.mesh, 0, assets, ui);
         });
 }
 
-fn image_type_info(handle: &Handle<Image>, assets: &AssetParams, ui: &mut egui::Ui) {
+fn image_type_info(
+    handle: &Handle<Image>,
+    assets: &AssetParams,
+    image_map: &HashMap<Handle<Image>, egui::TextureId>,
+    ui: &mut egui::Ui,
+) {
     if let Some(image) = assets.images.get(handle) {
         let label = image.texture_descriptor.label.unwrap_or("Image");
         egui::CollapsingHeader::new(label)
             .default_open(false)
             .show(ui, |ui| {
-                ui.label(format!(
-                    "Size: {}x{}",
-                    image.texture_descriptor.size.width, image.texture_descriptor.size.height
-                ));
+                let w = image.texture_descriptor.size.width as f32;
+                let h = image.texture_descriptor.size.height as f32;
+
+                ui.label(format!("Size: {w}x{h}"));
                 ui.label(format!("Format: {:?}", image.texture_descriptor.format));
                 ui.label(format!(
                     "Mip Levels: {}",
                     image.texture_descriptor.mip_level_count
                 ));
             });
+    } else if let Some(tex_id) = image_map.get(handle) {
+        let texture = egui::load::SizedTexture::new(*tex_id, [128.0, 128.0]);
+        ui.add(egui::widgets::Image::new(texture));
     } else {
         ui.colored_label(egui::Color32::YELLOW, "Image not loaded");
     }
@@ -617,6 +685,7 @@ fn material_impl_type_info(material: &StandardMaterial, material_index: usize, u
 fn terrain_material_type_info(
     material: &Handle<ExtendedMaterial<StandardMaterial, TerrainMaterial>>,
     assets: &AssetParams,
+    image_map: &HashMap<Handle<Image>, egui::TextureId>,
     ui: &mut egui::Ui,
 ) {
     if let Some(material) = assets.terrain_materials.get(material) {
@@ -625,15 +694,15 @@ fn terrain_material_type_info(
         egui::CollapsingHeader::new("Terrain Material")
             .default_open(false)
             .show(ui, |ui| {
-                image_type_info(&material.extension.alpha_texture, assets, ui);
+                image_type_info(&material.extension.alpha_texture, assets, image_map, ui);
                 if let Some(level1) = &material.extension.level1_texture {
-                    image_type_info(level1, assets, ui);
+                    image_type_info(level1, assets, image_map, ui);
                 }
                 if let Some(level2) = &material.extension.level2_texture {
-                    image_type_info(level2, assets, ui);
+                    image_type_info(level2, assets, image_map, ui);
                 }
                 if let Some(level3) = &material.extension.level3_texture {
-                    image_type_info(level3, assets, ui);
+                    image_type_info(level3, assets, image_map, ui);
                 }
             });
     } else {
