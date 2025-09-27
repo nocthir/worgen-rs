@@ -43,7 +43,7 @@ use crate::material::TerrainMaterial;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WorldMapAssetLabel {
     Root,
-    CombinedAlpha,
+    CombinedAlpha(usize),
     TerrainMaterial(usize),
     Chunk(usize),
     Model(usize),
@@ -56,14 +56,16 @@ impl core::fmt::Display for WorldMapAssetLabel {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
             WorldMapAssetLabel::Root => f.write_str("Root"),
-            WorldMapAssetLabel::CombinedAlpha => f.write_str("CombinedAlpha"),
-            WorldMapAssetLabel::TerrainMaterial(index) => {
-                f.write_str(&format!("TerrainMaterial{index}"))
+            WorldMapAssetLabel::CombinedAlpha(index) => {
+                f.write_fmt(format_args!("CombinedAlpha{index}"))
             }
-            WorldMapAssetLabel::Chunk(index) => f.write_str(&format!("Chunk{index}")),
-            WorldMapAssetLabel::Model(index) => f.write_str(&format!("Model{index}")),
-            WorldMapAssetLabel::WorldModel(index) => f.write_str(&format!("WorldModel{index}")),
-            WorldMapAssetLabel::Image(index) => f.write_str(&format!("Image{index}")),
+            WorldMapAssetLabel::TerrainMaterial(index) => {
+                f.write_fmt(format_args!("TerrainMaterial{index}"))
+            }
+            WorldMapAssetLabel::Chunk(index) => f.write_fmt(format_args!("Chunk{index}")),
+            WorldMapAssetLabel::Model(index) => f.write_fmt(format_args!("Model{index}")),
+            WorldMapAssetLabel::WorldModel(index) => f.write_fmt(format_args!("WorldModel{index}")),
+            WorldMapAssetLabel::Image(index) => f.write_fmt(format_args!("Image{index}")),
             WorldMapAssetLabel::BoundingSphere => f.write_str("BoundingSphere"),
         }
     }
@@ -240,6 +242,7 @@ impl WorldMapAssetLoader {
             let do_not_fix_alpha = chunk.flags & bit_16th != 0;
             let alpha_texture = Self::create_alpha_texture_from_world_map_chunk(
                 chunk,
+                index,
                 load_context,
                 has_big_alpha,
                 do_not_fix_alpha,
@@ -342,7 +345,7 @@ impl WorldMapAssetLoader {
             let z = z_offset + z_suboffset;
 
             static UV_SCALE: f32 = 8.0;
-            tex_coords[i] = [(1.0 - x / UV_SCALE), (1.0 - z / UV_SCALE)];
+            tex_coords[i] = [x / UV_SCALE, z / UV_SCALE];
             positions[i] = [-x, chunk.height_map[i], -z];
             normals[i] = from_normalized_vec3_u8(chunk.normals[i]);
         }
@@ -446,6 +449,7 @@ impl WorldMapAssetLoader {
     /// and column being equivalent to the previous one
     pub fn create_alpha_texture_from_world_map_chunk(
         chunk: &adt::McnkChunk,
+        index: usize,
         load_context: &mut LoadContext<'_>,
         has_big_alpha: bool,
         do_not_fix_alpha: bool,
@@ -466,7 +470,7 @@ impl WorldMapAssetLoader {
         }
 
         load_context.add_labeled_asset(
-            WorldMapAssetLabel::CombinedAlpha.to_string(),
+            WorldMapAssetLabel::CombinedAlpha(index).to_string(),
             combined_alpha.to_image(),
         )
     }
