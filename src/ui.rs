@@ -5,6 +5,7 @@
 use bevy::{
     asset::RecursiveDependencyLoadState,
     ecs::system::SystemParam,
+    pbr::ExtendedMaterial,
     prelude::*,
     render::{camera::Viewport, mesh::VertexAttributeValues, view::RenderLayers},
     window::PrimaryWindow,
@@ -14,6 +15,7 @@ use bevy_egui::*;
 use crate::{
     assets::{model, world_map, world_model},
     data::{self, archive, file},
+    material::TerrainMaterial,
     settings::{self, FileSettings},
 };
 
@@ -78,6 +80,7 @@ pub fn select_default_model(mut event_writer: EventWriter<FileSelected>) {
 struct AssetParams<'w> {
     images: Res<'w, Assets<Image>>,
     materials: Res<'w, Assets<StandardMaterial>>,
+    terrain_materials: Res<'w, Assets<ExtendedMaterial<StandardMaterial, TerrainMaterial>>>,
     meshes: Res<'w, Assets<Mesh>>,
     models: Res<'w, Assets<model::ModelAsset>>,
     world_models: Res<'w, Assets<world_model::WorldModelAsset>>,
@@ -365,74 +368,180 @@ fn get_file_icon(data_type: &file::DataType) -> &'static str {
 
 fn data_type_info(data_type: &file::DataType, assets: &AssetParams, ui: &mut egui::Ui) {
     match data_type {
-        file::DataType::Texture(_) => {
-            egui::CollapsingHeader::new("Texture")
-                .default_open(true)
-                .show(ui, |ui| {
-                    ui.label("A 2D image used for texturing 3D models.");
-                });
+        file::DataType::Texture(image) => {
+            image_type_info(image, assets, ui);
         }
         file::DataType::Model(handle) => {
-            model_type_info(handle, assets, ui);
+            model_type_info(handle, 0, assets, ui);
         }
-        file::DataType::WorldModel(_) => {
-            egui::CollapsingHeader::new("World Model")
-                .default_open(true)
-                .show(ui, |ui| {
-                    ui.label("A complex 3D model used for large structures or environments.");
-                });
+        file::DataType::WorldModel(handle) => {
+            world_model_type_info(handle, 0, assets, ui);
         }
-        file::DataType::WorldMap(_) => {
-            egui::CollapsingHeader::new("World Map")
-                .default_open(true)
-                .show(ui, |ui| {
-                    ui.label("A map representing the game world or a specific area.");
-                });
+        file::DataType::WorldMap(handle) => {
+            world_map_type_info(handle, assets, ui);
         }
         file::DataType::Unknown => {
-            egui::CollapsingHeader::new("Unknown")
-                .default_open(true)
-                .show(ui, |ui| {
-                    ui.label("The type of this file is unknown.");
-                });
+            ui.label("The type of this file is unknown.");
         }
     }
 }
 
-fn model_type_info(handle: &Handle<model::ModelAsset>, assets: &AssetParams, ui: &mut egui::Ui) {
+fn model_type_info(
+    handle: &Handle<model::ModelAsset>,
+    index: usize,
+    assets: &AssetParams,
+    ui: &mut egui::Ui,
+) {
     if let Some(model) = assets.models.get(handle) {
-        egui::CollapsingHeader::new("Details")
+        egui::CollapsingHeader::new(format!("Model {}", index))
             .default_open(false)
             .show(ui, |ui| {
-                egui::CollapsingHeader::new("Images")
-                    .default_open(false)
-                    .show(ui, |ui| {
-                        for image in &model.images {
-                            image_type_info(image, assets, ui);
-                        }
-                    });
-
-                egui::CollapsingHeader::new("Materials")
-                    .default_open(false)
-                    .show(ui, |ui| {
-                        for (index, material) in model.materials.iter().enumerate() {
-                            material_type_info(material, index, assets, ui);
-                        }
-                    });
-
-                egui::CollapsingHeader::new("Meshes")
-                    .default_open(false)
-                    .show(ui, |ui| {
-                        for (index, mesh) in model.meshes.iter().enumerate() {
-                            mesh_type_info(mesh, index, assets, ui);
-                        }
-                    });
-
+                images_type_info(&model.images, assets, ui);
+                materials_type_info(&model.materials, assets, ui);
+                meshes_type_info(&model.meshes, assets, ui);
                 ui.label(format!("Aabb: {}", model.aabb));
             });
     } else {
         ui.colored_label(egui::Color32::YELLOW, "Model not loaded");
     }
+}
+
+fn world_model_type_info(
+    handle: &Handle<world_model::WorldModelAsset>,
+    index: usize,
+    assets: &AssetParams,
+    ui: &mut egui::Ui,
+) {
+    if let Some(world_model) = assets.world_models.get(handle) {
+        egui::CollapsingHeader::new(format!("World Model {}", index))
+            .default_open(false)
+            .show(ui, |ui| {
+                images_type_info(&world_model.images, assets, ui);
+                materials_type_info(&world_model.materials, assets, ui);
+                meshes_type_info(&world_model.meshes, assets, ui);
+                ui.label(format!("Aabb: {}", world_model.aabb));
+            });
+    } else {
+        ui.colored_label(egui::Color32::YELLOW, "World Model not loaded");
+    }
+}
+
+fn world_map_type_info(
+    handle: &Handle<world_map::WorldMapAsset>,
+    assets: &AssetParams,
+    ui: &mut egui::Ui,
+) {
+    if let Some(world_map) = assets.world_maps.get(handle) {
+        egui::CollapsingHeader::new("World Map")
+            .default_open(false)
+            .show(ui, |ui| {
+                images_type_info(&world_map.images, assets, ui);
+                terrains_type_info(&world_map.terrain, assets, ui);
+                models_type_info(&world_map.models, assets, ui);
+                world_models_type_info(&world_map.world_models, assets, ui);
+                ui.label(format!("Aabb: {}", world_map.aabb));
+            });
+    } else {
+        ui.colored_label(egui::Color32::YELLOW, "World Map not loaded");
+    }
+}
+
+fn images_type_info(images: &[Handle<Image>], assets: &AssetParams, ui: &mut egui::Ui) {
+    if !images.is_empty() {
+        egui::CollapsingHeader::new("Images")
+            .default_open(false)
+            .show(ui, |ui| {
+                for handle in images {
+                    image_type_info(handle, assets, ui);
+                }
+            });
+    }
+}
+
+fn materials_type_info(
+    materials: &[Handle<StandardMaterial>],
+    assets: &AssetParams,
+    ui: &mut egui::Ui,
+) {
+    if !materials.is_empty() {
+        egui::CollapsingHeader::new("Materials")
+            .default_open(false)
+            .show(ui, |ui| {
+                for (index, material) in materials.iter().enumerate() {
+                    material_type_info(material, index, assets, ui);
+                }
+            });
+    }
+}
+
+fn meshes_type_info(meshes: &[Handle<Mesh>], assets: &AssetParams, ui: &mut egui::Ui) {
+    if !meshes.is_empty() {
+        egui::CollapsingHeader::new("Meshes")
+            .default_open(false)
+            .show(ui, |ui| {
+                for (index, mesh) in meshes.iter().enumerate() {
+                    mesh_type_info(mesh, index, assets, ui);
+                }
+            });
+    }
+}
+
+fn models_type_info(models: &[Handle<model::ModelAsset>], assets: &AssetParams, ui: &mut egui::Ui) {
+    if !models.is_empty() {
+        egui::CollapsingHeader::new("Models")
+            .default_open(false)
+            .show(ui, |ui| {
+                for (index, model) in models.iter().enumerate() {
+                    model_type_info(model, index, assets, ui);
+                }
+            });
+    }
+}
+
+fn world_models_type_info(
+    world_models: &[Handle<world_model::WorldModelAsset>],
+    assets: &AssetParams,
+    ui: &mut egui::Ui,
+) {
+    if !world_models.is_empty() {
+        egui::CollapsingHeader::new("World Models")
+            .default_open(false)
+            .show(ui, |ui| {
+                for (index, world_model) in world_models.iter().enumerate() {
+                    world_model_type_info(world_model, index, assets, ui);
+                }
+            });
+    }
+}
+
+fn terrains_type_info(
+    terrains: &[world_map::TerrainBundle],
+    assets: &AssetParams,
+    ui: &mut egui::Ui,
+) {
+    if !terrains.is_empty() {
+        egui::CollapsingHeader::new("Terrains")
+            .default_open(false)
+            .show(ui, |ui| {
+                for (index, terrain) in terrains.iter().enumerate() {
+                    terrain_type_info(terrain, index, assets, ui);
+                }
+            });
+    }
+}
+
+fn terrain_type_info(
+    terrain: &world_map::TerrainBundle,
+    terrain_index: usize,
+    assets: &AssetParams,
+    ui: &mut egui::Ui,
+) {
+    egui::CollapsingHeader::new(format!("Terrain {}", terrain_index))
+        .default_open(false)
+        .show(ui, |ui| {
+            terrain_material_type_info(&terrain.material, assets, ui);
+            mesh_type_info(&terrain.mesh, 0, assets, ui);
+        });
 }
 
 fn image_type_info(handle: &Handle<Image>, assets: &AssetParams, ui: &mut egui::Ui) {
@@ -463,20 +572,50 @@ fn material_type_info(
     ui: &mut egui::Ui,
 ) {
     if let Some(material) = assets.materials.get(material) {
-        let label: String = format!("Material{}", material_index);
-        egui::CollapsingHeader::new(label)
+        material_impl_type_info(material, material_index, ui);
+    } else {
+        ui.colored_label(egui::Color32::YELLOW, "Material not loaded");
+    }
+}
+
+fn material_impl_type_info(material: &StandardMaterial, material_index: usize, ui: &mut egui::Ui) {
+    egui::CollapsingHeader::new(format!("Material {}", material_index))
+        .default_open(false)
+        .show(ui, |ui| {
+            ui.label(format!("Base Color: {:?}", material.base_color));
+            if let Some(base_color_texture) = &material.base_color_texture {
+                ui.label(format!(
+                    "Base Color Texture: {}",
+                    base_color_texture.path().as_ref().unwrap()
+                ));
+            }
+            ui.label(format!("Emissive Color: {:?}", material.emissive));
+            ui.label(format!("Alpha Mode: {:?}", material.alpha_mode));
+            ui.label(format!("Double Sided: {}", material.double_sided));
+        });
+}
+
+fn terrain_material_type_info(
+    material: &Handle<ExtendedMaterial<StandardMaterial, TerrainMaterial>>,
+    assets: &AssetParams,
+    ui: &mut egui::Ui,
+) {
+    if let Some(material) = assets.terrain_materials.get(material) {
+        material_impl_type_info(&material.base, 0, ui);
+
+        egui::CollapsingHeader::new("Terrain Material")
             .default_open(false)
             .show(ui, |ui| {
-                ui.label(format!("Base Color: {:?}", material.base_color));
-                if let Some(base_color_texture) = &material.base_color_texture {
-                    ui.label(format!(
-                        "Base Color Texture: {}",
-                        base_color_texture.path().as_ref().unwrap()
-                    ));
+                image_type_info(&material.extension.alpha_texture, assets, ui);
+                if let Some(level1) = &material.extension.level1_texture {
+                    image_type_info(level1, assets, ui);
                 }
-                ui.label(format!("Emissive Color: {:?}", material.emissive));
-                ui.label(format!("Alpha Mode: {:?}", material.alpha_mode));
-                ui.label(format!("Double Sided: {}", material.double_sided));
+                if let Some(level2) = &material.extension.level2_texture {
+                    image_type_info(level2, assets, ui);
+                }
+                if let Some(level3) = &material.extension.level3_texture {
+                    image_type_info(level3, assets, ui);
+                }
             });
     } else {
         ui.colored_label(egui::Color32::YELLOW, "Material not loaded");
