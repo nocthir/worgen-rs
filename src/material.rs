@@ -16,6 +16,9 @@ impl Plugin for TerrainMaterialPlugin {
 // This struct defines the data that will be passed to your shader
 #[derive(Asset, Default, AsBindGroup, Reflect, Debug, Clone)]
 pub struct TerrainMaterial {
+    #[uniform(69)]
+    pub level_mask: u32,
+
     #[uniform(70)]
     pub level_count: u32,
 

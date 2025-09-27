@@ -17,6 +17,7 @@ fn main() {
                 ..default()
             }),
         ))
+        .add_plugins(settings::SettingsPlugin)
         .add_plugins(assets::AssetPlugin)
         .add_plugins(diagnostic::FrameTimeDiagnosticsPlugin::default())
         .add_plugins(bevy_egui::EguiPlugin::default())

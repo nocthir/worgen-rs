@@ -105,7 +105,7 @@ struct InfoParams<'w, 's> {
 fn data_info(
     mut contexts: EguiContexts,
     mut info: InfoParams,
-    mut terrain_settings: ResMut<file::TerrainSettings>,
+    mut terrain_settings: ResMut<settings::TerrainSettings>,
     assets: AssetParams,
     // Window + camera for viewport adjustment so 3D scene doesn't render under panel
     window_camera: WindowParams,
@@ -154,7 +154,7 @@ fn data_info(
 
 fn left_panel(
     info: &mut InfoParams,
-    terrain_settings: &mut file::TerrainSettings,
+    terrain_settings: &mut settings::TerrainSettings,
     ctx: &mut egui::Context,
 ) -> egui::InnerResponse<()> {
     egui::SidePanel::left("info_panel")
@@ -162,17 +162,8 @@ fn left_panel(
         .min_width(220.0)
         .default_width(260.0)
         .show(ctx, |ui| {
-            egui::CollapsingHeader::new("Terrain Settings")
-                .default_open(false)
-                .show(ui, |ui| {
-                    ui.add(
-                        egui::Slider::new(&mut terrain_settings.uv_scale, 1.0..=32.0)
-                            .text("UV Scale")
-                            .clamping(egui::SliderClamping::Always)
-                            .step_by(1.0)
-                            .show_value(true),
-                    );
-                });
+            terrain_settings_widget(terrain_settings, ui);
+            ui.separator();
 
             // Single scroll area with both vertical and horizontal scrolling so
             // the horizontal scrollbar is rendered at the bottom of the panel.
@@ -193,6 +184,17 @@ fn left_panel(
                     }
                 });
         })
+}
+
+fn terrain_settings_widget(terrain_settings: &mut settings::TerrainSettings, ui: &mut egui::Ui) {
+    egui::CollapsingHeader::new("Terrain Settings")
+        .default_open(false)
+        .show(ui, |ui| {
+            ui.checkbox(&mut terrain_settings.level0, "Level 0");
+            ui.checkbox(&mut terrain_settings.level1, "Level 1");
+            ui.checkbox(&mut terrain_settings.level2, "Level 2");
+            ui.checkbox(&mut terrain_settings.level3, "Level 3");
+        });
 }
 
 fn right_panel(

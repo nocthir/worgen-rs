@@ -11,7 +11,6 @@ use bevy::pbr::ExtendedMaterial;
 use bevy::prelude::*;
 use bevy::render::mesh::*;
 use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
-use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use wow_adt as adt;
 
@@ -125,7 +124,6 @@ pub enum WorldMapAssetLoaderError {
 impl WorldMapAssetLoader {
     async fn load_model(
         bytes: Vec<u8>,
-        settings: &WorldMapLoaderSettings,
         load_context: &mut LoadContext<'_>,
     ) -> Result<WorldMapAsset, WorldMapAssetLoaderError> {
         let mut cursor = io::Cursor::new(&bytes);
@@ -133,7 +131,7 @@ impl WorldMapAssetLoader {
 
         Self::fix_model_extensions(&mut world_map);
         let images = Self::load_images(&world_map, load_context).await?;
-        let terrain = Self::load_terrain(&world_map, settings).await;
+        let terrain = Self::load_terrain(&world_map).await;
         let aabb = RootAabb::from_transformed_meshes(terrain.iter());
         let models = Self::load_models(&world_map, load_context);
         let world_models = Self::load_world_models(&world_map, load_context);
@@ -205,13 +203,10 @@ impl WorldMapAssetLoader {
             .collect()
     }
 
-    async fn load_terrain(
-        world_map: &adt::Adt,
-        settings: &WorldMapLoaderSettings,
-    ) -> Vec<TransformMesh> {
+    async fn load_terrain(world_map: &adt::Adt) -> Vec<TransformMesh> {
         let mut meshes = Vec::new();
         for chunk in &world_map.mcnk_chunks {
-            let mesh = Self::create_mesh_from_world_map_chunk(chunk, settings);
+            let mesh = Self::create_mesh_from_world_map_chunk(chunk);
             meshes.push(mesh);
         }
         meshes
@@ -277,6 +272,7 @@ impl WorldMapAssetLoader {
             };
 
             let terrain_material = TerrainMaterial {
+                level_mask: 0,
                 level_count: chunk.texture_layers.len() as u32,
                 alpha_texture,
                 level1_texture: level1_texture_handle,
@@ -319,10 +315,7 @@ impl WorldMapAssetLoader {
     ///   per quad using the middle (odd-row) vertex as the center. The triangles are emitted
     ///   with counter-clockwise (CCW) winding so front faces are consistent with the engine's
     ///   default.
-    pub fn create_mesh_from_world_map_chunk(
-        chunk: &adt::McnkChunk,
-        settings: &WorldMapLoaderSettings,
-    ) -> TransformMesh {
+    pub fn create_mesh_from_world_map_chunk(chunk: &adt::McnkChunk) -> TransformMesh {
         static VERTEX_COUNT: usize = 145; // 8*8 + 9*9
         let mut positions = vec![[0.0, 0.0, 0.0]; VERTEX_COUNT];
         let mut normals = vec![[0.0, 0.0, 0.0]; VERTEX_COUNT];
@@ -348,7 +341,8 @@ impl WorldMapAssetLoader {
             let x = x_offset + x_suboffset;
             let z = z_offset + z_suboffset;
 
-            tex_coords[i] = [(1.0 - x / settings.uv_scale), (1.0 - z / settings.uv_scale)];
+            static UV_SCALE: f32 = 8.0;
+            tex_coords[i] = [(1.0 - x / UV_SCALE), (1.0 - z / UV_SCALE)];
             positions[i] = [-x, chunk.height_map[i], -z];
             normals[i] = from_normalized_vec3_u8(chunk.normals[i]);
         }
@@ -459,17 +453,15 @@ impl WorldMapAssetLoader {
         let mut combined_alpha = CombinedAlphaMap::new(do_not_fix_alpha);
 
         // Put level 1 alpha in R channel, level 2 in G channel, level 3 in B channel
-        for (level, alpha) in chunk.alpha_maps.iter().enumerate() {
-            for &alpha_value in alpha.iter() {
-                if has_big_alpha {
-                    // alpha is one byte here
-                    combined_alpha.set_next_alpha(level, alpha_value);
-                } else {
-                    // Convert 4-bit alpha to 8-bit alpha
-                    // We set two pixels at a time since each byte contains two 4-bit alpha values
-                    combined_alpha.set_next_alpha(level, (alpha_value & 0x0F) * 16);
-                    combined_alpha.set_next_alpha(level, ((alpha_value >> 4) & 0x0F) * 16);
-                }
+        for &alpha in chunk.alpha_maps.iter() {
+            if has_big_alpha {
+                // alpha is one byte here
+                combined_alpha.set_next_alpha(alpha);
+            } else {
+                // Convert 4-bit alpha to 8-bit alpha
+                // We set two pixels at a time since each byte contains two 4-bit alpha values
+                combined_alpha.set_next_alpha((alpha & 0x0F) * 16);
+                combined_alpha.set_next_alpha(((alpha >> 4) & 0x0F) * 16);
             }
         }
 
@@ -530,31 +522,20 @@ impl WorldMapAssetLoader {
     }
 }
 
-#[derive(Serialize, Deserialize)]
-pub struct WorldMapLoaderSettings {
-    pub uv_scale: f32,
-}
-
-impl Default for WorldMapLoaderSettings {
-    fn default() -> Self {
-        Self { uv_scale: 8.0 }
-    }
-}
-
 impl AssetLoader for WorldMapAssetLoader {
     type Asset = WorldMapAsset;
-    type Settings = WorldMapLoaderSettings;
+    type Settings = ();
     type Error = WorldMapAssetLoaderError;
 
     async fn load(
         &self,
         reader: &mut dyn Reader,
-        settings: &Self::Settings,
+        _settings: &Self::Settings,
         load_context: &mut LoadContext<'_>,
     ) -> Result<Self::Asset, Self::Error> {
         let mut bytes = Vec::new();
         reader.read_to_end(&mut bytes).await?;
-        Self::load_model(bytes, settings, load_context).await
+        Self::load_model(bytes, load_context).await
     }
 
     fn extensions(&self) -> &[&str] {
@@ -566,6 +547,7 @@ struct CombinedAlphaMap {
     map: [[[u8; 4]; 64]; 64],
     current_x: usize,
     current_y: usize,
+    current_level: usize,
 
     /// If `do_not_fix` is true, we should read a 63*63 map with the last row
     /// and column being equivalent to the previous one
@@ -574,10 +556,13 @@ struct CombinedAlphaMap {
 
 impl CombinedAlphaMap {
     fn new(do_not_fix: bool) -> Self {
+        let mut map = [[[0u8; 4]; 64]; 64];
+        map.iter_mut().for_each(|layer| layer.fill([0, 0, 0, 0]));
         Self {
-            map: [[[0u8; 4]; 64]; 64],
+            map,
             current_x: 0,
             current_y: 0,
+            current_level: 0,
             do_not_fix,
         }
     }
@@ -588,15 +573,16 @@ impl CombinedAlphaMap {
         }
     }
 
-    fn set_next_alpha(&mut self, level: usize, alpha: u8) {
-        self.set_alpha(self.current_x, self.current_y, level, alpha);
-        self.advance();
-
+    fn set_next_alpha(&mut self, alpha: u8) {
+        if !self.do_not_fix {
+            self.set_alpha(self.current_x, self.current_y, self.current_level, alpha);
+            self.advance();
+        }
         // If we are at the last row or column and do_not_fix is true,
         // duplicate the last value to fill the 64x64 texture
         if self.do_not_fix {
             if self.current_x == 63 {
-                self.set_alpha(self.current_x, self.current_y, level, alpha);
+                self.set_alpha(self.current_x, self.current_y, self.current_level, alpha);
                 self.advance();
             }
             if self.current_y == 63 {
@@ -605,8 +591,8 @@ impl CombinedAlphaMap {
                 } else {
                     self.current_x - 1
                 };
-                let alpha = self.map[self.current_y - 1][prev_x][level];
-                self.set_alpha(self.current_x, self.current_y, level, alpha);
+                let alpha = self.map[self.current_y - 1][prev_x][self.current_level];
+                self.set_alpha(self.current_x, self.current_y, self.current_level, alpha);
                 self.advance();
             }
         }
@@ -617,6 +603,10 @@ impl CombinedAlphaMap {
         if self.current_x >= 64 {
             self.current_x = 0;
             self.current_y += 1;
+            if self.current_y >= 64 {
+                self.current_y = 0;
+                self.current_level += 1;
+            }
         }
     }
 
@@ -642,6 +632,18 @@ impl CombinedAlphaMap {
             TextureFormat::Rgba8Unorm,
             RenderAssetUsages::RENDER_WORLD,
         )
+    }
+
+    fn _save_png(&self, path: impl AsRef<std::path::Path>) -> anyhow::Result<()> {
+        let parent = path.as_ref().parent().unwrap();
+        std::fs::create_dir_all(parent)?;
+        let file = std::fs::File::create(path)?;
+        let writer = std::io::BufWriter::new(file);
+        use ::image::codecs::png::PngEncoder;
+        let encoder = PngEncoder::new(writer);
+        use ::image::*;
+        encoder.write_image(self.as_slice(), 64, 64, ExtendedColorType::Rgba8)?;
+        Ok(())
     }
 }
 

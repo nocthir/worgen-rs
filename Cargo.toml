@@ -28,17 +28,18 @@ serde = "1.0.*"
 serde_json = "1.0.*"
 thiserror = "2.0.16"
 
-wow-adt = { git = "https://github.com/nocthir/warcraft-rs", rev = "cb62481fe71ea1879468bca76cabff3b735d04b4" }
-wow-m2 = { git = "https://github.com/nocthir/warcraft-rs", rev = "cb62481fe71ea1879468bca76cabff3b735d04b4" }
-wow-mpq = { git = "https://github.com/nocthir/warcraft-rs", rev = "cb62481fe71ea1879468bca76cabff3b735d04b4" }
-wow-wmo = { git = "https://github.com/nocthir/warcraft-rs", rev = "cb62481fe71ea1879468bca76cabff3b735d04b4" }
-wow-blp = { git = "https://github.com/nocthir/warcraft-rs", rev = "cb62481fe71ea1879468bca76cabff3b735d04b4" }
+#wow-adt = { git = "https://github.com/nocthir/warcraft-rs", rev = "cb62481fe71ea1879468bca76cabff3b735d04b4" }
+#wow-m2 = { git = "https://github.com/nocthir/warcraft-rs", rev = "cb62481fe71ea1879468bca76cabff3b735d04b4" }
+#wow-mpq = { git = "https://github.com/nocthir/warcraft-rs", rev = "cb62481fe71ea1879468bca76cabff3b735d04b4" }
+#wow-wmo = { git = "https://github.com/nocthir/warcraft-rs", rev = "cb62481fe71ea1879468bca76cabff3b735d04b4" }
+#wow-blp = { git = "https://github.com/nocthir/warcraft-rs", rev = "cb62481fe71ea1879468bca76cabff3b735d04b4" }
 
-#wow-adt = { path = "../warcraft-rs/file-formats/world-data/wow-adt" }
-#wow-m2 = { path = "../warcraft-rs/file-formats/graphics/wow-m2" }
-#wow-mpq = { path = "../warcraft-rs/file-formats/archives/wow-mpq" }
-#wow-wmo = { path = "../warcraft-rs/file-formats/graphics/wow-wmo" }
-#wow-blp = { path = "../warcraft-rs/file-formats/graphics/wow-blp" }
+wow-adt = { path = "../warcraft-rs/file-formats/world-data/wow-adt" }
+wow-m2 = { path = "../warcraft-rs/file-formats/graphics/wow-m2" }
+wow-mpq = { path = "../warcraft-rs/file-formats/archives/wow-mpq" }
+wow-wmo = { path = "../warcraft-rs/file-formats/graphics/wow-wmo" }
+wow-blp = { path = "../warcraft-rs/file-formats/graphics/wow-blp" }
+image = "0.25.8"
 
 [dev-dependencies]
 env_logger = "*"
