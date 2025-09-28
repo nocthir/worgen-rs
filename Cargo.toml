@@ -1,6 +1,6 @@
 [package]
 name = "worgen-rs"
-version = "0.3.0"
+version = "0.3.1"
 authors = ["Nocthir <nocthir@proton.me>"]
 edition = "2024"
 license = "MIT OR Apache-2.0"
@@ -26,8 +26,8 @@ bevy-inspector-egui = "0.33.*"
 bevy_egui = "0.36.*"
 serde = "1.0.*"
 serde_json = "1.0.*"
-thiserror = "2.0.16"
-image = "0.25.8"
+thiserror = "2.0.*"
+image = "0.25.*"
 
 wow-adt = { git = "https://github.com/nocthir/warcraft-rs", rev = "6f5ecf80b2034510cb2ed9c83c88f26169fdd760" }
 wow-m2 = { git = "https://github.com/nocthir/warcraft-rs", rev = "6f5ecf80b2034510cb2ed9c83c88f26169fdd760" }
