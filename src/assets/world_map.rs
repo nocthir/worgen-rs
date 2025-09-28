@@ -255,13 +255,13 @@ impl WorldMapAssetLoader {
             }
 
             let bit_16th = 1 << 15;
-            let do_not_fix_alpha = chunk.flags & bit_16th != 0;
+            let fix_alpha = chunk.flags & bit_16th == 0;
             let alpha_texture = Self::create_alpha_texture_from_world_map_chunk(
                 chunk,
                 index,
                 load_context,
                 has_big_alpha,
-                do_not_fix_alpha,
+                fix_alpha,
             );
 
             let mut level1_texture_handle = None;
@@ -475,9 +475,9 @@ impl WorldMapAssetLoader {
         index: usize,
         load_context: &mut LoadContext<'_>,
         has_big_alpha: bool,
-        do_not_fix_alpha: bool,
+        fix_alpha: bool,
     ) -> Handle<Image> {
-        let mut combined_alpha = CombinedAlphaMap::new(do_not_fix_alpha);
+        let mut combined_alpha = CombinedAlphaMap::new(fix_alpha);
 
         // Put level 1 alpha in R channel, level 2 in G channel, level 3 in B channel
         for &alpha in chunk.alpha_maps.iter() {
@@ -576,13 +576,13 @@ struct CombinedAlphaMap {
     current_y: usize,
     current_level: usize,
 
-    /// If `do_not_fix` is true, we should read a 63*63 map with the last row
+    /// If `fix_alpha` is true, we should read a 63*63 map with the last row
     /// and column being equivalent to the previous one
-    do_not_fix: bool,
+    fix_alpha: bool,
 }
 
 impl CombinedAlphaMap {
-    fn new(do_not_fix: bool) -> Self {
+    fn new(fix_alpha: bool) -> Self {
         let mut map = [[[0u8; 4]; 64]; 64];
         // Alpha is unused, but we set it to 255 so the image is visible when viewed in debug UI.
         map.iter_mut().for_each(|layer| layer.fill([0, 0, 0, 255]));
@@ -591,7 +591,7 @@ impl CombinedAlphaMap {
             current_x: 0,
             current_y: 0,
             current_level: 0,
-            do_not_fix,
+            fix_alpha,
         }
     }
 
@@ -601,29 +601,19 @@ impl CombinedAlphaMap {
         }
     }
 
-    fn set_next_alpha(&mut self, alpha: u8) {
-        if !self.do_not_fix {
-            self.set_alpha(self.current_x, self.current_y, self.current_level, alpha);
-            self.advance();
-        }
-        // If we are at the last row or column and do_not_fix is true,
-        // duplicate the last value to fill the 64x64 texture
-        if self.do_not_fix {
+    fn set_next_alpha(&mut self, mut alpha: u8) {
+        if self.fix_alpha {
+            // If we are at the last row or column and fix_alpha is true,
+            // duplicate the last value to fill the 64x64 texture
             if self.current_x == 63 {
-                self.set_alpha(self.current_x, self.current_y, self.current_level, alpha);
-                self.advance();
+                alpha = self.map[self.current_y][self.current_x - 1][self.current_level];
             }
             if self.current_y == 63 {
-                let prev_x = if self.current_x == 0 {
-                    63
-                } else {
-                    self.current_x - 1
-                };
-                let alpha = self.map[self.current_y - 1][prev_x][self.current_level];
-                self.set_alpha(self.current_x, self.current_y, self.current_level, alpha);
-                self.advance();
+                alpha = self.map[self.current_y - 1][self.current_x][self.current_level];
             }
         }
+        self.set_alpha(self.current_x, self.current_y, self.current_level, alpha);
+        self.advance();
     }
 
     fn advance(&mut self) {
