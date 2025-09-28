@@ -169,6 +169,7 @@ impl WorldMapAssetLoader {
         }
 
         Self::place_models(&mut root, &world_map, load_context);
+        Self::place_world_models(&mut root, &world_map, load_context);
 
         let scene_loader = load_context.begin_labeled_asset();
         let loaded_scene = scene_loader.finish(Scene::new(world));
@@ -576,6 +577,42 @@ impl WorldMapAssetLoader {
             }
         }
         paths
+    }
+
+    fn place_world_models(
+        root: &mut EntityWorldMut<'_>,
+        world_map: &adt::Adt,
+        load_context: &mut LoadContext<'_>,
+    ) {
+        let paths = Self::get_world_model_asset_paths(world_map);
+
+        if let Some(modf) = &world_map.modf {
+            for model in &modf.models {
+                let model_path = &paths[model.name_id as usize];
+                let scene =
+                    load_context.load(WorldModelAssetLabel::Root.from_asset(model_path.clone()));
+
+                let rotation = vec3(
+                    model.rotation[0],
+                    180.0 + model.rotation[1],
+                    model.rotation[2],
+                );
+
+                let transform = Transform::default()
+                    .with_translation(vec3(
+                        MAP_SIZE - model.position[0],
+                        model.position[1],
+                        MAP_SIZE - model.position[2],
+                    ))
+                    .with_rotation(
+                        Quat::from_axis_angle(Vec3::X, rotation[0].to_radians())
+                            * Quat::from_axis_angle(Vec3::Y, rotation[1].to_radians())
+                            * Quat::from_axis_angle(Vec3::Z, rotation[2].to_radians()),
+                    );
+
+                root.with_child((SceneRoot(scene), transform));
+            }
+        }
     }
 }
 
