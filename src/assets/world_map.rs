@@ -110,6 +110,8 @@ impl WorldMapAsset {
     }
 }
 
+static MAP_SIZE: f32 = 1600.0 * 32.0 / 3.0; // 17066.66
+
 #[derive(Debug)]
 pub struct WorldMapTerrain {
     pub bundle: TerrainBundle,
@@ -165,6 +167,8 @@ impl WorldMapAssetLoader {
             alphas.push(terrain.combined_alpha.clone());
             root.with_child(terrain.bundle.clone());
         }
+
+        Self::place_models(&mut root, &world_map, load_context);
 
         let scene_loader = load_context.begin_labeled_asset();
         let loaded_scene = scene_loader.finish(Scene::new(world));
@@ -394,7 +398,6 @@ impl WorldMapAssetLoader {
         static CHUNK_SCALE: f32 = 100.0 / 24.0;
 
         // 1600 feet -> 533.33 yards
-        //static MAP_SIZE: f32 = 1600.0 * 32.0 / 3.0; // 17066.66
 
         let x = chunk.position[0];
         let y = chunk.position[1];
@@ -402,10 +405,6 @@ impl WorldMapAssetLoader {
         let transform = Transform::default()
             .with_translation(vec3(x, y, z))
             .with_scale(vec3(CHUNK_SCALE, 1.0, CHUNK_SCALE));
-
-        //transform.rotate_local_z(-std::f32::consts::FRAC_PI_2);
-        //transform.rotate_local_y(std::f32::consts::PI);
-        //transform.rotate_local_x(-std::f32::consts::FRAC_PI_2);
 
         TransformMesh { mesh, transform }
     }
@@ -504,7 +503,7 @@ impl WorldMapAssetLoader {
     ) -> Vec<Handle<ModelAsset>> {
         let mut models = Vec::new();
         for model_path in Self::get_model_asset_paths(world_map) {
-            models.push(load_context.load(&model_path));
+            models.push(load_context.load(model_path));
         }
         models
     }
@@ -520,6 +519,37 @@ impl WorldMapAssetLoader {
             );
         }
         models
+    }
+
+    fn place_models(
+        root: &mut EntityWorldMut<'_>,
+        world_map: &adt::Adt,
+        load_context: &mut LoadContext<'_>,
+    ) {
+        let model_asset_paths = Self::get_model_asset_paths(world_map);
+
+        if let Some(mddf) = &world_map.mddf {
+            for placement in &mddf.doodads {
+                let model_path = model_asset_paths[placement.name_id as usize].clone();
+
+                let scene = load_context.load(ModelAssetLabel::Root.from_asset(model_path));
+
+                let transform = Transform::default()
+                    .with_translation(vec3(
+                        MAP_SIZE - placement.position[0],
+                        placement.position[1],
+                        MAP_SIZE - placement.position[2],
+                    ))
+                    .with_rotation(
+                        Quat::from_axis_angle(Vec3::X, placement.rotation[0].to_radians())
+                            * Quat::from_axis_angle(Vec3::Y, placement.rotation[1].to_radians())
+                            * Quat::from_axis_angle(Vec3::Z, placement.rotation[2].to_radians()),
+                    )
+                    .with_scale(Vec3::splat(placement.scale));
+
+                root.with_child((SceneRoot(scene), transform));
+            }
+        }
     }
 
     fn load_world_models(
