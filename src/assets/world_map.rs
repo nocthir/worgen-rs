@@ -93,14 +93,28 @@ pub struct WorldMapAsset {
     pub scene: Handle<Scene>,
     /// Image handles requested during load.
     pub images: Vec<Handle<Image>>,
-    /// Terrain bundles created from chunks.
-    pub terrain: Vec<TerrainBundle>,
+    /// Alpha maps combined into RGBA textures.
+    pub alphas: Vec<Handle<Image>>,
+    /// Terrains created from chunks.
+    pub terrains: Vec<WorldMapTerrain>,
     /// Model handles requested during load.
     pub models: Vec<Handle<ModelAsset>>,
     /// World model handles requested during load.
     pub world_models: Vec<Handle<WorldModelAsset>>,
     /// Bounding box
     pub aabb: RootAabb,
+}
+
+impl WorldMapAsset {
+    pub fn get_all_images(&self) -> impl Iterator<Item = &Handle<Image>> {
+        self.images.iter().chain(self.alphas.iter())
+    }
+}
+
+#[derive(Debug)]
+pub struct WorldMapTerrain {
+    pub bundle: TerrainBundle,
+    pub combined_alpha: Handle<Image>,
 }
 
 #[derive(Bundle, Clone, Debug)]
@@ -133,12 +147,12 @@ impl WorldMapAssetLoader {
 
         Self::fix_model_extensions(&mut world_map);
         let images = Self::load_images(&world_map, load_context).await?;
-        let terrain = Self::load_terrain(&world_map).await;
-        let aabb = RootAabb::from_transformed_meshes(terrain.iter());
+        let terrains = Self::load_terrains(&world_map).await;
+        let aabb = RootAabb::from_transformed_meshes(terrains.iter());
         let models = Self::load_models(&world_map, load_context);
         let world_models = Self::load_world_models(&world_map, load_context);
 
-        let terrain = Self::process_terrain(&world_map, terrain, &images, load_context)?;
+        let terrains = Self::process_terrains(&world_map, terrains, &images, load_context)?;
 
         let mut transform = Transform::default();
         transform.rotate_local_x(-std::f32::consts::FRAC_PI_2);
@@ -147,8 +161,10 @@ impl WorldMapAssetLoader {
         let mut world = World::default();
         let mut root = world.spawn((Transform::default(), Visibility::default(), aabb));
 
-        for terrain in &terrain {
-            root.with_child(terrain.clone());
+        let mut alphas = Vec::new();
+        for terrain in &terrains {
+            alphas.push(terrain.combined_alpha.clone());
+            root.with_child(terrain.bundle.clone());
         }
 
         let scene_loader = load_context.begin_labeled_asset();
@@ -159,7 +175,8 @@ impl WorldMapAssetLoader {
         Ok(WorldMapAsset {
             scene,
             images,
-            terrain,
+            alphas,
+            terrains,
             models,
             world_models,
             aabb,
@@ -205,7 +222,7 @@ impl WorldMapAssetLoader {
             .collect()
     }
 
-    async fn load_terrain(world_map: &adt::Adt) -> Vec<TransformMesh> {
+    async fn load_terrains(world_map: &adt::Adt) -> Vec<TransformMesh> {
         let mut meshes = Vec::new();
         for chunk in &world_map.mcnk_chunks {
             let mesh = Self::create_mesh_from_world_map_chunk(chunk);
@@ -214,13 +231,13 @@ impl WorldMapAssetLoader {
         meshes
     }
 
-    fn process_terrain(
+    fn process_terrains(
         world_map: &adt::Adt,
         meshes: Vec<TransformMesh>,
         images: &[Handle<Image>],
         load_context: &mut LoadContext<'_>,
-    ) -> Result<Vec<TerrainBundle>> {
-        let mut bundles = Vec::new();
+    ) -> Result<Vec<WorldMapTerrain>> {
+        let mut terrains = Vec::new();
 
         let header = world_map.mhdr.as_ref().unwrap();
         let has_big_alpha = header.flags & 0x4 != 0;
@@ -277,7 +294,7 @@ impl WorldMapAssetLoader {
             let terrain_material = TerrainMaterial {
                 level_mask: 0,
                 level_count: chunk.texture_layers.len() as u32,
-                alpha_texture,
+                alpha_texture: alpha_texture.clone(),
                 level1_texture: level1_texture_handle,
                 level2_texture: level2_texture_handle,
                 level3_texture: level3_texture_handle,
@@ -293,14 +310,21 @@ impl WorldMapAssetLoader {
                 extended_material,
             );
 
-            bundles.push(TerrainBundle {
+            let bundle = TerrainBundle {
                 mesh: Mesh3d(mesh_handle),
                 material: MeshMaterial3d(material_handle),
                 transform,
-            });
+            };
+
+            let terrain = WorldMapTerrain {
+                bundle,
+                combined_alpha: alpha_texture,
+            };
+
+            terrains.push(terrain);
         }
 
-        Ok(bundles)
+        Ok(terrains)
     }
 
     /// Create mesh for a terrain chunk.
@@ -561,7 +585,8 @@ struct CombinedAlphaMap {
 impl CombinedAlphaMap {
     fn new(do_not_fix: bool) -> Self {
         let mut map = [[[0u8; 4]; 64]; 64];
-        map.iter_mut().for_each(|layer| layer.fill([0, 0, 0, 0]));
+        // Alpha is unused, but we set it to 255 so the image is visible when viewed in debug UI.
+        map.iter_mut().for_each(|layer| layer.fill([0, 0, 0, 255]));
         Self {
             map,
             current_x: 0,

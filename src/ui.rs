@@ -9,7 +9,7 @@ use bevy::{
     ecs::system::SystemParam,
     pbr::ExtendedMaterial,
     prelude::*,
-    render::{camera::Viewport, mesh::VertexAttributeValues, view::RenderLayers},
+    render::{camera::Viewport, view::RenderLayers},
     window::PrimaryWindow,
 };
 use bevy_egui::*;
@@ -178,7 +178,7 @@ fn get_image_handles(
             }
             file::DataType::WorldMap(world_map_handle) => {
                 if let Some(world_map) = assets.world_maps.get(world_map_handle) {
-                    for image in &world_map.images {
+                    for image in world_map.get_all_images() {
                         let texture_id = contexts.add_image(image.clone_weak());
                         image_handles.insert(image.clone(), texture_id);
                     }
@@ -460,7 +460,7 @@ fn model_type_info(
         egui::CollapsingHeader::new(format!("Model {}", index))
             .default_open(false)
             .show(ui, |ui| {
-                images_type_info(&model.images, assets, image_map, ui);
+                images_type_info("Images", &model.images, assets, image_map, ui);
                 materials_type_info(&model.materials, assets, ui);
                 meshes_type_info(&model.meshes, assets, ui);
                 ui.label(format!("Aabb: {}", model.aabb));
@@ -481,7 +481,7 @@ fn world_model_type_info(
         egui::CollapsingHeader::new(format!("World Model {}", index))
             .default_open(false)
             .show(ui, |ui| {
-                images_type_info(&world_model.images, assets, image_map, ui);
+                images_type_info("Images", &world_model.images, assets, image_map, ui);
                 materials_type_info(&world_model.materials, assets, ui);
                 meshes_type_info(&world_model.meshes, assets, ui);
                 ui.label(format!("Aabb: {}", world_model.aabb));
@@ -501,8 +501,9 @@ fn world_map_type_info(
         egui::CollapsingHeader::new("World Map")
             .default_open(false)
             .show(ui, |ui| {
-                images_type_info(&world_map.images, assets, image_map, ui);
-                terrains_type_info(&world_map.terrain, assets, image_map, ui);
+                images_type_info("Images", &world_map.images, assets, image_map, ui);
+                images_type_info("Alphas", &world_map.alphas, assets, image_map, ui);
+                terrains_type_info(&world_map.terrains, assets, image_map, ui);
                 models_type_info(&world_map.models, assets, image_map, ui);
                 world_models_type_info(&world_map.world_models, assets, image_map, ui);
                 ui.label(format!("Aabb: {}", world_map.aabb));
@@ -512,14 +513,15 @@ fn world_map_type_info(
     }
 }
 
-fn images_type_info(
+fn images_type_info<S: AsRef<str>>(
+    label: S,
     images: &[Handle<Image>],
     assets: &AssetParams,
     image_map: &HashMap<Handle<Image>, egui::TextureId>,
     ui: &mut egui::Ui,
 ) {
     if !images.is_empty() {
-        egui::CollapsingHeader::new("Images")
+        egui::CollapsingHeader::new(label.as_ref())
             .default_open(false)
             .show(ui, |ui| {
                 for handle in images {
@@ -592,7 +594,7 @@ fn world_models_type_info(
 }
 
 fn terrains_type_info(
-    terrains: &[world_map::TerrainBundle],
+    terrains: &[world_map::WorldMapTerrain],
     assets: &AssetParams,
     image_map: &HashMap<Handle<Image>, egui::TextureId>,
     ui: &mut egui::Ui,
@@ -609,7 +611,7 @@ fn terrains_type_info(
 }
 
 fn terrain_type_info(
-    terrain: &world_map::TerrainBundle,
+    terrain: &world_map::WorldMapTerrain,
     terrain_index: usize,
     assets: &AssetParams,
     image_map: &HashMap<Handle<Image>, egui::TextureId>,
@@ -618,8 +620,8 @@ fn terrain_type_info(
     egui::CollapsingHeader::new(format!("Terrain {}", terrain_index))
         .default_open(false)
         .show(ui, |ui| {
-            terrain_material_type_info(&terrain.material, assets, image_map, ui);
-            mesh_type_info(&terrain.mesh, 0, assets, ui);
+            terrain_material_type_info(&terrain.bundle.material, assets, image_map, ui);
+            mesh_type_info(&terrain.bundle.mesh, 0, assets, ui);
         });
 }
 
@@ -716,50 +718,12 @@ fn mesh_type_info(
     assets: &AssetParams,
     ui: &mut egui::Ui,
 ) {
-    if let Some(mesh) = assets.meshes.get(handle) {
-        let label: String = format!("Mesh{}", mesh_index);
-        egui::CollapsingHeader::new(label)
-            .default_open(false)
-            .show(ui, |ui| {
-                for (attribute_name, attribute_value) in mesh.attributes() {
-                    egui::CollapsingHeader::new(format!("{:?}", attribute_name.name))
-                        .default_open(false)
-                        .show(ui, |ui| {
-                            attribute_value_info(attribute_value, ui);
-                        });
-                }
-            });
+    if assets.meshes.get(handle).is_some() {
+        ui.label(format!("Mesh{}", mesh_index));
     } else {
-        ui.colored_label(egui::Color32::YELLOW, "Mesh not loaded");
-    }
-}
-
-fn attribute_value_info(attribute_value: &VertexAttributeValues, ui: &mut egui::Ui) {
-    match attribute_value {
-        VertexAttributeValues::Float32x3(values) => {
-            if !values.is_empty() {
-                let preview_count = values.len().min(5);
-                for v in values.iter().take(preview_count) {
-                    ui.label(format!("{:?} ", v));
-                }
-                if values.len() > preview_count {
-                    ui.label("  ...");
-                }
-            }
-        }
-        VertexAttributeValues::Float32x2(values) => {
-            if !values.is_empty() {
-                let preview_count = values.len().min(5);
-                for v in values.iter().take(preview_count) {
-                    ui.label(format!("{:?} ", v));
-                }
-                if values.len() > preview_count {
-                    ui.label("  ...");
-                }
-            }
-        }
-        _ => {
-            ui.label("Unsupported attribute type");
-        }
+        ui.colored_label(
+            egui::Color32::YELLOW,
+            format!("Mesh{} not loaded", mesh_index),
+        );
     }
 }
