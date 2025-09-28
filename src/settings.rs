@@ -107,10 +107,21 @@ impl TestSettings {
     }
 }
 
-#[derive(Resource, Default, Debug, Clone, Copy)]
+#[derive(Resource, Debug, Clone, Copy)]
 pub struct TerrainSettings {
     pub level0: bool,
     pub level1: bool,
     pub level2: bool,
     pub level3: bool,
+}
+
+impl Default for TerrainSettings {
+    fn default() -> Self {
+        Self {
+            level0: true,
+            level1: true,
+            level2: true,
+            level3: true,
+        }
+    }
 }

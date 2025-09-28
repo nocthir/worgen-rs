@@ -95,6 +95,8 @@ fn fragment(
         alpha_values.r = 1.0 - (alpha_values.g + alpha_values.b + alpha_values.a);
     }
 
+    pbr_input.material.base_color = alpha_values.r * pbr_input.material.base_color + alpha_values.g * level1_color + alpha_values.b * level2_color + alpha_values.a * level3_color;
+
 #ifdef PREPASS_PIPELINE
     // in deferred mode we can't modify anything after that, as lighting is run in a separate fullscreen shader.
     var out = deferred_output(in, pbr_input);
@@ -107,8 +109,6 @@ fn fragment(
     // note this does not include fullscreen postprocessing effects like bloom.
     out.color = main_pass_post_lighting_processing(pbr_input, out.color);
 #endif
-
-    out.color = alpha_values.r * out.color + alpha_values.g * level1_color + alpha_values.b * level2_color + alpha_values.a * level3_color;
 
     return out;
 }

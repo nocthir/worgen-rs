@@ -7,6 +7,7 @@ use std::f32::consts::{FRAC_PI_2, PI, TAU};
 use bevy::input::mouse::{MouseMotion, MouseScrollUnit, MouseWheel};
 use bevy::prelude::*;
 use bevy::render::primitives::Aabb;
+use bevy::*;
 use bevy_egui::EguiContexts;
 
 use crate::assets::root_aabb::RootAabb;
@@ -15,9 +16,30 @@ use crate::assets::root_aabb::RootAabb;
 /// https://bevy-cheatbook.github.io/cookbook/pan-orbit-camera.html
 #[derive(Bundle, Default)]
 pub struct PanOrbitCameraBundle {
-    pub camera: Camera3d,
+    pub camera_state: Camera,
     pub state: PanOrbitState,
     pub settings: PanOrbitSettings,
+    pub camera: Camera3d,
+    pub exposure: render::camera::Exposure,
+    pub tonemapping: core_pipeline::tonemapping::Tonemapping,
+    pub bloom: core_pipeline::bloom::Bloom,
+}
+
+impl PanOrbitCameraBundle {
+    pub fn new() -> Self {
+        let mut ret = Self::default();
+        ret.camera_state.hdr = true;
+
+        // The directional light illuminance used in this scene
+        // is quite bright, so raising the exposure compensation helps
+        // bring the scene to a nicer brightness range.
+        ret.exposure = render::camera::Exposure::SUNLIGHT;
+        ret.tonemapping = core_pipeline::tonemapping::Tonemapping::AcesFitted;
+        // Bloom gives the sun a much more natural look.
+        ret.bloom = core_pipeline::bloom::Bloom::NATURAL;
+
+        ret
+    }
 }
 
 /// The internal state of the pan-orbit controller
@@ -95,7 +117,8 @@ impl Plugin for PanOrbitCameraPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Startup, setup_camera)
             .add_systems(PreUpdate, on_model_loaded)
-            .add_systems(Update, pan_orbit_camera);
+            .add_systems(Update, pan_orbit_camera)
+            .add_systems(Update, rotate_sun);
     }
 }
 
@@ -104,18 +127,26 @@ pub fn setup_camera(mut commands: Commands) {
     commands.spawn((
         DirectionalLight {
             shadows_enabled: true,
-            ..Default::default()
+            illuminance: pbr::light_consts::lux::AMBIENT_DAYLIGHT,
+            ..default()
         },
-        Transform::from_rotation(Quat::from_axis_angle(Vec3::X, -1.14)),
+        Transform::from_xyz(1.0, -0.4, 0.0).looking_at(Vec3::ZERO, Vec3::Y),
     ));
 
-    let mut camera = PanOrbitCameraBundle::default();
+    let mut orbit_camera = PanOrbitCameraBundle::default();
+
     // Position our camera using our component
-    camera.state.center = Vec3::new(1.0, 2.0, 3.0);
-    camera.state.radius = 50.0;
-    camera.state.pitch = -15.0f32.to_radians();
-    camera.state.yaw = 30.0f32.to_radians();
-    commands.spawn(camera);
+    orbit_camera.state.center = Vec3::new(1.0, 2.0, 3.0);
+    orbit_camera.state.radius = 50.0;
+    orbit_camera.state.pitch = -15.0f32.to_radians();
+    orbit_camera.state.yaw = 30.0f32.to_radians();
+
+    commands.spawn(orbit_camera);
+}
+
+fn rotate_sun(time: Res<Time>, mut suns: Query<&mut Transform, With<DirectionalLight>>) {
+    suns.iter_mut()
+        .for_each(|mut tf| tf.rotate_x(-time.delta_secs() * PI / 10.0));
 }
 
 fn pan_orbit_camera(
