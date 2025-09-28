@@ -15,7 +15,6 @@ use thiserror::Error;
 use wow_adt as adt;
 
 use crate::assets::*;
-use crate::material::TerrainMaterial;
 
 /// Labels that can be used to load part of a Model
 ///
@@ -120,7 +119,7 @@ pub struct WorldMapTerrain {
 #[derive(Bundle, Clone, Debug)]
 pub struct TerrainBundle {
     pub mesh: Mesh3d,
-    pub material: MeshMaterial3d<ExtendedMaterial<StandardMaterial, TerrainMaterial>>,
+    pub material: MeshMaterial3d<ExtTerrainMaterial>,
     pub transform: Transform,
 }
 
@@ -679,4 +678,34 @@ impl CombinedAlphaMap {
 pub fn is_world_map_extension(filename: &str) -> bool {
     let lower_filename = filename.to_lowercase();
     lower_filename.ends_with(".adt")
+}
+
+#[cfg(test)]
+mod test {
+    use crate::{assets::test::*, settings::TestSettings};
+
+    use super::*;
+
+    #[test]
+    fn test_terrain() -> Result<()> {
+        let mut app = test_app();
+        app.update();
+        let settings = TestSettings::load()?;
+        let asset_server = app.world().resource::<AssetServer>().clone();
+        let handle: Handle<WorldMapAsset> =
+            asset_server.load(format!("archive://{}", settings.test_terrain_path));
+        let handle_id = handle.id();
+        app.update();
+        run_app_until(&mut app, |_world| {
+            let load_state = asset_server.get_load_state(handle_id).unwrap();
+            if load_state.is_loaded() {
+                Some(())
+            } else {
+                None
+            }
+        });
+        let load_state = asset_server.get_load_state(handle_id).unwrap();
+        assert!(load_state.is_loaded());
+        Ok(())
+    }
 }

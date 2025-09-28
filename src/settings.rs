@@ -4,10 +4,11 @@
 
 use std::{fs, io, ptr::addr_of, sync::Once};
 
-use bevy::{pbr::ExtendedMaterial, prelude::*};
+use anyhow::Result;
+use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
-use crate::material::TerrainMaterial;
+use crate::assets::material::ExtTerrainMaterial;
 
 pub struct SettingsPlugin;
 
@@ -20,7 +21,7 @@ impl Plugin for SettingsPlugin {
 
 fn apply_terrain_settings(
     terrain_settings: Res<TerrainSettings>,
-    mut materials: ResMut<Assets<ExtendedMaterial<StandardMaterial, TerrainMaterial>>>,
+    mut materials: ResMut<Assets<ExtTerrainMaterial>>,
 ) {
     if terrain_settings.is_changed() {
         for (_idx, material) in materials.iter_mut() {
@@ -93,6 +94,7 @@ pub struct TestSettings {
     pub world_model_archive_path: String,
     pub terrain_archive_path: String,
     pub test_texture: FileSettings,
+    pub test_terrain_path: String,
 }
 
 impl TestSettings {

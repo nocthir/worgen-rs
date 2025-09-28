@@ -18,10 +18,9 @@ fn main() {
             }),
         ))
         .add_plugins(settings::SettingsPlugin)
-        .add_plugins(assets::AssetPlugin)
+        .add_plugins(assets::WorgenAssetPlugin)
         .add_plugins(diagnostic::FrameTimeDiagnosticsPlugin::default())
         .add_plugins(bevy_egui::EguiPlugin::default())
-        .add_plugins(material::TerrainMaterialPlugin)
         .add_plugins(ui::UiPlugin)
         .add_plugins(data::DataPlugin)
         .add_plugins(camera::PanOrbitCameraPlugin)

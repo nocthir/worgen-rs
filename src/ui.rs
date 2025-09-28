@@ -7,7 +7,6 @@ use std::collections::HashMap;
 use bevy::{
     asset::RecursiveDependencyLoadState,
     ecs::system::SystemParam,
-    pbr::ExtendedMaterial,
     prelude::*,
     render::{camera::Viewport, view::RenderLayers},
     window::PrimaryWindow,
@@ -15,9 +14,8 @@ use bevy::{
 use bevy_egui::*;
 
 use crate::{
-    assets::{model, world_map, world_model},
+    assets::{material::ExtTerrainMaterial, model, world_map, world_model},
     data::{self, archive, file},
-    material::TerrainMaterial,
     settings::{self, FileSettings},
 };
 
@@ -82,7 +80,7 @@ pub fn select_default_model(mut event_writer: EventWriter<FileSelected>) {
 struct AssetParams<'w> {
     images: ResMut<'w, Assets<Image>>,
     materials: Res<'w, Assets<StandardMaterial>>,
-    terrain_materials: Res<'w, Assets<ExtendedMaterial<StandardMaterial, TerrainMaterial>>>,
+    terrain_materials: Res<'w, Assets<ExtTerrainMaterial>>,
     meshes: Res<'w, Assets<Mesh>>,
     models: Res<'w, Assets<model::ModelAsset>>,
     world_models: Res<'w, Assets<world_model::WorldModelAsset>>,
@@ -685,7 +683,7 @@ fn material_impl_type_info(material: &StandardMaterial, material_index: usize, u
 }
 
 fn terrain_material_type_info(
-    material: &Handle<ExtendedMaterial<StandardMaterial, TerrainMaterial>>,
+    material: &Handle<ExtTerrainMaterial>,
     assets: &AssetParams,
     image_map: &HashMap<Handle<Image>, egui::TextureId>,
     ui: &mut egui::Ui,
