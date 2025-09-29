@@ -11,6 +11,7 @@ use bevy::*;
 use bevy_egui::EguiContexts;
 
 use crate::assets::root_aabb::RootAabb;
+use crate::assets::world_map::WorldMap;
 
 /// Bundle to spawn our custom camera easily
 /// https://bevy-cheatbook.github.io/cookbook/pan-orbit-camera.html
@@ -320,7 +321,7 @@ fn pan_orbit_camera(
 }
 
 fn on_model_loaded(
-    q_current: Query<&RootAabb, Added<RootAabb>>,
+    q_current: Query<&RootAabb, (Added<RootAabb>, With<WorldMap>)>,
     mut q_camera: Query<(&mut PanOrbitState, &mut Transform)>,
 ) {
     // Get the entity that just received the `CurrentFile` component

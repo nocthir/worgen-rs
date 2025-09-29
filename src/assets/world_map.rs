@@ -16,6 +16,10 @@ use wow_adt as adt;
 
 use crate::assets::*;
 
+#[derive(Component, Debug, Clone, Copy, Default, Reflect)]
+#[reflect(Component)]
+pub struct WorldMap;
+
 /// Labels that can be used to load part of a Model
 ///
 /// You can use [`WorldMapAssetLabel::from_asset`] to add it to an asset path
@@ -160,7 +164,7 @@ impl WorldMapAssetLoader {
         transform.rotate_local_z(-std::f32::consts::FRAC_PI_2);
 
         let mut world = World::default();
-        let mut root = world.spawn((Transform::default(), Visibility::default(), aabb));
+        let mut root = world.spawn((Transform::default(), WorldMap, aabb));
 
         let mut alphas = Vec::new();
         for terrain in &terrains {

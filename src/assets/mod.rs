@@ -26,6 +26,7 @@ pub struct WorgenAssetPlugin;
 impl Plugin for WorgenAssetPlugin {
     fn build(&self, app: &mut App) {
         app.register_type::<RootAabb>()
+            .register_type::<WorldMap>()
             .init_asset::<ModelAsset>()
             .init_asset::<WorldModelAsset>()
             .init_asset::<WorldMapAsset>()
