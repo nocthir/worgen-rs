@@ -284,7 +284,15 @@ fn archive_info(
     let world_model_paths = &archive.world_model_paths;
     let world_map_paths = &archive.world_map_paths;
 
-    egui::CollapsingHeader::new(format!("⛃ {}", archive.path.display()))
+    let archive_file_name = archive
+        .path
+        .file_name()
+        .unwrap_or_default()
+        .to_str()
+        .unwrap_or("Unknown");
+    let label = format!("⛃ {}", archive_file_name);
+
+    egui::CollapsingHeader::new(label)
         .default_open(false)
         .show(ui, |ui| {
             egui::CollapsingHeader::new("Textures")
