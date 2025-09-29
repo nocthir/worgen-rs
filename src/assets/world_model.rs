@@ -16,6 +16,10 @@ use wow_wmo as wmo;
 
 use crate::assets::*;
 
+#[derive(Component, Debug, Clone, Copy, Default, Reflect)]
+#[reflect(Component)]
+pub struct WorldModel;
+
 /// Labels that can be used to load part of a Model
 ///
 /// You can use [`WorldModelAssetLabel::from_asset`] to add it to an asset path
@@ -154,7 +158,7 @@ impl WorldModelAssetLoader {
             .collect();
 
         let mut world = World::default();
-        let mut root = world.spawn((transform, Visibility::default(), aabb));
+        let mut root = world.spawn((transform, WorldModel, aabb));
         for mesh_index in 0..world_meshes.len() {
             root.with_child((
                 Mesh3d(mesh_handles[mesh_index].clone()),

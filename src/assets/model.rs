@@ -30,6 +30,10 @@ use wow_m2 as m2;
 use crate::assets::*;
 use crate::settings::Settings;
 
+#[derive(Component, Debug, Clone, Copy, Default, Reflect)]
+#[reflect(Component)]
+pub struct Model;
+
 /// Labels that can be used to load part of a Model
 ///
 /// You can use [`ModelAssetLabel::from_asset`] to add it to an asset path
@@ -161,7 +165,7 @@ impl ModelAssetLoader {
             .collect();
 
         let mut world = World::default();
-        let mut root = world.spawn((transform, Visibility::default(), aabb));
+        let mut root = world.spawn((transform, Model, aabb));
         for i in 0..meshes.len() {
             root.with_child((
                 Mesh3d(meshes[i].clone()),

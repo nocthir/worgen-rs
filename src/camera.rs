@@ -10,8 +10,10 @@ use bevy::render::primitives::Aabb;
 use bevy::*;
 use bevy_egui::EguiContexts;
 
+use crate::assets::model::Model;
 use crate::assets::root_aabb::RootAabb;
 use crate::assets::world_map::WorldMap;
+use crate::assets::world_model::WorldModel;
 
 /// Bundle to spawn our custom camera easily
 /// https://bevy-cheatbook.github.io/cookbook/pan-orbit-camera.html
@@ -117,10 +119,18 @@ pub struct PanOrbitCameraPlugin;
 impl Plugin for PanOrbitCameraPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Startup, setup_camera)
-            .add_systems(PreUpdate, on_model_loaded)
+            .add_systems(PreUpdate, on_world_map_loaded)
+            .add_systems(
+                PreUpdate,
+                (on_world_model_loaded, on_model_loaded).run_if(no_world_map),
+            )
             .add_systems(Update, pan_orbit_camera)
             .add_systems(Update, rotate_sun);
     }
+}
+
+fn no_world_map(world_maps: Query<(), With<WorldMap>>) -> bool {
+    world_maps.is_empty()
 }
 
 pub fn setup_camera(mut commands: Commands) {
@@ -321,15 +331,28 @@ fn pan_orbit_camera(
 }
 
 fn on_model_loaded(
+    q_current: Query<&RootAabb, (Added<RootAabb>, With<Model>)>,
+    mut q_camera: Query<(&mut PanOrbitState, &mut Transform)>,
+) {
+    if let Ok(root_aabb) = q_current.single() {
+        focus_camera(&root_aabb.aabb, &mut q_camera);
+    }
+}
+
+fn on_world_model_loaded(
+    q_current: Query<&RootAabb, (Added<RootAabb>, With<WorldModel>)>,
+    mut q_camera: Query<(&mut PanOrbitState, &mut Transform)>,
+) {
+    if let Ok(root_aabb) = q_current.single() {
+        focus_camera(&root_aabb.aabb, &mut q_camera);
+    }
+}
+
+fn on_world_map_loaded(
     q_current: Query<&RootAabb, (Added<RootAabb>, With<WorldMap>)>,
     mut q_camera: Query<(&mut PanOrbitState, &mut Transform)>,
 ) {
-    // Get the entity that just received the `CurrentFile` component
     if let Ok(root_aabb) = q_current.single() {
-        info!(
-            "Focusing camera on loaded model with AABB: {:?}",
-            root_aabb.aabb
-        );
         focus_camera(&root_aabb.aabb, &mut q_camera);
     }
 }
