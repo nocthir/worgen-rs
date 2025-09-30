@@ -72,8 +72,9 @@ impl From<&FileSettings> for FileSelected {
 }
 
 pub fn select_default_model(mut event_writer: EventWriter<FileSelected>) {
-    let default_model_path = settings::Settings::get().test_model_path.clone();
-    event_writer.write(FileSelected::new(default_model_path));
+    if let Some(default_model_path) = settings::Settings::get().test_model_path.clone() {
+        event_writer.write(FileSelected::new(default_model_path));
+    }
 }
 
 #[derive(SystemParam)]
