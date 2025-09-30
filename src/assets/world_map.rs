@@ -164,7 +164,7 @@ impl WorldMapAssetLoader {
         transform.rotate_local_z(-std::f32::consts::FRAC_PI_2);
 
         let mut world = World::default();
-        let mut root = world.spawn((Transform::default(), WorldMap, aabb));
+        let mut root = world.spawn((Transform::default(), WorldMap, aabb, Visibility::default()));
 
         let mut alphas = Vec::new();
         for terrain in &terrains {
@@ -256,11 +256,11 @@ impl WorldMapAssetLoader {
                 .add_labeled_asset(WorldMapAssetLabel::Chunk(index).to_string(), mesh.mesh);
 
             let chunk = &world_map.mcnk_chunks[index];
-            let mut level0_texture_handle = None;
 
-            if let Some(level0) = chunk.texture_layers.first() {
-                let image_index = level0.texture_id as usize;
-                level0_texture_handle = images.get(image_index).cloned();
+            let mut layer_textures = [None, None, None, None];
+            for (i, layer) in chunk.texture_layers.iter().enumerate() {
+                let image_index = layer.texture_id as usize;
+                layer_textures[i] = images.get(image_index).cloned();
             }
 
             let bit_16th = 1 << 15;
@@ -273,28 +273,11 @@ impl WorldMapAssetLoader {
                 fix_alpha,
             );
 
-            let mut level1_texture_handle = None;
-            let mut level2_texture_handle = None;
-            let mut level3_texture_handle = None;
-
-            if let Some(level1) = chunk.texture_layers.get(1) {
-                let image_index = level1.texture_id as usize;
-                level1_texture_handle = images.get(image_index).cloned();
-            }
-            if let Some(level2) = chunk.texture_layers.get(2) {
-                let image_index = level2.texture_id as usize;
-                level2_texture_handle = images.get(image_index).cloned();
-            }
-            if let Some(level3) = chunk.texture_layers.get(3) {
-                let image_index = level3.texture_id as usize;
-                level3_texture_handle = images.get(image_index).cloned();
-            }
-
             let material = StandardMaterial {
-                base_color_texture: level0_texture_handle,
+                base_color_texture: layer_textures[0].clone(),
                 perceptual_roughness: 1.0,
                 reflectance: 0.0,
-                unlit: false,
+                unlit: true,
                 cull_mode: None,
                 ..Default::default()
             };
@@ -303,9 +286,9 @@ impl WorldMapAssetLoader {
                 level_mask: 0,
                 level_count: chunk.texture_layers.len() as u32,
                 alpha_texture: alpha_texture.clone(),
-                level1_texture: level1_texture_handle,
-                level2_texture: level2_texture_handle,
-                level3_texture: level3_texture_handle,
+                level1_texture: layer_textures[1].clone(),
+                level2_texture: layer_textures[2].clone(),
+                level3_texture: layer_textures[3].clone(),
             };
 
             let extended_material = ExtendedMaterial {
@@ -462,18 +445,7 @@ impl WorldMapAssetLoader {
         indices
     }
 
-    /// Create a combined RGBA texture from the alpha maps of a world map chunk.
-    /// Each alpha map is stored in a separate channel:
-    /// - R: Level 1 alpha
-    /// - G: Level 2 alpha
-    /// - B: Level 3 alpha
-    /// - A: Unused
-    ///
-    /// If `has_big_alpha` is true, each alpha value is 8 bits (1 byte),
-    /// otherwise as 4 bits (half a byte).
-    ///
-    /// If `do_not_fix_alpha` is true, we should read a 63*63 map with the last row
-    /// and column being equivalent to the previous one
+    /// Create and register a combined RGBA alpha texture for a terrain chunk.
     pub fn create_alpha_texture_from_world_map_chunk(
         chunk: &adt::McnkChunk,
         index: usize,
@@ -481,24 +453,22 @@ impl WorldMapAssetLoader {
         has_big_alpha: bool,
         fix_alpha: bool,
     ) -> Handle<Image> {
-        let mut combined_alpha = CombinedAlphaMap::new(fix_alpha);
-
-        // Put level 1 alpha in R channel, level 2 in G channel, level 3 in B channel
-        for &alpha in chunk.alpha_maps.iter() {
-            if has_big_alpha {
-                // alpha is one byte here
-                combined_alpha.set_next_alpha(alpha);
-            } else {
-                // Convert 4-bit alpha to 8-bit alpha
-                // We set two pixels at a time since each byte contains two 4-bit alpha values
-                combined_alpha.set_next_alpha((alpha & 0x0F) * 16);
-                combined_alpha.set_next_alpha(((alpha >> 4) & 0x0F) * 16);
-            }
-        }
-
+        let combined_alpha = adt::CombinedAlphaMap::new(chunk, has_big_alpha, fix_alpha);
+        let image_size: Extent3d = Extent3d {
+            width: 64,
+            height: 64,
+            depth_or_array_layers: 1,
+        };
+        let combined_alpha_image = Image::new_fill(
+            image_size,
+            TextureDimension::D2,
+            combined_alpha.as_slice(),
+            TextureFormat::Rgba8Unorm,
+            RenderAssetUsages::RENDER_WORLD,
+        );
         load_context.add_labeled_asset(
             WorldMapAssetLabel::CombinedAlpha(index).to_string(),
-            combined_alpha.to_image(),
+            combined_alpha_image,
         )
     }
 
@@ -638,101 +608,6 @@ impl AssetLoader for WorldMapAssetLoader {
 
     fn extensions(&self) -> &[&str] {
         &["adt"]
-    }
-}
-
-struct CombinedAlphaMap {
-    map: [[[u8; 4]; 64]; 64],
-    current_x: usize,
-    current_y: usize,
-    current_level: usize,
-
-    /// If `fix_alpha` is true, we should read a 63*63 map with the last row
-    /// and column being equivalent to the previous one
-    fix_alpha: bool,
-}
-
-impl CombinedAlphaMap {
-    fn new(fix_alpha: bool) -> Self {
-        let mut map = [[[0u8; 4]; 64]; 64];
-        // Alpha is unused, but we set it to 255 so the image is visible when viewed in debug UI.
-        map.iter_mut().for_each(|layer| layer.fill([0, 0, 0, 255]));
-        Self {
-            map,
-            current_x: 0,
-            current_y: 0,
-            current_level: 0,
-            fix_alpha,
-        }
-    }
-
-    fn set_alpha(&mut self, x: usize, y: usize, level: usize, alpha: u8) {
-        if y < 64 && x < 64 && level < 4 {
-            self.map[y][x][level] = alpha;
-        }
-    }
-
-    fn set_next_alpha(&mut self, mut alpha: u8) {
-        if self.fix_alpha {
-            // If we are at the last row or column and fix_alpha is true,
-            // duplicate the last value to fill the 64x64 texture
-            if self.current_x == 63 {
-                alpha = self.map[self.current_y][self.current_x - 1][self.current_level];
-            }
-            if self.current_y == 63 {
-                alpha = self.map[self.current_y - 1][self.current_x][self.current_level];
-            }
-        }
-        self.set_alpha(self.current_x, self.current_y, self.current_level, alpha);
-        self.advance();
-    }
-
-    fn advance(&mut self) {
-        self.current_x += 1;
-        if self.current_x >= 64 {
-            self.current_x = 0;
-            self.current_y += 1;
-            if self.current_y >= 64 {
-                self.current_y = 0;
-                self.current_level += 1;
-            }
-        }
-    }
-
-    fn as_slice(&self) -> &[u8] {
-        unsafe {
-            std::slice::from_raw_parts(
-                self.map.as_ptr() as *const u8,
-                std::mem::size_of_val(&self.map),
-            )
-        }
-    }
-
-    fn to_image(&self) -> Image {
-        let image_size: Extent3d = Extent3d {
-            width: 64,
-            height: 64,
-            depth_or_array_layers: 1,
-        };
-        Image::new_fill(
-            image_size,
-            TextureDimension::D2,
-            self.as_slice(),
-            TextureFormat::Rgba8Unorm,
-            RenderAssetUsages::RENDER_WORLD,
-        )
-    }
-
-    fn _save_png(&self, path: impl AsRef<std::path::Path>) -> anyhow::Result<()> {
-        let parent = path.as_ref().parent().unwrap();
-        std::fs::create_dir_all(parent)?;
-        let file = std::fs::File::create(path)?;
-        let writer = std::io::BufWriter::new(file);
-        use ::image::codecs::png::PngEncoder;
-        let encoder = PngEncoder::new(writer);
-        use ::image::*;
-        encoder.write_image(self.as_slice(), 64, 64, ExtendedColorType::Rgba8)?;
-        Ok(())
     }
 }
 

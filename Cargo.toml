@@ -29,11 +29,11 @@ serde_json = "1.0.*"
 thiserror = "2.0.*"
 image = "0.25.*"
 
-wow-adt = { git = "https://github.com/nocthir/warcraft-rs", rev = "6f5ecf80b2034510cb2ed9c83c88f26169fdd760" }
-wow-m2 = { git = "https://github.com/nocthir/warcraft-rs", rev = "6f5ecf80b2034510cb2ed9c83c88f26169fdd760" }
-wow-mpq = { git = "https://github.com/nocthir/warcraft-rs", rev = "6f5ecf80b2034510cb2ed9c83c88f26169fdd760" }
-wow-wmo = { git = "https://github.com/nocthir/warcraft-rs", rev = "6f5ecf80b2034510cb2ed9c83c88f26169fdd760" }
-wow-blp = { git = "https://github.com/nocthir/warcraft-rs", rev = "6f5ecf80b2034510cb2ed9c83c88f26169fdd760" }
+wow-adt = { git = "https://github.com/nocthir/warcraft-rs", rev = "4da5eca740f7d1df493eda29348c1d55e13d259c" }
+wow-m2 = { git = "https://github.com/nocthir/warcraft-rs", rev = "4da5eca740f7d1df493eda29348c1d55e13d259c" }
+wow-mpq = { git = "https://github.com/nocthir/warcraft-rs", rev = "4da5eca740f7d1df493eda29348c1d55e13d259c" }
+wow-wmo = { git = "https://github.com/nocthir/warcraft-rs", rev = "4da5eca740f7d1df493eda29348c1d55e13d259c" }
+wow-blp = { git = "https://github.com/nocthir/warcraft-rs", rev = "4da5eca740f7d1df493eda29348c1d55e13d259c" }
 
 #wow-adt = { path = "../warcraft-rs/file-formats/world-data/wow-adt" }
 #wow-m2 = { path = "../warcraft-rs/file-formats/graphics/wow-m2" }

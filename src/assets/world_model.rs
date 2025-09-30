@@ -158,7 +158,7 @@ impl WorldModelAssetLoader {
             .collect();
 
         let mut world = World::default();
-        let mut root = world.spawn((transform, WorldModel, aabb));
+        let mut root = world.spawn((transform, WorldModel, aabb, Visibility::default()));
         for mesh_index in 0..world_meshes.len() {
             root.with_child((
                 Mesh3d(mesh_handles[mesh_index].clone()),
@@ -292,7 +292,7 @@ impl WorldModelAssetLoader {
                 emissive,
                 perceptual_roughness: 1.0,
                 base_color_texture: Some(image_handle),
-                unlit,
+                unlit: true,
                 cull_mode,
                 alpha_mode,
                 ..Default::default()

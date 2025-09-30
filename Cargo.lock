@@ -7211,7 +7211,7 @@ dependencies = [
 [[package]]
 name = "wow-adt"
 version = "0.5.0"
-source = "git+https://github.com/nocthir/warcraft-rs?rev=6f5ecf80b2034510cb2ed9c83c88f26169fdd760#6f5ecf80b2034510cb2ed9c83c88f26169fdd760"
+source = "git+https://github.com/nocthir/warcraft-rs?rev=4da5eca740f7d1df493eda29348c1d55e13d259c#4da5eca740f7d1df493eda29348c1d55e13d259c"
 dependencies = [
  "log",
  "thiserror 2.0.16",
@@ -7220,7 +7220,7 @@ dependencies = [
 [[package]]
 name = "wow-blp"
 version = "0.5.0"
-source = "git+https://github.com/nocthir/warcraft-rs?rev=6f5ecf80b2034510cb2ed9c83c88f26169fdd760#6f5ecf80b2034510cb2ed9c83c88f26169fdd760"
+source = "git+https://github.com/nocthir/warcraft-rs?rev=4da5eca740f7d1df493eda29348c1d55e13d259c#4da5eca740f7d1df493eda29348c1d55e13d259c"
 dependencies = [
  "bytes",
  "color_quant",
@@ -7233,7 +7233,7 @@ dependencies = [
 [[package]]
 name = "wow-m2"
 version = "0.5.0"
-source = "git+https://github.com/nocthir/warcraft-rs?rev=6f5ecf80b2034510cb2ed9c83c88f26169fdd760#6f5ecf80b2034510cb2ed9c83c88f26169fdd760"
+source = "git+https://github.com/nocthir/warcraft-rs?rev=4da5eca740f7d1df493eda29348c1d55e13d259c#4da5eca740f7d1df493eda29348c1d55e13d259c"
 dependencies = [
  "anyhow",
  "bitflags 2.9.4",
@@ -7248,7 +7248,7 @@ dependencies = [
 [[package]]
 name = "wow-mpq"
 version = "0.5.0"
-source = "git+https://github.com/nocthir/warcraft-rs?rev=6f5ecf80b2034510cb2ed9c83c88f26169fdd760#6f5ecf80b2034510cb2ed9c83c88f26169fdd760"
+source = "git+https://github.com/nocthir/warcraft-rs?rev=4da5eca740f7d1df493eda29348c1d55e13d259c#4da5eca740f7d1df493eda29348c1d55e13d259c"
 dependencies = [
  "adler2",
  "byteorder",
@@ -7280,7 +7280,7 @@ dependencies = [
 [[package]]
 name = "wow-wmo"
 version = "0.5.0"
-source = "git+https://github.com/nocthir/warcraft-rs?rev=6f5ecf80b2034510cb2ed9c83c88f26169fdd760#6f5ecf80b2034510cb2ed9c83c88f26169fdd760"
+source = "git+https://github.com/nocthir/warcraft-rs?rev=4da5eca740f7d1df493eda29348c1d55e13d259c#4da5eca740f7d1df493eda29348c1d55e13d259c"
 dependencies = [
  "binrw",
  "bitflags 2.9.4",

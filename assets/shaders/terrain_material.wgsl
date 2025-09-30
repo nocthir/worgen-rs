@@ -1,4 +1,5 @@
 #import bevy_pbr::{
+    pbr_types,
     pbr_fragment::pbr_input_from_standard_material,
     pbr_functions::alpha_discard,
 }
@@ -12,6 +13,7 @@
 #import bevy_pbr::{
     forward_io::{VertexOutput, FragmentOutput},
     pbr_functions::{apply_pbr_lighting, main_pass_post_lighting_processing},
+    pbr_types::STANDARD_MATERIAL_FLAGS_UNLIT_BIT,
 }
 #endif
 
@@ -56,7 +58,7 @@ fn fragment(
         in.uv
     ).rgb;
 
-    var alpha_values = vec4<f32>(0.0);
+    var level0_color = vec4<f32>(0.0);
     var level1_color = vec4<f32>(0.0);
     var level2_color = vec4<f32>(0.0);
     var level3_color = vec4<f32>(0.0);
@@ -66,13 +68,18 @@ fn fragment(
     let level2_mask = (level_mask >> 2u) & 1u;
     let level3_mask = (level_mask >> 3u) & 1u;
 
+    if level0_mask != 0 && terrain_material.level_count > 0u {
+        level0_color = pbr_input.material.base_color;
+    }
+
     if level1_mask != 0 && terrain_material.level_count > 1u {
         level1_color = textureSample(
             level1_texture,
             level1_sampler,
             in.uv
         );
-        alpha_values.g = alpha.r;
+        level0_color = (1.0 - alpha.r) * level0_color;
+        level1_color = alpha.r * level1_color;
     }
     if level2_mask != 0 && terrain_material.level_count > 2u {
         level2_color = textureSample(
@@ -80,7 +87,9 @@ fn fragment(
             level2_sampler,
             in.uv
         );
-        alpha_values.b = alpha.g;
+        level0_color = (1.0 - alpha.g) * level0_color;
+        level1_color = (1.0 - alpha.g) * level1_color;
+        level2_color = alpha.g * level2_color;
     }
     if level3_mask != 0 && terrain_material.level_count > 3u {
         level3_color = textureSample(
@@ -88,22 +97,26 @@ fn fragment(
             level3_sampler,
             in.uv
         );
-        alpha_values.a = alpha.b;
+        level0_color= (1.0 - alpha.b) * level0_color;
+        level1_color= (1.0 - alpha.b) * level1_color;
+        level2_color= (1.0 - alpha.b) * level2_color;
+        level3_color = alpha.b * level3_color;
     }
 
-    if level0_mask != 0 {
-        alpha_values.r = 1.0 - (alpha_values.g + alpha_values.b + alpha_values.a);
-    }
-
-    pbr_input.material.base_color = alpha_values.r * pbr_input.material.base_color + alpha_values.g * level1_color + alpha_values.b * level2_color + alpha_values.a * level3_color;
+    pbr_input.material.base_color = level0_color + level1_color + level2_color + level3_color;
 
 #ifdef PREPASS_PIPELINE
     // in deferred mode we can't modify anything after that, as lighting is run in a separate fullscreen shader.
     var out = deferred_output(in, pbr_input);
 #else
+    // in forward mode, we calculate the lit color immediately, and then apply some post-lighting effects here.
+    // in deferred mode the lit color and these effects will be calculated in the deferred lighting shader
     var out: FragmentOutput;
-    // apply lighting
-    out.color = apply_pbr_lighting(pbr_input);
+    if (pbr_input.material.flags & STANDARD_MATERIAL_FLAGS_UNLIT_BIT) == 0u {
+        out.color = apply_pbr_lighting(pbr_input);
+    } else {
+        out.color = pbr_input.material.base_color;
+    }
 
     // apply in-shader post processing (fog, alpha-premultiply, and also tonemapping, debanding if the camera is non-hdr)
     // note this does not include fullscreen postprocessing effects like bloom.

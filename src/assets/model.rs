@@ -165,7 +165,7 @@ impl ModelAssetLoader {
             .collect();
 
         let mut world = World::default();
-        let mut root = world.spawn((transform, Model, aabb));
+        let mut root = world.spawn((transform, Model, aabb, Visibility::default()));
         for i in 0..meshes.len() {
             root.with_child((
                 Mesh3d(meshes[i].clone()),
@@ -277,6 +277,7 @@ impl ModelAssetLoader {
             base_color_texture: Some(image.clone()),
             perceptual_roughness: 1.0,
             alpha_mode,
+            unlit: true,
             ..Default::default()
         };
 
