@@ -41,7 +41,7 @@ impl CurrentFile {
 }
 
 fn load_selected_file(
-    mut event_reader: EventReader<ui::FileSelected>,
+    mut event_reader: MessageReader<ui::FileSelected>,
     current_query: Query<&CurrentFile>,
     entity_query: Query<Entity, With<CurrentFile>>,
     mut commands: Commands,

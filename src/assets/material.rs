@@ -2,7 +2,7 @@
 // Author: Nocthir <nocthir@proton.me>
 // SPDX-License-Identifier: MIT or Apache-2.0
 
-use bevy::{pbr::*, prelude::*, render::render_resource::*};
+use bevy::{pbr::*, prelude::*, render::render_resource::*, shader::ShaderRef};
 
 use wow_m2 as m2;
 use wow_wmo as wmo;

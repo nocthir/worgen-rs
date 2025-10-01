@@ -1,6 +1,6 @@
 [package]
 name = "worgen-rs"
-version = "0.3.2"
+version = "0.3.3"
 authors = ["Nocthir <nocthir@proton.me>"]
 edition = "2024"
 license = "MIT OR Apache-2.0"
@@ -21,9 +21,9 @@ test = false
 
 [dependencies]
 anyhow = "1.0.*"
-bevy = { version = "0.16.*", features = [ "bevy_gltf", "bevy_state" ] }
-bevy-inspector-egui = "0.33.*"
-bevy_egui = "0.36.*"
+bevy = { version = "0.17.*", features = [ "bevy_gltf", "bevy_state" ] }
+bevy-inspector-egui = { git = "https://github.com/jakobhellermann/bevy-inspector-egui", rev = "2e9f7ebe804cd4f78b74c74b4570fedd53948e13" }
+bevy_egui = "0.37.*"
 serde = "1.0.*"
 serde_json = "1.0.*"
 thiserror = "2.0.*"

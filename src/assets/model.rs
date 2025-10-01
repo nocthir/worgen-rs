@@ -21,10 +21,10 @@ use std::io;
 use std::path::PathBuf;
 
 use anyhow::Result;
-use bevy::asset::{AssetLoader, LoadContext, io::Reader};
-use bevy::asset::{AssetPath, ReadAssetBytesError, RenderAssetUsages};
+use bevy::asset::io::Reader;
+use bevy::asset::*;
+use bevy::mesh::*;
 use bevy::prelude::*;
-use bevy::render::mesh::*;
 use thiserror::Error;
 use wow_m2 as m2;
 

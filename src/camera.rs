@@ -4,9 +4,10 @@
 
 use std::f32::consts::{FRAC_PI_2, PI, TAU};
 
-use bevy::input::mouse::{MouseMotion, MouseScrollUnit, MouseWheel};
+use bevy::camera::primitives::Aabb;
+use bevy::input::mouse::*;
 use bevy::prelude::*;
-use bevy::render::primitives::Aabb;
+use bevy::render::view::Hdr;
 use bevy::*;
 use bevy_egui::EguiContexts;
 
@@ -19,29 +20,27 @@ use crate::assets::world_model::WorldModel;
 /// https://bevy-cheatbook.github.io/cookbook/pan-orbit-camera.html
 #[derive(Bundle, Default)]
 pub struct PanOrbitCameraBundle {
-    pub camera_state: Camera,
+    pub hdr: Hdr,
     pub state: PanOrbitState,
     pub settings: PanOrbitSettings,
     pub camera: Camera3d,
     pub atmosphere: pbr::Atmosphere,
-    pub exposure: render::camera::Exposure,
-    pub bloom: core_pipeline::bloom::Bloom,
+    pub exposure: camera::Exposure,
+    pub bloom: post_process::bloom::Bloom,
 }
 
 impl PanOrbitCameraBundle {
     pub fn new() -> Self {
-        let mut ret = Self::default();
-        ret.camera_state.hdr = true;
-
-        ret.atmosphere = pbr::Atmosphere::EARTH;
-        // The directional light illuminance used in this scene
-        // is quite bright, so raising the exposure compensation helps
-        // bring the scene to a nicer brightness range.
-        ret.exposure = render::camera::Exposure::SUNLIGHT;
-        // Bloom gives the sun a much more natural look.
-        ret.bloom = core_pipeline::bloom::Bloom::NATURAL;
-
-        ret
+        Self {
+            atmosphere: pbr::Atmosphere::EARTH,
+            // The directional light illuminance used in this scene
+            // is quite bright, so raising the exposure compensation helps
+            // bring the scene to a nicer brightness range.
+            exposure: camera::Exposure::SUNLIGHT,
+            // Bloom gives the sun a much more natural look.
+            bloom: post_process::bloom::Bloom::NATURAL,
+            ..default()
+        }
     }
 }
 
@@ -133,7 +132,7 @@ fn no_world_map(world_maps: Query<(), With<WorldMap>>) -> bool {
 }
 
 pub fn setup_camera(mut commands: Commands) {
-    let cascade_shadow_config = pbr::CascadeShadowConfigBuilder {
+    let cascade_shadow_config = light::CascadeShadowConfigBuilder {
         first_cascade_far_bound: 0.3,
         maximum_distance: 512.0,
         ..default()
@@ -143,7 +142,7 @@ pub fn setup_camera(mut commands: Commands) {
     commands.spawn((
         DirectionalLight {
             shadows_enabled: true,
-            illuminance: pbr::light_consts::lux::RAW_SUNLIGHT,
+            illuminance: light::light_consts::lux::RAW_SUNLIGHT,
             ..default()
         },
         Transform::from_xyz(1.0, 4.0, 1.0).looking_at(Vec3::ZERO, Vec3::Y),
@@ -173,8 +172,8 @@ fn _rotate_sun(time: Res<Time>, mut suns: Query<&mut Transform, With<Directional
 
 fn pan_orbit_camera(
     kbd: Res<ButtonInput<KeyCode>>,
-    mut evr_motion: EventReader<MouseMotion>,
-    mut evr_scroll: EventReader<MouseWheel>,
+    mut evr_motion: MessageReader<MouseMotion>,
+    mut evr_scroll: MessageReader<MouseWheel>,
     mut egui_ctxs: EguiContexts,
     mut q_camera: Query<(&PanOrbitSettings, &mut PanOrbitState, &mut Transform)>,
 ) {

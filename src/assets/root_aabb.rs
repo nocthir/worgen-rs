@@ -4,10 +4,7 @@
 
 use std::fmt;
 
-use bevy::{
-    prelude::*,
-    render::{mesh::MeshAabb, primitives::Aabb},
-};
+use bevy::{camera::primitives::*, prelude::*};
 
 use crate::assets::TransformMesh;
 
@@ -56,7 +53,7 @@ impl RootAabb {
     }
 
     pub fn transform(&mut self, transform: &Transform) {
-        let matrix = transform.compute_matrix();
+        let matrix = transform.to_matrix();
         let (scale, rotation, _translation) = matrix.to_scale_rotation_translation();
 
         // Original data

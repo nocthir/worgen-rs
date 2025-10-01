@@ -6,13 +6,10 @@ use std::collections::HashMap;
 
 use bevy::{
     asset::RecursiveDependencyLoadState,
+    camera::{CameraOutputMode, Viewport, visibility::RenderLayers},
     ecs::system::SystemParam,
     prelude::*,
-    render::{
-        camera::{CameraOutputMode, Viewport},
-        render_resource::BlendState,
-        view::RenderLayers,
-    },
+    render::{render_resource::BlendState, view::Hdr},
     window::PrimaryWindow,
 };
 use bevy_egui::*;
@@ -32,7 +29,7 @@ pub struct UiPlugin;
 
 impl Plugin for UiPlugin {
     fn build(&self, app: &mut App) {
-        app.add_event::<FileSelected>()
+        app.add_message::<FileSelected>()
             .add_systems(Startup, setup_ui)
             .add_systems(EguiPrimaryContextPass, data_info);
     }
@@ -50,8 +47,6 @@ fn setup_ui(mut commands: Commands, mut egui_global_settings: ResMut<EguiGlobalS
         // Setting RenderLayers to none makes sure we won't render anything apart from the UI.
         RenderLayers::none(),
         Camera {
-            // All cameras need to use HDR.
-            hdr: true,
             order: 1,
             // Needed because of https://github.com/bevyengine/bevy/issues/18901
             // and https://github.com/bevyengine/bevy/issues/18903
@@ -61,10 +56,11 @@ fn setup_ui(mut commands: Commands, mut egui_global_settings: ResMut<EguiGlobalS
             },
             ..default()
         },
+        Hdr,
     ));
 }
 
-#[derive(Event)]
+#[derive(Message)]
 pub struct FileSelected {
     pub file_path: String,
 }
@@ -88,7 +84,7 @@ impl From<&FileSettings> for FileSelected {
     }
 }
 
-pub fn select_default_model(mut event_writer: EventWriter<FileSelected>) {
+pub fn select_default_model(mut event_writer: MessageWriter<FileSelected>) {
     if let Some(default_model_path) = settings::Settings::get().test_model_path.clone() {
         event_writer.write(FileSelected::new(default_model_path));
     }
@@ -106,9 +102,9 @@ struct AssetParams<'w> {
 }
 
 #[derive(SystemParam)]
-struct WindowParams<'w> {
-    window: Single<'w, &'static Window, With<PrimaryWindow>>,
-    camera: Single<'w, &'static mut Camera, Without<EguiContext>>,
+struct WindowParams<'w, 's> {
+    window: Single<'w, 's, &'static Window, With<PrimaryWindow>>,
+    camera: Single<'w, 's, &'static mut Camera, Without<EguiContext>>,
 }
 
 #[derive(SystemParam)]
@@ -117,7 +113,7 @@ struct InfoParams<'w, 's> {
     file_info_map: Res<'w, file::FileInfoMap>,
     asset_server: Res<'w, AssetServer>,
     current_file: Query<'w, 's, &'static data::CurrentFile, With<data::CurrentFile>>,
-    event_writer: EventWriter<'w, FileSelected>,
+    event_writer: MessageWriter<'w, FileSelected>,
 }
 
 #[derive(SystemParam)]
@@ -197,13 +193,15 @@ fn get_image_handles(
         let file = file_info_map.get_file(&current_file.path).unwrap();
         match &file.data_type {
             file::DataType::Texture(image_handle) => {
-                let texture_id = contexts.add_image(image_handle.clone_weak());
+                let handle = EguiTextureHandle::Strong(image_handle.clone());
+                let texture_id = contexts.add_image(handle);
                 image_handles.insert(image_handle.clone(), texture_id);
             }
             file::DataType::WorldMap(world_map_handle) => {
                 if let Some(world_map) = assets.world_maps.get(world_map_handle) {
                     for image in world_map.get_all_images() {
-                        let texture_id = contexts.add_image(image.clone_weak());
+                        let handle = EguiTextureHandle::Strong(image.clone());
+                        let texture_id = contexts.add_image(handle);
                         image_handles.insert(image.clone(), texture_id);
                     }
                 }
@@ -303,7 +301,7 @@ fn archive_info(
     archive: &archive::ArchiveInfo,
     file_info_map: &file::FileInfoMap,
     ui: &mut egui::Ui,
-    event_writer: &mut EventWriter<FileSelected>,
+    event_writer: &mut MessageWriter<FileSelected>,
     asset_server: &AssetServer,
 ) -> Result<()> {
     let texture_paths = &archive.texture_paths;
@@ -366,7 +364,7 @@ fn archive_info(
 fn model_info(
     file_info: &file::FileInfo,
     ui: &mut egui::Ui,
-    event_writer: &mut EventWriter<FileSelected>,
+    event_writer: &mut MessageWriter<FileSelected>,
     asset_server: &AssetServer,
 ) {
     let header = file_info_header(file_info, ui, asset_server);
@@ -380,7 +378,7 @@ fn model_info(
 fn world_model_info(
     file_info: &file::FileInfo,
     ui: &mut egui::Ui,
-    event_writer: &mut EventWriter<FileSelected>,
+    event_writer: &mut MessageWriter<FileSelected>,
     asset_server: &AssetServer,
 ) {
     let header = file_info_header(file_info, ui, asset_server);
@@ -394,7 +392,7 @@ fn world_model_info(
 fn world_map_info(
     file_info: &file::FileInfo,
     ui: &mut egui::Ui,
-    event_writer: &mut EventWriter<FileSelected>,
+    event_writer: &mut MessageWriter<FileSelected>,
     asset_server: &AssetServer,
 ) {
     let header = file_info_header(file_info, ui, asset_server);

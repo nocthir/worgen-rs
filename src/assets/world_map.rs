@@ -5,12 +5,12 @@
 use std::io;
 
 use anyhow::Result;
-use bevy::asset::{AssetLoader, LoadContext, io::Reader};
-use bevy::asset::{AssetPath, RenderAssetUsages};
+use bevy::asset::io::Reader;
+use bevy::asset::*;
+use bevy::mesh::*;
 use bevy::pbr::ExtendedMaterial;
 use bevy::prelude::*;
-use bevy::render::mesh::*;
-use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
+use bevy::render::render_resource::*;
 use thiserror::Error;
 use wow_adt as adt;
 

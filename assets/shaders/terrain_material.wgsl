@@ -28,17 +28,16 @@ struct TerrainMaterial {
     level_count: u32,
 };
 
-@group(2) @binding(69) var<uniform> level_mask: u32;
-@group(2) @binding(70) var<uniform> terrain_material: TerrainMaterial;
-
-@group(2) @binding(71) var alpha_texture: texture_2d<f32>;
-@group(2) @binding(72) var alpha_sampler: sampler;
-@group(2) @binding(73) var level1_texture: texture_2d<f32>;
-@group(2) @binding(74) var level1_sampler: sampler;
-@group(2) @binding(75) var level2_texture: texture_2d<f32>;
-@group(2) @binding(76) var level2_sampler: sampler;
-@group(2) @binding(77) var level3_texture: texture_2d<f32>;
-@group(2) @binding(78) var level3_sampler: sampler;
+@group(#{MATERIAL_BIND_GROUP}) @binding(69) var<uniform> level_mask: u32;
+@group(#{MATERIAL_BIND_GROUP}) @binding(70) var<uniform> terrain_material: TerrainMaterial;
+@group(#{MATERIAL_BIND_GROUP}) @binding(71) var alpha_texture: texture_2d<f32>;
+@group(#{MATERIAL_BIND_GROUP}) @binding(72) var alpha_sampler: sampler;
+@group(#{MATERIAL_BIND_GROUP}) @binding(73) var level1_texture: texture_2d<f32>;
+@group(#{MATERIAL_BIND_GROUP}) @binding(74) var level1_sampler: sampler;
+@group(#{MATERIAL_BIND_GROUP}) @binding(75) var level2_texture: texture_2d<f32>;
+@group(#{MATERIAL_BIND_GROUP}) @binding(76) var level2_sampler: sampler;
+@group(#{MATERIAL_BIND_GROUP}) @binding(77) var level3_texture: texture_2d<f32>;
+@group(#{MATERIAL_BIND_GROUP}) @binding(78) var level3_sampler: sampler;
 
 @fragment
 fn fragment(

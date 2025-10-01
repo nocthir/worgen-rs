@@ -1,15 +1,16 @@
 // Copyright © 2025
 // Author: Nocthir <nocthir@proton.me>
 // SPDX-License-Identifier: MIT or Apache-2.0
+
 use std::io;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Result, anyhow};
-use bevy::asset::{AssetLoader, LoadContext, io::Reader};
-use bevy::asset::{AssetPath, ReadAssetBytesError, RenderAssetUsages};
+use bevy::asset::io::Reader;
+use bevy::asset::*;
 use bevy::image::ImageLoaderSettings;
+use bevy::mesh::*;
 use bevy::prelude::*;
-use bevy::render::mesh::*;
 use bevy::render::render_resource::Face;
 use thiserror::Error;
 use wow_wmo as wmo;

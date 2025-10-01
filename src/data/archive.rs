@@ -115,7 +115,7 @@ async fn load_archive(archive_path: PathBuf) -> Result<ArchiveInfo> {
 }
 
 pub fn check_archive_loading(
-    mut exit: EventWriter<AppExit>,
+    mut exit: MessageWriter<AppExit>,
     mut load_task: ResMut<LoadArchiveTasks>,
     mut archive_info_map: ResMut<ArchiveInfoMap>,
 ) -> Result<()> {
