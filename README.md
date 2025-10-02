@@ -211,4 +211,8 @@ flowchart TD
 13. Mesh/material merge passes to reduce draw calls post‑load.
 14. Hierarchical or per‑chunk culling structures for large scenes.
 15. Incremental loading of embedded models/world models for world maps (prioritize nearby placements).
-
+16. Detect black alpha maps, and skip them during terrain material creation.
+    Use a default black texture for all such cases to save memory.
+17. Instead of keeping track of asset handles for models and world models,
+    keep track of useful data in the Model and WorldModel components.
+    With this approach, we can use queries to get a mutable reference to the Model or WorldModel component and then access the data we need.

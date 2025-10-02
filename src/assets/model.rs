@@ -18,6 +18,7 @@
 //! 4. Replace manual model load task path with handle-based selection (future).
 
 use std::io;
+use std::path::PathBuf;
 
 use anyhow::Result;
 use bevy::asset::{AssetLoader, LoadContext, io::Reader};
@@ -30,9 +31,23 @@ use wow_m2 as m2;
 use crate::assets::*;
 use crate::settings::Settings;
 
-#[derive(Component, Debug, Clone, Copy, Default, Reflect)]
+#[derive(Component, Debug, Clone, Default, Reflect)]
 #[reflect(Component)]
-pub struct Model;
+pub struct Model {
+    pub name: String,
+}
+
+impl Model {
+    pub fn new(path: &str) -> Self {
+        let fixed_path = path.replace("\\", "/");
+        let name = PathBuf::from(fixed_path)
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("Unknown")
+            .to_string();
+        Self { name }
+    }
+}
 
 /// Labels that can be used to load part of a Model
 ///
@@ -130,10 +145,11 @@ impl ModelAssetLoader {
     ) -> Result<ModelAsset, ModelAssetLoaderError> {
         let model_asset_path = format!("archive://{}", model_path);
         let bytes = load_context.read_asset_bytes(&model_asset_path).await?;
-        Self::load_model(bytes, load_context).await
+        Self::load_model(model_path, bytes, load_context).await
     }
 
     pub async fn load_model(
+        model_path: &str,
         bytes: Vec<u8>,
         load_context: &mut LoadContext<'_>,
     ) -> Result<ModelAsset, ModelAssetLoaderError> {
@@ -165,7 +181,10 @@ impl ModelAssetLoader {
             .collect();
 
         let mut world = World::default();
-        let mut root = world.spawn((transform, Model, aabb, Visibility::default()));
+
+        let model = Model::new(model_path);
+
+        let mut root = world.spawn((transform, model, aabb, Visibility::default()));
         for i in 0..meshes.len() {
             root.with_child((
                 Mesh3d(meshes[i].clone()),
@@ -325,7 +344,8 @@ impl AssetLoader for ModelAssetLoader {
     ) -> Result<Self::Asset, Self::Error> {
         let mut bytes = Vec::new();
         reader.read_to_end(&mut bytes).await?;
-        Self::load_model(bytes, load_context).await
+        let model_path = load_context.path().to_string_lossy().into_owned();
+        Self::load_model(&model_path, bytes, load_context).await
     }
 
     fn extensions(&self) -> &[&str] {

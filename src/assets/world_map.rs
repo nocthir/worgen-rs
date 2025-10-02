@@ -622,6 +622,22 @@ pub fn is_world_map_extension(filename: &str) -> bool {
     lower_filename.ends_with(".adt")
 }
 
+#[derive(Component)]
+pub struct RoiAabb {
+    pub min: Vec3,
+    pub max: Vec3,
+}
+impl RoiAabb {
+    pub fn contains_aabb(&self, min: Vec3, max: Vec3) -> bool {
+        !(max.x < self.min.x
+            || min.x > self.max.x
+            || max.y < self.min.y
+            || min.y > self.max.y
+            || max.z < self.min.z
+            || min.z > self.max.z)
+    }
+}
+
 #[cfg(test)]
 mod test {
     use crate::{assets::test::*, settings::TestSettings};

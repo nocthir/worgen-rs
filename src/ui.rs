@@ -18,7 +18,12 @@ use bevy::{
 use bevy_egui::*;
 
 use crate::{
-    assets::{material::ExtTerrainMaterial, model, world_map, world_model},
+    assets::{
+        material::ExtTerrainMaterial,
+        model::{self, Model},
+        world_map,
+        world_model::{self, WorldModel},
+    },
     data::{self, archive, file},
     settings::{self, FileSettings},
 };
@@ -115,6 +120,13 @@ struct InfoParams<'w, 's> {
     event_writer: EventWriter<'w, FileSelected>,
 }
 
+#[derive(SystemParam)]
+struct WorldParams<'w, 's> {
+    models: Query<'w, 's, (Entity, &'static Model), With<Model>>,
+    world_models: Query<'w, 's, (Entity, &'static WorldModel), With<WorldModel>>,
+    visibility: Query<'w, 's, &'static mut Visibility>,
+}
+
 fn data_info(
     mut contexts: EguiContexts,
     mut info: InfoParams,
@@ -122,6 +134,7 @@ fn data_info(
     assets: AssetParams,
     // Window + camera for viewport adjustment so 3D scene doesn't render under panel
     window_camera: WindowParams,
+    mut world: WorldParams,
 ) -> Result<()> {
     // Get egui image handles
     let image_handles = get_image_handles(
@@ -136,7 +149,7 @@ fn data_info(
 
     let left_panel_response = left_panel(&mut info, &mut terrain_settings, ctx);
 
-    let right_panel_response = right_panel(&mut info, &assets, image_handles, ctx);
+    let right_panel_response = right_panel(&mut info, &mut world, &assets, image_handles, ctx);
 
     // Adjust world camera viewport so scene starts to the right of the panel (avoid rendering beneath UI)
     let left_width_logical = left_panel_response.response.rect.width();
@@ -248,6 +261,7 @@ fn terrain_settings_widget(terrain_settings: &mut settings::TerrainSettings, ui:
 
 fn right_panel(
     info: &mut InfoParams,
+    world: &mut WorldParams,
     assets: &AssetParams,
     image_map: HashMap<Handle<Image>, egui::TextureId>,
     ctx: &mut egui::Context,
@@ -267,7 +281,7 @@ fn right_panel(
                     .show(ui, |ui| {
                         if let Ok(file_info) = info.file_info_map.get_file(&current_file.path) {
                             ui.label(&file_info.path);
-                            data_type_info(&file_info.data_type, assets, &image_map, ui);
+                            data_type_info(&file_info.data_type, assets, &image_map, ui, world);
                         } else {
                             ui.colored_label(
                                 egui::Color32::RED,
@@ -448,10 +462,11 @@ fn data_type_info(
     assets: &AssetParams,
     image_map: &HashMap<Handle<Image>, egui::TextureId>,
     ui: &mut egui::Ui,
+    world: &mut WorldParams,
 ) {
     match data_type {
-        file::DataType::Texture(image) => {
-            image_type_info(image, assets, image_map, ui);
+        file::DataType::Texture(handle) => {
+            image_type_info(handle, assets, image_map, ui);
         }
         file::DataType::Model(handle) => {
             model_type_info(handle, 0, assets, image_map, ui);
@@ -460,7 +475,7 @@ fn data_type_info(
             world_model_type_info(handle, 0, assets, image_map, ui);
         }
         file::DataType::WorldMap(handle) => {
-            world_map_type_info(handle, assets, image_map, ui);
+            world_map_type_info(handle, assets, image_map, ui, world);
         }
         file::DataType::Unknown => {
             ui.label("The type of this file is unknown.");
@@ -515,6 +530,7 @@ fn world_map_type_info(
     assets: &AssetParams,
     image_map: &HashMap<Handle<Image>, egui::TextureId>,
     ui: &mut egui::Ui,
+    world: &mut WorldParams,
 ) {
     if let Some(world_map) = assets.world_maps.get(handle) {
         egui::CollapsingHeader::new("World Map")
@@ -523,8 +539,8 @@ fn world_map_type_info(
                 images_type_info("Images", &world_map.images, assets, image_map, ui);
                 images_type_info("Alphas", &world_map.alphas, assets, image_map, ui);
                 terrains_type_info(&world_map.terrains, assets, image_map, ui);
-                models_type_info(&world_map.models, assets, image_map, ui);
-                world_models_type_info(&world_map.world_models, assets, image_map, ui);
+                models_type_info(&world_map.models, ui, world);
+                world_models_type_info(&world_map.world_models, ui, world);
                 ui.label(format!("Aabb: {}", world_map.aabb));
             });
     } else {
@@ -580,16 +596,22 @@ fn meshes_type_info(meshes: &[Handle<Mesh>], assets: &AssetParams, ui: &mut egui
 
 fn models_type_info(
     models: &[Handle<model::ModelAsset>],
-    assets: &AssetParams,
-    image_map: &HashMap<Handle<Image>, egui::TextureId>,
     ui: &mut egui::Ui,
+    world: &mut WorldParams,
 ) {
     if !models.is_empty() {
         egui::CollapsingHeader::new("Models")
             .default_open(false)
             .show(ui, |ui| {
-                for (index, model) in models.iter().enumerate() {
-                    model_type_info(model, index, assets, image_map, ui);
+                for (i, (entity, model)) in world.models.iter().enumerate() {
+                    egui::CollapsingHeader::new(format!("{i}: {}", model.name))
+                        .default_open(false)
+                        .show(ui, |ui| {
+                            ui.label(format!("Entity: {:?}", model));
+                            if let Ok(mut visibility) = world.visibility.get_mut(entity) {
+                                ui_for_visibility(&mut visibility, ui);
+                            }
+                        });
                 }
             });
     }
@@ -597,19 +619,50 @@ fn models_type_info(
 
 fn world_models_type_info(
     world_models: &[Handle<world_model::WorldModelAsset>],
-    assets: &AssetParams,
-    image_map: &HashMap<Handle<Image>, egui::TextureId>,
     ui: &mut egui::Ui,
+    world: &mut WorldParams,
 ) {
     if !world_models.is_empty() {
         egui::CollapsingHeader::new("World Models")
             .default_open(false)
             .show(ui, |ui| {
-                for (index, world_model) in world_models.iter().enumerate() {
-                    world_model_type_info(world_model, index, assets, image_map, ui);
+                for (index, (entity, world_model)) in world.world_models.iter().enumerate() {
+                    egui::CollapsingHeader::new(format!("{index}: {}", world_model.name))
+                        .default_open(false)
+                        .show(ui, |ui| {
+                            if let Ok(mut visibility) = world.visibility.get_mut(entity) {
+                                ui_for_visibility(&mut visibility, ui);
+                            }
+                        });
                 }
             });
     }
+}
+
+fn ui_for_visibility(visibility: &mut Visibility, ui: &mut egui::Ui) {
+    let selected = match visibility {
+        Visibility::Inherited => "Inherited",
+        Visibility::Visible => "Visible",
+        Visibility::Hidden => "Hidden",
+    };
+
+    egui::ComboBox::from_label("Visibility")
+        .selected_text(selected)
+        .width(80.0)
+        .show_ui(ui, |ui| {
+            let response = ui.selectable_value(visibility, Visibility::Inherited, "Inherited");
+            if response.clicked() {
+                *visibility = Visibility::Inherited;
+            }
+            let response = ui.selectable_value(visibility, Visibility::Visible, "Visible");
+            if response.clicked() {
+                *visibility = Visibility::Visible;
+            }
+            let response = ui.selectable_value(visibility, Visibility::Hidden, "Hidden");
+            if response.clicked() {
+                *visibility = Visibility::Hidden;
+            }
+        });
 }
 
 fn terrains_type_info(

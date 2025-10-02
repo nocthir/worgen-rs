@@ -2,7 +2,7 @@
 // Author: Nocthir <nocthir@proton.me>
 // SPDX-License-Identifier: MIT or Apache-2.0
 use std::io;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use anyhow::{Result, anyhow};
 use bevy::asset::{AssetLoader, LoadContext, io::Reader};
@@ -16,9 +16,23 @@ use wow_wmo as wmo;
 
 use crate::assets::*;
 
-#[derive(Component, Debug, Clone, Copy, Default, Reflect)]
+#[derive(Component, Debug, Clone, Default, Reflect)]
 #[reflect(Component)]
-pub struct WorldModel;
+pub struct WorldModel {
+    pub name: String,
+}
+
+impl WorldModel {
+    pub fn new(path: &str) -> Self {
+        let fixed_path = path.replace("\\", "/");
+        let name = PathBuf::from(fixed_path)
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("Unknown")
+            .to_string();
+        Self { name }
+    }
+}
 
 /// Labels that can be used to load part of a Model
 ///
@@ -158,7 +172,10 @@ impl WorldModelAssetLoader {
             .collect();
 
         let mut world = World::default();
-        let mut root = world.spawn((transform, WorldModel, aabb, Visibility::default()));
+
+        let world_model = WorldModel::new(model_path);
+
+        let mut root = world.spawn((transform, world_model, aabb, Visibility::default()));
         for mesh_index in 0..world_meshes.len() {
             root.with_child((
                 Mesh3d(mesh_handles[mesh_index].clone()),
