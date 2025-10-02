@@ -571,23 +571,24 @@ impl WorldMapAssetLoader {
                 let scene =
                     load_context.load(WorldModelAssetLabel::Root.from_asset(model_path.clone()));
 
-                let rotation = vec3(
-                    model.rotation[0],
-                    180.0 + model.rotation[1],
-                    model.rotation[2],
+                let translation = vec3(
+                    MAP_SIZE - model.position[0],
+                    model.position[1],
+                    MAP_SIZE - model.position[2],
                 );
 
+                let rotation_vector = vec3(
+                    (model.rotation[0]).to_radians(),
+                    (180.0 + model.rotation[1]).to_radians(),
+                    (model.rotation[2]).to_radians(),
+                );
+                let rotation = Quat::from_axis_angle(Vec3::X, rotation_vector[0])
+                    * Quat::from_axis_angle(Vec3::Y, rotation_vector[1])
+                    * Quat::from_axis_angle(Vec3::Z, rotation_vector[2]);
+
                 let transform = Transform::default()
-                    .with_translation(vec3(
-                        MAP_SIZE - model.position[0],
-                        model.position[1],
-                        MAP_SIZE - model.position[2],
-                    ))
-                    .with_rotation(
-                        Quat::from_axis_angle(Vec3::X, rotation[0].to_radians())
-                            * Quat::from_axis_angle(Vec3::Y, rotation[1].to_radians())
-                            * Quat::from_axis_angle(Vec3::Z, rotation[2].to_radians()),
-                    );
+                    .with_translation(translation)
+                    .with_rotation(rotation);
 
                 root.with_child((SceneRoot(scene), transform));
             }
