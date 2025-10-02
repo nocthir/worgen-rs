@@ -545,14 +545,9 @@ impl WorldMapAssetLoader {
 
     fn get_world_model_asset_paths(world_map: &adt::Adt) -> Vec<String> {
         let mut paths = Vec::new();
-        if let Some(modf) = &world_map.modf
-            && let Some(mwmo) = &world_map.mwmo
-        {
-            let filenames = &mwmo.filenames;
-            for model in &modf.models {
-                if let Some(filename) = filenames.get(model.name_id as usize) {
-                    paths.push(format!("archive://{}", filename));
-                }
+        if let Some(mwmo) = &world_map.mwmo {
+            for filename in &mwmo.filenames {
+                paths.push(format!("archive://{}", filename));
             }
         }
         paths
@@ -565,9 +560,15 @@ impl WorldMapAssetLoader {
     ) {
         let paths = Self::get_world_model_asset_paths(world_map);
 
-        if let Some(modf) = &world_map.modf {
+        if let Some(modf) = &world_map.modf
+            && let Some(mwid) = &world_map.mwid
+            && let Some(mwmo) = &world_map.mwmo
+        {
+            let indices = mwid.get_indices(mwmo);
+
             for model in &modf.models {
-                let model_path = &paths[model.name_id as usize];
+                let index = indices[model.name_id as usize];
+                let model_path = &paths[index];
                 let scene =
                     load_context.load(WorldModelAssetLabel::Root.from_asset(model_path.clone()));
 
