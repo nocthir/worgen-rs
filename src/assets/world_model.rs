@@ -311,7 +311,6 @@ impl WorldModelAssetLoader {
         let default_material = StandardMaterial {
             base_color: Color::WHITE,
             perceptual_roughness: 1.0,
-            unlit: true,
             ..Default::default()
         };
         load_context.add_labeled_asset(

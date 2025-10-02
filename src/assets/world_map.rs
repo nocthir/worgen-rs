@@ -361,7 +361,13 @@ impl WorldMapAssetLoader {
             static UV_SCALE: f32 = 8.0;
             tex_coords[i] = [x / UV_SCALE, z / UV_SCALE];
             positions[i] = [-x, chunk.height_map[i], -z];
-            normals[i] = from_normalized_vec3_u8(chunk.normals[i]);
+
+            let normal: [u8; 3] = [
+                chunk.normals[i][1],
+                chunk.normals[i][2],
+                chunk.normals[i][0],
+            ];
+            normals[i] = from_normalized_vec3_u8(normal);
         }
 
         let mesh = Mesh::new(
