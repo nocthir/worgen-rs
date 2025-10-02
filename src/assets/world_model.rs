@@ -292,7 +292,7 @@ impl WorldModelAssetLoader {
                 emissive,
                 perceptual_roughness: 1.0,
                 base_color_texture: Some(image_handle),
-                unlit: true,
+                unlit,
                 cull_mode,
                 alpha_mode,
                 ..Default::default()

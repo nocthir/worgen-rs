@@ -8,7 +8,11 @@ use bevy::{
     asset::RecursiveDependencyLoadState,
     ecs::system::SystemParam,
     prelude::*,
-    render::{camera::Viewport, view::RenderLayers},
+    render::{
+        camera::{CameraOutputMode, Viewport},
+        render_resource::BlendState,
+        view::RenderLayers,
+    },
     window::PrimaryWindow,
 };
 use bevy_egui::*;
@@ -41,7 +45,15 @@ fn setup_ui(mut commands: Commands, mut egui_global_settings: ResMut<EguiGlobalS
         // Setting RenderLayers to none makes sure we won't render anything apart from the UI.
         RenderLayers::none(),
         Camera {
+            // All cameras need to use HDR.
+            hdr: true,
             order: 1,
+            // Needed because of https://github.com/bevyengine/bevy/issues/18901
+            // and https://github.com/bevyengine/bevy/issues/18903
+            output_mode: CameraOutputMode::Write {
+                blend_state: Some(BlendState::ALPHA_BLENDING),
+                clear_color: ClearColorConfig::None,
+            },
             ..default()
         },
     ));

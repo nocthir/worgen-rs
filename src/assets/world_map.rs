@@ -277,7 +277,6 @@ impl WorldMapAssetLoader {
                 base_color_texture: layer_textures[0].clone(),
                 perceptual_roughness: 1.0,
                 reflectance: 0.0,
-                unlit: true,
                 cull_mode: None,
                 ..Default::default()
             };

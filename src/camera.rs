@@ -23,6 +23,7 @@ pub struct PanOrbitCameraBundle {
     pub state: PanOrbitState,
     pub settings: PanOrbitSettings,
     pub camera: Camera3d,
+    pub atmosphere: pbr::Atmosphere,
     pub exposure: render::camera::Exposure,
     pub tonemapping: core_pipeline::tonemapping::Tonemapping,
     pub bloom: core_pipeline::bloom::Bloom,
@@ -33,11 +34,12 @@ impl PanOrbitCameraBundle {
         let mut ret = Self::default();
         ret.camera_state.hdr = true;
 
+        ret.atmosphere = pbr::Atmosphere::EARTH;
         // The directional light illuminance used in this scene
         // is quite bright, so raising the exposure compensation helps
         // bring the scene to a nicer brightness range.
         ret.exposure = render::camera::Exposure::SUNLIGHT;
-        ret.tonemapping = core_pipeline::tonemapping::Tonemapping::AcesFitted;
+        ret.tonemapping = core_pipeline::tonemapping::Tonemapping::BlenderFilmic;
         // Bloom gives the sun a much more natural look.
         ret.bloom = core_pipeline::bloom::Bloom::NATURAL;
 
@@ -124,8 +126,7 @@ impl Plugin for PanOrbitCameraPlugin {
                 PreUpdate,
                 (on_world_model_loaded, on_model_loaded).run_if(no_world_map),
             )
-            .add_systems(Update, pan_orbit_camera)
-            .add_systems(Update, rotate_sun);
+            .add_systems(Update, pan_orbit_camera);
     }
 }
 
@@ -134,17 +135,24 @@ fn no_world_map(world_maps: Query<(), With<WorldMap>>) -> bool {
 }
 
 pub fn setup_camera(mut commands: Commands) {
+    let cascade_shadow_config = pbr::CascadeShadowConfigBuilder {
+        first_cascade_far_bound: 0.3,
+        maximum_distance: 512.0,
+        ..default()
+    }
+    .build();
     // Light
     commands.spawn((
         DirectionalLight {
             shadows_enabled: true,
-            illuminance: pbr::light_consts::lux::AMBIENT_DAYLIGHT,
+            illuminance: pbr::light_consts::lux::RAW_SUNLIGHT,
             ..default()
         },
-        Transform::from_xyz(1.0, -0.4, 0.0).looking_at(Vec3::ZERO, Vec3::Y),
+        Transform::from_xyz(1.0, 4.0, 1.0).looking_at(Vec3::ZERO, Vec3::Y),
+        cascade_shadow_config,
     ));
 
-    let mut orbit_camera = PanOrbitCameraBundle::default();
+    let mut orbit_camera = PanOrbitCameraBundle::new();
 
     // Position our camera using our component
     orbit_camera.state.center = Vec3::new(1.0, 2.0, 3.0);
@@ -155,7 +163,7 @@ pub fn setup_camera(mut commands: Commands) {
     commands.spawn(orbit_camera);
 }
 
-fn rotate_sun(time: Res<Time>, mut suns: Query<&mut Transform, With<DirectionalLight>>) {
+fn _rotate_sun(time: Res<Time>, mut suns: Query<&mut Transform, With<DirectionalLight>>) {
     suns.iter_mut()
         .for_each(|mut tf| tf.rotate_x(-time.delta_secs() * PI / 10.0));
 }

@@ -277,7 +277,6 @@ impl ModelAssetLoader {
             base_color_texture: Some(image.clone()),
             perceptual_roughness: 1.0,
             alpha_mode,
-            unlit: true,
             ..Default::default()
         };
 
