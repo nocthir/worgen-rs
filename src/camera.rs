@@ -25,7 +25,6 @@ pub struct PanOrbitCameraBundle {
     pub camera: Camera3d,
     pub atmosphere: pbr::Atmosphere,
     pub exposure: render::camera::Exposure,
-    pub tonemapping: core_pipeline::tonemapping::Tonemapping,
     pub bloom: core_pipeline::bloom::Bloom,
 }
 
@@ -39,7 +38,6 @@ impl PanOrbitCameraBundle {
         // is quite bright, so raising the exposure compensation helps
         // bring the scene to a nicer brightness range.
         ret.exposure = render::camera::Exposure::SUNLIGHT;
-        ret.tonemapping = core_pipeline::tonemapping::Tonemapping::BlenderFilmic;
         // Bloom gives the sun a much more natural look.
         ret.bloom = core_pipeline::bloom::Bloom::NATURAL;
 
