@@ -69,7 +69,7 @@ impl ImageLoader {
         let dimension = TextureDimension::D2;
         let data = dyn_image.to_rgba8().into_raw();
         let texture_format = TextureFormat::Rgba8Unorm;
-        let usage = RenderAssetUsages::RENDER_WORLD;
+        let usage = RenderAssetUsages::MAIN_WORLD | RenderAssetUsages::RENDER_WORLD;
         Ok(Image::new(extent, dimension, data, texture_format, usage))
     }
 }

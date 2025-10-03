@@ -71,6 +71,28 @@ pub fn alpha_mode_from_world_model_blend_mode(blend_mode: u32) -> AlphaMode {
     ))
 }
 
+pub fn sampler_from_model_texture_flags(
+    flags: m2::chunks::texture::M2TextureFlags,
+) -> bevy::image::ImageSampler {
+    use bevy::image::*;
+    let address_mode_u = if flags.contains(m2::chunks::texture::M2TextureFlags::WRAP_X) {
+        ImageAddressMode::MirrorRepeat
+    } else {
+        ImageAddressMode::ClampToEdge
+    };
+    let address_mode_v = if flags.contains(m2::chunks::texture::M2TextureFlags::WRAP_Y) {
+        ImageAddressMode::MirrorRepeat
+    } else {
+        ImageAddressMode::ClampToEdge
+    };
+    let descriptor = ImageSamplerDescriptor {
+        address_mode_u,
+        address_mode_v,
+        ..Default::default()
+    };
+    ImageSampler::Descriptor(descriptor)
+}
+
 pub fn sampler_from_world_model_material_flags(
     flags: wmo::WmoMaterialFlags,
 ) -> bevy::image::ImageSampler {

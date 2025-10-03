@@ -209,7 +209,15 @@ impl ModelAssetLoader {
         let mut handles = Vec::new();
         for texture in &model.textures {
             let image_path = Self::get_image_asset_path(texture);
-            handles.push(load_context.load(image_path));
+            let sampler = sampler_from_model_texture_flags(texture.flags);
+            handles.push(
+                load_context
+                    .loader()
+                    .with_settings(move |settings: &mut ImageLoaderSettings| {
+                        settings.sampler = sampler.clone();
+                    })
+                    .load(image_path),
+            );
         }
         handles
     }
