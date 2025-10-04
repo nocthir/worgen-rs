@@ -21,17 +21,18 @@ use crate::assets::*;
 #[reflect(Component)]
 pub struct WorldModel {
     pub name: String,
+    pub images: Vec<Handle<Image>>,
 }
 
 impl WorldModel {
-    pub fn new(path: &str) -> Self {
+    pub fn new(path: &str, images: Vec<Handle<Image>>) -> Self {
         let fixed_path = path.replace("\\", "/");
         let name = PathBuf::from(fixed_path)
             .file_stem()
             .and_then(|s| s.to_str())
             .unwrap_or("Unknown")
             .to_string();
-        Self { name }
+        Self { name, images }
     }
 }
 
@@ -100,8 +101,6 @@ impl WorldModelAssetLabel {
 pub struct WorldModelAsset {
     /// Scene loaded from the model, with reorientation applied.
     pub scene: Handle<Scene>,
-    /// Image handles requested during load (populated by the loader).
-    pub images: Vec<Handle<Image>>,
     /// Generated mesh handles after preparation.
     pub meshes: Vec<Handle<Mesh>>,
     /// Generated material handles after preparation.
@@ -174,7 +173,7 @@ impl WorldModelAssetLoader {
 
         let mut world = World::default();
 
-        let world_model = WorldModel::new(model_path);
+        let world_model = WorldModel::new(model_path, images);
 
         let mut root = world.spawn((transform, world_model, aabb, Visibility::default()));
         for mesh_index in 0..world_meshes.len() {
@@ -190,7 +189,6 @@ impl WorldModelAssetLoader {
 
         Ok(WorldModelAsset {
             scene,
-            images,
             meshes: mesh_handles,
             materials,
             aabb,

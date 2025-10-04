@@ -12,11 +12,12 @@ use wow_mpq as mpq;
 
 use crate::assets::*;
 
-#[derive(Default, Resource)]
+#[derive(Default, Resource, Reflect)]
 pub struct ArchiveInfoMap {
     pub map: HashMap<PathBuf, ArchiveInfo>,
 }
 
+#[derive(Reflect)]
 pub struct ArchiveInfo {
     pub path: PathBuf,
     pub texture_paths: Vec<String>,

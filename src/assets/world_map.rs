@@ -16,7 +16,7 @@ use wow_adt as adt;
 
 use crate::assets::*;
 
-#[derive(Component, Debug, Clone, Copy, Default, Reflect)]
+#[derive(Component, Debug, Clone, Default, Reflect)]
 #[reflect(Component)]
 pub struct WorldMap;
 
@@ -94,10 +94,6 @@ impl WorldMapAssetLabel {
 pub struct WorldMapAsset {
     /// Scene loaded from the model, with reorientation applied.
     pub scene: Handle<Scene>,
-    /// Image handles requested during load.
-    pub images: Vec<Handle<Image>>,
-    /// Alpha maps combined into RGBA textures.
-    pub alphas: Vec<Handle<Image>>,
     /// Terrains created from chunks.
     pub terrains: Vec<WorldMapTerrain>,
     /// Model handles requested during load.
@@ -106,12 +102,6 @@ pub struct WorldMapAsset {
     pub world_models: Vec<Handle<WorldModelAsset>>,
     /// Bounding box
     pub aabb: RootAabb,
-}
-
-impl WorldMapAsset {
-    pub fn get_all_images(&self) -> impl Iterator<Item = &Handle<Image>> {
-        self.images.iter().chain(self.alphas.iter())
-    }
 }
 
 static MAP_SIZE: f32 = 1600.0 * 32.0 / 3.0; // 17066.66
@@ -127,6 +117,7 @@ pub struct TerrainBundle {
     pub mesh: Mesh3d,
     pub material: MeshMaterial3d<ExtTerrainMaterial>,
     pub transform: Transform,
+    pub terrain_material: TerrainMaterial,
 }
 
 #[derive(Default)]
@@ -163,15 +154,17 @@ impl WorldMapAssetLoader {
         transform.rotate_local_x(-std::f32::consts::FRAC_PI_2);
         transform.rotate_local_z(-std::f32::consts::FRAC_PI_2);
 
-        let mut world = World::default();
-        let mut root = world.spawn((Transform::default(), WorldMap, aabb, Visibility::default()));
-
         let mut alphas = Vec::new();
         for terrain in &terrains {
             alphas.push(terrain.combined_alpha.clone());
-            root.with_child(terrain.bundle.clone());
         }
 
+        let mut world = World::default();
+
+        let mut root = world.spawn((Transform::default(), WorldMap, aabb, Visibility::default()));
+        for terrain in &terrains {
+            root.with_child(terrain.bundle.clone());
+        }
         Self::place_models(&mut root, &world_map, load_context);
         Self::place_world_models(&mut root, &world_map, load_context);
 
@@ -182,8 +175,6 @@ impl WorldMapAssetLoader {
 
         Ok(WorldMapAsset {
             scene,
-            images,
-            alphas,
             terrains,
             models,
             world_models,
@@ -292,7 +283,7 @@ impl WorldMapAssetLoader {
 
             let extended_material = ExtendedMaterial {
                 base: material,
-                extension: terrain_material,
+                extension: terrain_material.clone(),
             };
 
             let material_handle = load_context.add_labeled_asset(
@@ -304,6 +295,7 @@ impl WorldMapAssetLoader {
                 mesh: Mesh3d(mesh_handle),
                 material: MeshMaterial3d(material_handle),
                 transform,
+                terrain_material,
             };
 
             let terrain = WorldMapTerrain {

@@ -13,7 +13,8 @@ const SHADER_ASSET_PATH: &str = "shaders/terrain_material.wgsl";
 pub type ExtTerrainMaterial = ExtendedMaterial<StandardMaterial, TerrainMaterial>;
 
 // This struct defines the data that will be passed to your shader
-#[derive(Asset, Default, AsBindGroup, Reflect, Debug, Clone)]
+#[derive(Asset, Component, Default, AsBindGroup, Reflect, Debug, Clone)]
+#[reflect(Component)]
 pub struct TerrainMaterial {
     #[uniform(69)]
     pub level_mask: u32,

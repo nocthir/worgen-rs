@@ -21,7 +21,7 @@ fn main() {
         .add_plugins(assets::WorgenAssetPlugin)
         .add_plugins(diagnostic::FrameTimeDiagnosticsPlugin::default())
         .add_plugins(bevy_egui::EguiPlugin::default())
-        .add_plugins(bevy_inspector_egui::quick::WorldInspectorPlugin::default())
+        .add_plugins(bevy_inspector_egui::DefaultInspectorConfigPlugin)
         .add_plugins(ui::UiPlugin)
         .add_plugins(data::DataPlugin)
         .add_plugins(camera::PanOrbitCameraPlugin)

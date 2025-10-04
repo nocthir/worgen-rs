@@ -12,6 +12,7 @@ use wow_mpq as mpq;
 
 use crate::assets::*;
 
+#[derive(Reflect)]
 pub struct FileInfo {
     pub path: String,
     pub archive_path: PathBuf,
@@ -45,7 +46,7 @@ impl FileInfo {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Reflect, Debug, Clone, PartialEq, Eq)]
 pub enum DataType {
     Texture(Handle<Image>),
     Model(Handle<model::ModelAsset>),

@@ -23,6 +23,7 @@ use std::path::PathBuf;
 use anyhow::Result;
 use bevy::asset::io::Reader;
 use bevy::asset::*;
+use bevy::image::ImageLoaderSettings;
 use bevy::mesh::*;
 use bevy::prelude::*;
 use thiserror::Error;
@@ -35,17 +36,27 @@ use crate::settings::Settings;
 #[reflect(Component)]
 pub struct Model {
     pub name: String,
+    pub images: Vec<Handle<Image>>,
+    pub materials: Vec<Handle<StandardMaterial>>,
 }
 
 impl Model {
-    pub fn new(path: &str) -> Self {
+    pub fn new(
+        path: &str,
+        images: Vec<Handle<Image>>,
+        materials: Vec<Handle<StandardMaterial>>,
+    ) -> Self {
         let fixed_path = path.replace("\\", "/");
         let name = PathBuf::from(fixed_path)
             .file_stem()
             .and_then(|s| s.to_str())
             .unwrap_or("Unknown")
             .to_string();
-        Self { name }
+        Self {
+            name,
+            images,
+            materials,
+        }
     }
 }
 
@@ -113,12 +124,8 @@ impl ModelAssetLabel {
 pub struct ModelAsset {
     /// Scene loaded from the model, with reorientation applied.
     pub scene: Handle<Scene>,
-    /// Image handles requested during load (populated by the loader).
-    pub images: Vec<Handle<Image>>,
     /// Generated mesh handles after preparation.
     pub meshes: Vec<Handle<Mesh>>,
-    /// Generated material handles after preparation.
-    pub materials: Vec<Handle<StandardMaterial>>,
     /// Axis-aligned bounding box of the model's meshes.
     pub aabb: RootAabb,
 }
@@ -182,7 +189,7 @@ impl ModelAssetLoader {
 
         let mut world = World::default();
 
-        let model = Model::new(model_path);
+        let model = Model::new(model_path, images, materials.clone());
 
         let mut root = world.spawn((transform, model, aabb, Visibility::default()));
         for i in 0..meshes.len() {
@@ -198,9 +205,7 @@ impl ModelAssetLoader {
 
         Ok(ModelAsset {
             scene,
-            images,
             meshes,
-            materials,
             aabb,
         })
     }

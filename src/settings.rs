@@ -23,14 +23,12 @@ fn apply_terrain_settings(
     terrain_settings: Res<TerrainSettings>,
     mut materials: ResMut<Assets<ExtTerrainMaterial>>,
 ) {
-    if terrain_settings.is_changed() {
-        for (_idx, material) in materials.iter_mut() {
-            let level_mask = (if terrain_settings.level0 { 1 } else { 0 })
-                | (if terrain_settings.level1 { 2 } else { 0 })
-                | (if terrain_settings.level2 { 4 } else { 0 })
-                | (if terrain_settings.level3 { 8 } else { 0 });
-            material.extension.level_mask = level_mask;
-        }
+    for (_idx, material) in materials.iter_mut() {
+        let level_mask = (if terrain_settings.level0 { 1 } else { 0 })
+            | (if terrain_settings.level1 { 2 } else { 0 })
+            | (if terrain_settings.level2 { 4 } else { 0 })
+            | (if terrain_settings.level3 { 8 } else { 0 });
+        material.extension.level_mask = level_mask;
     }
 }
 
@@ -107,7 +105,7 @@ impl TestSettings {
     }
 }
 
-#[derive(Resource, Debug, Clone, Copy)]
+#[derive(Reflect, Resource, Debug, Clone, Copy)]
 pub struct TerrainSettings {
     pub level0: bool,
     pub level1: bool,
