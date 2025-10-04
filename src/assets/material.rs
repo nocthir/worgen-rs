@@ -49,6 +49,24 @@ impl MaterialExtension for TerrainMaterial {
     }
 }
 
+pub fn color_from_batch_model_color(model: &m2::M2Model, batch: &m2::skin::SkinBatch) -> Color {
+    if batch.color_index != u16::MAX {
+        let ca = &model.color_animations[batch.color_index as usize];
+        let color = ca
+            .color
+            .track
+            .values
+            .data
+            .first()
+            .cloned()
+            .unwrap_or_default();
+        let alpha = ca.alpha.track.values.data.first().cloned().unwrap_or(255);
+        Color::linear_rgba(color.r, color.g, color.b, alpha as f32 / u16::MAX as f32)
+    } else {
+        Default::default()
+    }
+}
+
 pub fn alpha_mode_from_model_blend_mode(
     blend_mode: m2::chunks::material::M2BlendMode,
 ) -> AlphaMode {

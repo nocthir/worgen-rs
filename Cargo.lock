@@ -7470,7 +7470,6 @@ dependencies = [
 [[package]]
 name = "wow-adt"
 version = "0.5.0"
-source = "git+https://github.com/nocthir/warcraft-rs?rev=402345dab0358ae70fc752597f11b772098f30a5#402345dab0358ae70fc752597f11b772098f30a5"
 dependencies = [
  "log",
  "thiserror 2.0.17",
@@ -7479,7 +7478,6 @@ dependencies = [
 [[package]]
 name = "wow-blp"
 version = "0.5.0"
-source = "git+https://github.com/nocthir/warcraft-rs?rev=402345dab0358ae70fc752597f11b772098f30a5#402345dab0358ae70fc752597f11b772098f30a5"
 dependencies = [
  "bytes",
  "color_quant",
@@ -7492,7 +7490,6 @@ dependencies = [
 [[package]]
 name = "wow-m2"
 version = "0.5.0"
-source = "git+https://github.com/nocthir/warcraft-rs?rev=402345dab0358ae70fc752597f11b772098f30a5#402345dab0358ae70fc752597f11b772098f30a5"
 dependencies = [
  "anyhow",
  "bitflags 2.9.4",
@@ -7507,7 +7504,6 @@ dependencies = [
 [[package]]
 name = "wow-mpq"
 version = "0.5.0"
-source = "git+https://github.com/nocthir/warcraft-rs?rev=402345dab0358ae70fc752597f11b772098f30a5#402345dab0358ae70fc752597f11b772098f30a5"
 dependencies = [
  "adler2",
  "byteorder",
@@ -7539,7 +7535,6 @@ dependencies = [
 [[package]]
 name = "wow-wmo"
 version = "0.5.0"
-source = "git+https://github.com/nocthir/warcraft-rs?rev=402345dab0358ae70fc752597f11b772098f30a5#402345dab0358ae70fc752597f11b772098f30a5"
 dependencies = [
  "binrw",
  "bitflags 2.9.4",

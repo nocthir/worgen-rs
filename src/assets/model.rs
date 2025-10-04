@@ -304,8 +304,10 @@ impl ModelAssetLoader {
         // Note that multiple batches can share the same material.
         let model_material = &model.materials[batch.material_index as usize];
         let alpha_mode = alpha_mode_from_model_blend_mode(model_material.blend_mode);
+        let base_color = color_from_batch_model_color(model, batch);
 
         let material = StandardMaterial {
+            base_color,
             base_color_texture: Some(image.clone()),
             perceptual_roughness: 1.0,
             alpha_mode,
