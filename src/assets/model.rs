@@ -25,7 +25,9 @@ use bevy::asset::io::Reader;
 use bevy::asset::*;
 use bevy::image::ImageLoaderSettings;
 use bevy::mesh::*;
+use bevy::platform::collections::HashSet;
 use bevy::prelude::*;
+use bevy::render::render_resource::Face;
 use thiserror::Error;
 use wow_m2 as m2;
 
@@ -130,6 +132,14 @@ pub struct ModelAsset {
     pub aabb: RootAabb,
 }
 
+/// Helper class to reduce the number of parameters passed around when creating meshes.
+#[derive(Default)]
+pub struct MeshData {
+    meshes: Vec<Mesh>,
+    materials: Vec<StandardMaterial>,
+    geosets: Vec<Geoset>,
+}
+
 #[derive(Default)]
 pub struct ModelAssetLoader;
 
@@ -164,22 +174,23 @@ impl ModelAssetLoader {
         let model = m2::M2Model::parse(&mut cursor)?;
 
         let images = Self::load_images(&model, load_context);
-        let mut materials = Vec::new();
-        let mut meshes = Vec::new();
-        Self::load_meshes(&model, &bytes, &images, &mut meshes, &mut materials)?;
+        let mut data = MeshData::default();
+        Self::load_meshes(&model, &bytes, &images, &mut data)?;
 
         let mut transform = Transform::default();
         transform.rotate_local_x(-std::f32::consts::FRAC_PI_2);
         transform.rotate_local_z(-std::f32::consts::FRAC_PI_2);
 
-        let aabb = RootAabb::from_meshes_with_transform(meshes.iter(), &transform);
+        let aabb = RootAabb::from_meshes_with_transform(data.meshes.iter(), &transform);
 
-        let meshes: Vec<Handle<Mesh>> = meshes
+        let meshes: Vec<Handle<Mesh>> = data
+            .meshes
             .into_iter()
             .enumerate()
             .map(|(i, m)| load_context.add_labeled_asset(ModelAssetLabel::Mesh(i).to_string(), m))
             .collect();
-        let materials: Vec<Handle<StandardMaterial>> = materials
+        let materials: Vec<Handle<StandardMaterial>> = data
+            .materials
             .into_iter()
             .enumerate()
             .map(|(i, mat)| {
@@ -192,10 +203,24 @@ impl ModelAssetLoader {
         let model = Model::new(model_path, images, materials.clone());
 
         let mut root = world.spawn((transform, model, aabb, Visibility::default()));
+
+        // Make sure to hide conflicting geosets
+        let mut geosets_seen = HashSet::new();
+
         for i in 0..meshes.len() {
+            let geoset_type = GeosetType::from_geoset(data.geosets[i]);
+            let visibility =
+                if geoset_type == GeosetType::SkinBase || geosets_seen.insert(geoset_type) {
+                    Visibility::default()
+                } else {
+                    Visibility::Hidden
+                };
+
             root.with_child((
                 Mesh3d(meshes[i].clone()),
                 MeshMaterial3d(materials[i].clone()),
+                data.geosets[i],
+                visibility,
             ));
         }
         let scene_loader = load_context.begin_labeled_asset();
@@ -247,8 +272,7 @@ impl ModelAssetLoader {
         model: &m2::M2Model,
         model_bytes: &[u8],
         images: &[Handle<Image>],
-        meshes: &mut Vec<Mesh>,
-        materials: &mut Vec<StandardMaterial>,
+        data: &mut MeshData,
     ) -> Result<(), ModelAssetLoaderError> {
         let skin = model.parse_embedded_skin(model_bytes, 0)?;
 
@@ -271,15 +295,7 @@ impl ModelAssetLoader {
         }
 
         for batch_index in 0..skin.batches().len() {
-            Self::load_submesh(
-                model,
-                &skin,
-                batch_index,
-                &vertex_attributes,
-                images,
-                meshes,
-                materials,
-            )?;
+            Self::load_submesh(model, &skin, batch_index, &vertex_attributes, images, data)?;
         }
         Ok(())
     }
@@ -290,11 +306,14 @@ impl ModelAssetLoader {
         batch_index: usize,
         vertex_attributes: &VertexAttributes,
         images: &[Handle<Image>],
-        meshes: &mut Vec<Mesh>,
-        materials: &mut Vec<StandardMaterial>,
+        data: &mut MeshData,
     ) -> Result<()> {
         let batch = &skin.batches()[batch_index];
         let submesh = &skin.submeshes()[batch.skin_section_index as usize];
+
+        let geoset = Geoset { id: submesh.id };
+        data.geosets.push(geoset);
+
         let texture_index =
             model.raw_data.texture_lookup_table[batch.texture_combo_index as usize] as usize;
         // Textures must be already loaded.
@@ -305,16 +324,29 @@ impl ModelAssetLoader {
         let model_material = &model.materials[batch.material_index as usize];
         let alpha_mode = alpha_mode_from_model_blend_mode(model_material.blend_mode);
         let base_color = color_from_batch_model_color(model, batch);
+        let cull_mode = if model_material
+            .flags
+            .contains(m2::chunks::material::M2RenderFlags::NO_BACKFACE_CULLING)
+        {
+            None
+        } else {
+            Some(Face::Back)
+        };
+        let unlit = model_material
+            .flags
+            .contains(m2::chunks::material::M2RenderFlags::UNLIT);
 
         let material = StandardMaterial {
             base_color,
             base_color_texture: Some(image.clone()),
             perceptual_roughness: 1.0,
             alpha_mode,
+            cull_mode,
+            unlit,
             ..Default::default()
         };
 
-        materials.push(material);
+        data.materials.push(material);
 
         // Index into local arrays
         assert_eq!(submesh.triangle_start % 3, 0);
@@ -340,7 +372,7 @@ impl ModelAssetLoader {
         .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, vertex_attributes.tex_coords_0.clone())
         .with_inserted_indices(Indices::U16(submesh_indices));
 
-        meshes.push(mesh);
+        data.meshes.push(mesh);
 
         Ok(())
     }
@@ -391,4 +423,133 @@ pub fn is_model_extension(filename: &str) -> bool {
     lower_filename.ends_with(".m2")
         || lower_filename.ends_with(".mdx")
         || lower_filename.ends_with(".mdl")
+}
+
+#[derive(Component, Debug, Copy, Clone, Default, Reflect)]
+#[reflect(Component)]
+pub struct Geoset {
+    pub id: u16,
+}
+
+/// High-level grouping for character model component / equipment visibility.
+///
+/// This enum encodes commonly observed geoset category indices used by a
+/// character model format. They are typically identified by the high-order
+/// digits of the geoset id (e.g. `15xx` for a cloak / cape group). The trailing
+/// digits select a style / variation within that category (e.g. different
+/// silhouette shapes, beard styles, etc). The definitions are intentionally
+/// coarse – they do not enumerate every style id, only the parent category. Use
+/// the raw `GeosetType.id` (or a future helper) if exact variant selection is
+/// required.
+///
+/// Sources: community reverse engineering of the binary model format and
+/// inspection of shipped assets. This is best-effort and may evolve.
+/// https://wowdev.wiki/Character_Customization#Geosets
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Reflect)]
+pub enum GeosetType {
+    /// Base skin / body root (id 0000). Often always present.
+    SkinBase,
+    /// Hair / head styles (`00**` except 0000) – variants encode hairstyle meshes.
+    Hair,
+    /// Facial hair group 1 / "Facial1" (`01**`) – usually beards (style 1..=8 typical).
+    Facial1,
+    /// Facial hair group 2 / sideburns / alt moustache (`02**`). Style 1 usually none.
+    Facial2,
+    /// Facial hair group 3 / moustache / alt sideburns (`03**`). Style 1 usually none.
+    Facial3,
+    /// Gloves (`04**`) – hand coverings, 1..=4 styles.
+    Gloves,
+    /// Boots / footwear (`05**`) – 1..=5 styles (shape / height).
+    Boots,
+    /// Shirt tail (race / gender specific lower garment extension) (`06**`). Rare / optional.
+    ShirtTail,
+    /// Ears (`07**`) – style 1 none / hidden, style 2 visible ears (race dependent).
+    Ears,
+    /// Wristbands / sleeves (`08**`) – 1 none, 2 normal, 3 ruffled (where supported).
+    Wristbands,
+    /// Legs armor pads / cuffs (`09**`) – 1 none, 2 long, 3 short variations.
+    Legs,
+    /// Shirt doublet / upper chest overlay (`10**`) – 1 none, 2 obscure/unused variant.
+    ShirtDoublet,
+    /// Pant doublet / lower garment overlay (`11**`) – styles include skirt / armored.
+    PantDoublet,
+    /// Tabard (`12**`) – 1 none, 2 tabard mesh.
+    Tabard,
+    /// Robe trousers split / dress (`13**`) – 1 legs (pants), 2 dress (robe lower).
+    Robe,
+    /// Loincloth / lower flap accessory (`14**`).
+    Loincloth,
+    /// Cloaks / capes (`15**`) – multiple silhouette styles (1..=10 common).
+    Cape,
+    /// Facial jewelry / adornments (`16**`) – nose rings, earrings, chin pieces, etc.
+    FacialJewelry,
+    /// Eye glow / special eye effects (`17**`) – 1 none, 2 primary glow, 3 alternate glow.
+    EyeEffects,
+    /// Belt / belt pack (`18**`) – includes bulky / monk specific variations.
+    Belt,
+    /// Skin extras: bones / tail / additional appendages (`19**`). Implementation dependent.
+    SkinBoneTail,
+    /// Toes / feet detail (`20**`) – 1 none, 2 feet (race dependent visibility control).
+    Toes,
+    /// Skull (additional overlay / effect) (`21**`). Rare usage.
+    Skull,
+    /// Torso armored overlay (`22**`) – 1 regular, 2 armored chest plating.
+    Torso,
+    /// Hands attachments (special hand overlays / alternative meshes) (`23**`).
+    HandsAttachments,
+    /// Head attachments (horns, antlers, crests, etc.) (`24**`).
+    HeadAttachments,
+    /// Facewear (blindfolds, runes, etc.) (`25**`).
+    Facewear,
+    /// Shoulders effect / attachment geosets (`26**`).
+    Shoulders,
+    /// Helm (object component models / extra helm geometry) (`27**`).
+    Helm,
+    /// Upper arm overlays / attachments (`28**`).
+    ArmUpper,
+    /// Unknown / not yet classified category.
+    Unknown,
+}
+
+impl GeosetType {
+    /// Classify from a geoset (e.g. 1507 for a cloak style). Falls back to Unknown.
+    pub fn from_geoset(geoset: Geoset) -> Self {
+        // High-order two digits (base 10) normally define the category, except 0000.
+        if geoset.id == 0 {
+            return GeosetType::SkinBase;
+        }
+        let group = geoset.id / 100; // e.g. 15 for 1507
+        match group {
+            0 => GeosetType::Hair, // 00** excluding 0000
+            1 => GeosetType::Facial1,
+            2 => GeosetType::Facial2,
+            3 => GeosetType::Facial3,
+            4 => GeosetType::Gloves,
+            5 => GeosetType::Boots,
+            6 => GeosetType::ShirtTail,
+            7 => GeosetType::Ears,
+            8 => GeosetType::Wristbands,
+            9 => GeosetType::Legs,
+            10 => GeosetType::ShirtDoublet,
+            11 => GeosetType::PantDoublet,
+            12 => GeosetType::Tabard,
+            13 => GeosetType::Robe,
+            14 => GeosetType::Loincloth,
+            15 => GeosetType::Cape,
+            16 => GeosetType::FacialJewelry,
+            17 => GeosetType::EyeEffects,
+            18 => GeosetType::Belt,
+            19 => GeosetType::SkinBoneTail,
+            20 => GeosetType::Toes,
+            21 => GeosetType::Skull,
+            22 => GeosetType::Torso,
+            23 => GeosetType::HandsAttachments,
+            24 => GeosetType::HeadAttachments,
+            25 => GeosetType::Facewear,
+            26 => GeosetType::Shoulders,
+            27 => GeosetType::Helm,
+            28 => GeosetType::ArmUpper,
+            _ => GeosetType::Unknown,
+        }
+    }
 }
