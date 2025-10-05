@@ -301,7 +301,8 @@ impl WorldModelAssetLoader {
                 Some(Face::Back)
             };
 
-            let alpha_mode = material::alpha_mode_from_world_model_blend_mode(material.blend_mode);
+            let alpha_mode =
+                material::alpha_mode_from_world_model_blend_mode(material.blend_mode, 0.5);
 
             let material = StandardMaterial {
                 base_color,

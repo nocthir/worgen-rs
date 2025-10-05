@@ -7448,7 +7448,7 @@ checksum = "f17a85883d4e6d00e8a97c586de764dabcc06133f7f1d55dce5cdc070ad7fe59"
 
 [[package]]
 name = "worgen-rs"
-version = "0.3.4"
+version = "0.3.5"
 dependencies = [
  "anyhow",
  "bevy",
@@ -7470,6 +7470,7 @@ dependencies = [
 [[package]]
 name = "wow-adt"
 version = "0.5.0"
+source = "git+https://github.com/nocthir/warcraft-rs?rev=df77300c5b3b6f536eef5b542e35e559ffcfdba3#df77300c5b3b6f536eef5b542e35e559ffcfdba3"
 dependencies = [
  "log",
  "thiserror 2.0.17",
@@ -7478,6 +7479,7 @@ dependencies = [
 [[package]]
 name = "wow-blp"
 version = "0.5.0"
+source = "git+https://github.com/nocthir/warcraft-rs?rev=df77300c5b3b6f536eef5b542e35e559ffcfdba3#df77300c5b3b6f536eef5b542e35e559ffcfdba3"
 dependencies = [
  "bytes",
  "color_quant",
@@ -7490,6 +7492,7 @@ dependencies = [
 [[package]]
 name = "wow-m2"
 version = "0.5.0"
+source = "git+https://github.com/nocthir/warcraft-rs?rev=df77300c5b3b6f536eef5b542e35e559ffcfdba3#df77300c5b3b6f536eef5b542e35e559ffcfdba3"
 dependencies = [
  "anyhow",
  "bitflags 2.9.4",
@@ -7504,6 +7507,7 @@ dependencies = [
 [[package]]
 name = "wow-mpq"
 version = "0.5.0"
+source = "git+https://github.com/nocthir/warcraft-rs?rev=df77300c5b3b6f536eef5b542e35e559ffcfdba3#df77300c5b3b6f536eef5b542e35e559ffcfdba3"
 dependencies = [
  "adler2",
  "byteorder",
@@ -7535,6 +7539,7 @@ dependencies = [
 [[package]]
 name = "wow-wmo"
 version = "0.5.0"
+source = "git+https://github.com/nocthir/warcraft-rs?rev=df77300c5b3b6f536eef5b542e35e559ffcfdba3#df77300c5b3b6f536eef5b542e35e559ffcfdba3"
 dependencies = [
  "binrw",
  "bitflags 2.9.4",

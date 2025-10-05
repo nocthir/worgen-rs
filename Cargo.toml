@@ -1,6 +1,6 @@
 [package]
 name = "worgen-rs"
-version = "0.3.4"
+version = "0.3.5"
 authors = ["Nocthir <nocthir@proton.me>"]
 edition = "2024"
 license = "MIT OR Apache-2.0"
@@ -29,17 +29,17 @@ serde_json = "1.0.*"
 thiserror = "2.0.*"
 image = "0.25.*"
 
-#wow-adt = { git = "https://github.com/nocthir/warcraft-rs", rev = "402345dab0358ae70fc752597f11b772098f30a5" }
-#wow-m2 = { git = "https://github.com/nocthir/warcraft-rs", rev = "402345dab0358ae70fc752597f11b772098f30a5" }
-#wow-mpq = { git = "https://github.com/nocthir/warcraft-rs", rev = "402345dab0358ae70fc752597f11b772098f30a5" }
-#wow-wmo = { git = "https://github.com/nocthir/warcraft-rs", rev = "402345dab0358ae70fc752597f11b772098f30a5" }
-#wow-blp = { git = "https://github.com/nocthir/warcraft-rs", rev = "402345dab0358ae70fc752597f11b772098f30a5" }
+wow-adt = { git = "https://github.com/nocthir/warcraft-rs", rev = "df77300c5b3b6f536eef5b542e35e559ffcfdba3" }
+wow-m2 = { git = "https://github.com/nocthir/warcraft-rs", rev = "df77300c5b3b6f536eef5b542e35e559ffcfdba3" }
+wow-mpq = { git = "https://github.com/nocthir/warcraft-rs", rev = "df77300c5b3b6f536eef5b542e35e559ffcfdba3" }
+wow-wmo = { git = "https://github.com/nocthir/warcraft-rs", rev = "df77300c5b3b6f536eef5b542e35e559ffcfdba3" }
+wow-blp = { git = "https://github.com/nocthir/warcraft-rs", rev = "df77300c5b3b6f536eef5b542e35e559ffcfdba3" }
 
-wow-adt = { path = "../warcraft-rs/file-formats/world-data/wow-adt" }
-wow-m2 = { path = "../warcraft-rs/file-formats/graphics/wow-m2" }
-wow-mpq = { path = "../warcraft-rs/file-formats/archives/wow-mpq" }
-wow-wmo = { path = "../warcraft-rs/file-formats/graphics/wow-wmo" }
-wow-blp = { path = "../warcraft-rs/file-formats/graphics/wow-blp" }
+#wow-adt = { path = "../warcraft-rs/file-formats/world-data/wow-adt" }
+#wow-m2 = { path = "../warcraft-rs/file-formats/graphics/wow-m2" }
+#wow-mpq = { path = "../warcraft-rs/file-formats/archives/wow-mpq" }
+#wow-wmo = { path = "../warcraft-rs/file-formats/graphics/wow-wmo" }
+#wow-blp = { path = "../warcraft-rs/file-formats/graphics/wow-blp" }
 
 [dev-dependencies]
 env_logger = "*"

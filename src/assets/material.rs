@@ -7,12 +7,10 @@ use bevy::{pbr::*, prelude::*, render::render_resource::*, shader::ShaderRef};
 use wow_m2 as m2;
 use wow_wmo as wmo;
 
-/// This example uses a shader source file from the assets subdirectory
-const SHADER_ASSET_PATH: &str = "shaders/terrain_material.wgsl";
+const TERRAIN_SHADER_ASSET_PATH: &str = "shaders/terrain_material.wgsl";
 
 pub type ExtTerrainMaterial = ExtendedMaterial<StandardMaterial, TerrainMaterial>;
 
-// This struct defines the data that will be passed to your shader
 #[derive(Asset, Component, Default, AsBindGroup, Reflect, Debug, Clone)]
 #[reflect(Component)]
 pub struct TerrainMaterial {
@@ -36,16 +34,13 @@ pub struct TerrainMaterial {
     pub level3_texture: Option<Handle<Image>>,
 }
 
-/// The Material trait is very configurable, but comes with sensible defaults for all methods.
-/// You only need to implement functions for features that need non-default behavior.
-/// See the Material api docs for details!
 impl MaterialExtension for TerrainMaterial {
     fn fragment_shader() -> ShaderRef {
-        SHADER_ASSET_PATH.into()
+        TERRAIN_SHADER_ASSET_PATH.into()
     }
 
     fn deferred_fragment_shader() -> ShaderRef {
-        SHADER_ASSET_PATH.into()
+        TERRAIN_SHADER_ASSET_PATH.into()
     }
 }
 
@@ -69,9 +64,12 @@ pub fn color_from_batch_model_color(model: &m2::M2Model, batch: &m2::skin::SkinB
 
 pub fn alpha_mode_from_model_blend_mode(
     blend_mode: m2::chunks::material::M2BlendMode,
+    weight: f32,
 ) -> AlphaMode {
     use m2::chunks::material::M2BlendMode as BM;
-    if blend_mode.intersects(BM::ALPHA_KEY | BM::NO_ALPHA_ADD) {
+    if blend_mode.intersects(BM::ALPHA_KEY) {
+        AlphaMode::Mask(weight)
+    } else if blend_mode.intersects(BM::NO_ALPHA_ADD) {
         AlphaMode::AlphaToCoverage
     } else if blend_mode.intersects(BM::ADD | BM::BLEND_ADD) {
         AlphaMode::Add
@@ -84,10 +82,11 @@ pub fn alpha_mode_from_model_blend_mode(
     }
 }
 
-pub fn alpha_mode_from_world_model_blend_mode(blend_mode: u32) -> AlphaMode {
-    alpha_mode_from_model_blend_mode(m2::chunks::material::M2BlendMode::from_bits_truncate(
-        blend_mode as u16,
-    ))
+pub fn alpha_mode_from_world_model_blend_mode(blend_mode: u32, weight: f32) -> AlphaMode {
+    alpha_mode_from_model_blend_mode(
+        m2::chunks::material::M2BlendMode::from_bits_truncate(blend_mode as u16),
+        weight,
+    )
 }
 
 pub fn sampler_from_model_texture_flags(
