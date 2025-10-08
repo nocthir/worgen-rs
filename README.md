@@ -77,6 +77,7 @@ Components:
 * `RootAabb` – Axis‑aligned bounding box derived from meshes (or terrain chunks) after consistent reorientation.
 * `Model`, `WorldModel`, `WorldMap` – Marker components identifying scene root types for focus logic & UI introspection.
 * `TerrainMaterial` – Extension payload of `ExtTerrainMaterial` storing layer textures, combined alpha map, layer count and bitmask.
+ * `Geoset`, `GeosetCatalog`, `GeosetSelection` – Appearance variant system (see "Appearance Variant (Geoset) System").
 
 ## File classification
 
@@ -102,7 +103,7 @@ Common pattern: parse bytes → enqueue/load dependent assets (images, group fil
 
 Loaders:
 * Image loader – Decodes image format into RGBA `Image` assets, applying per‑texture sampler descriptors derived from format flags.
-* Model loader – Parses model structure, resolves texture handles (fallback to configured test image when missing), builds per‑batch meshes & materials. Geoset grouping logic ensures only one variant of mutually exclusive categories is visible at spawn to avoid overdraw.
+* Model loader – Parses model structure, resolves texture handles (fallback to configured test image when missing), builds per‑batch meshes & materials. Appearance variant (geoset) grouping ensures only one variant of mutually exclusive categories is visible at spawn.
 * World model loader – Parses root file, loads all group files, builds meshes per render batch, applies material flags (alpha blending, two‑sided, unlit, sampler modes), constructs a scene with `WorldModel` marker and child mesh entities.
 * World map loader – Parses terrain definition, generates one mesh per chunk (145 vertices, 256 CCW triangles via 4‑triangle fan per quad), creates a combined RGBA alpha texture per chunk, builds extended terrain materials carrying up to 4 texture layers + alpha mask, requests referenced models & world models, places them with orientation & scale adjustments, and labels all sub‑assets (chunks, materials, combined alpha, models, world models, images).
 
@@ -138,6 +139,22 @@ Focus logic: sets center to AABB center and radius to max(length(half_extents) *
 
 `RootAabb` utilities derive a combined AABB from one or many meshes (optionally transformed). For terrains a merged bounding box is computed from chunk meshes prior to focus. Reorientation occurs before measurement to ensure consistent camera framing across asset types.
 
+## Geoset system
+
+Some character / equipment models expose multiple optional or stylistic mesh fragments encoded as numeric ids. The runtime groups those into high‑level categories (Hair, Cape, Helm, etc.) and exposes a simple selection model:
+
+Key components:
+* `Geoset` – Attached to each child mesh fragment (raw id + derived category + variant index).
+* `GeosetCatalog` – Per‑model discovered variant indices per category (built lazily once).
+* `GeosetSelection` – Mutable state: exclusive category → single variant; additive category → enabled set.
+
+Systems (via `GeosetRuntimePlugin`):
+1. `build_geoset_catalog_system` – Collects child components, builds catalog, seeds selection.
+2. `apply_geoset_selection_system` – Applies selection (change‑driven visibility updates).
+3. `debug_cycle_cape_system` – Press `C` to cycle cape variants (debug/testing aid).
+
+UI: Right panel section lists models with catalogs. Exclusive categories offer prev / next / reset / none buttons; additive categories expose toggle chips. Clearing an exclusive category hides its variants until reselected.
+
 ## Error handling & load states
 
 * Archive task errors log the cause and request application error exit.
@@ -154,7 +171,7 @@ Focus logic: sets center to AABB center and radius to max(length(half_extents) *
 * Only the newest selection per frame is processed (debounce during rapid clicks).
 * A uniform reorientation (−90° X, −90° Z) yields consistent forward/up for all asset categories.
 * Terrain layer visibility toggles update material bitmasks in place (no asset reload).
-* Model geoset visibility: mutually exclusive geoset categories ensure only one variant renders for overlapping cosmetic groups.
+* Model appearance variants: mutually exclusive categories ensure only a single variant renders for overlapping cosmetic groups.
 
 ## Mermaid overview
 

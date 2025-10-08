@@ -15,7 +15,7 @@ use bevy_inspector_egui::{
 };
 
 use crate::{
-    assets::{material::TerrainMaterial, model::Model, world_model::WorldModel},
+    assets::{geoset::*, material::TerrainMaterial, model::*, world_model::WorldModel},
     data::{CurrentFile, file::FileInfoMap},
     ui::get_file_icon,
 };
@@ -59,6 +59,8 @@ pub fn ui(world: &mut World, context: &mut EguiContext) -> egui::InnerResponse<(
                             true,
                             &Filter::<With<CurrentFile>>::all(),
                         );
+                        ui.separator();
+                        geosets_models_ui(world, ui);
                     });
             })
     } else {
@@ -96,6 +98,7 @@ impl InspectorPrimitive for Model {
 
         ui.label(format!("Name: {}", self.name));
         images_ui("Images", &self.images, world, ui);
+        // Note: Geoset editing UI lives in panel-level helper because we need mutable access to GeosetSelection.
     }
 }
 
@@ -270,4 +273,139 @@ impl InspectorPrimitive for TerrainMaterial {
             image_ui(level3, 3, world, ui);
         }
     }
+}
+
+/// Geoset editor:
+fn geosets_models_ui(world: &mut World, ui: &mut egui::Ui) {
+    // Gather immutable data first (entity, name, catalog) to avoid holding a mutable borrow
+    let mut gather_query = world.query::<(Entity, &Model, &GeosetCatalog)>();
+    let mut models: Vec<(Entity, String, GeosetCatalog)> = Vec::new();
+    for (entity, model, catalog) in gather_query.iter(world) {
+        models.push((entity, model.name.clone(), catalog.clone()));
+    }
+    if models.is_empty() {
+        return;
+    }
+    // We'll reuse a separate query for mutable selection borrows inside UI passes.
+    let mut selection_query = world.query::<&mut GeosetSelection>();
+    egui::CollapsingHeader::new("👤 Geosets")
+        .default_open(false)
+        .show(ui, |ui| {
+            models.sort_by(|a, b| a.1.cmp(&b.1));
+            for (entity, name, catalog) in models.into_iter() {
+                egui::CollapsingHeader::new(format!("{entity}: {name}"))
+                    .default_open(false)
+                    .show(ui, |ui| {
+                        if let Ok(selection) = selection_query.get_mut(world, entity) {
+                            geoset_catalog_ui(selection, &catalog, ui);
+                        } else {
+                            ui.label("Selection component not found");
+                        }
+                    });
+            }
+        });
+}
+
+fn geoset_catalog_ui(
+    mut selection: Mut<GeosetSelection>,
+    catalog: &GeosetCatalog,
+    ui: &mut egui::Ui,
+) {
+    // Build sorted list of categories for stable UI (sort by debug name)
+    let mut cats: Vec<GeosetType> = catalog.categories.keys().copied().collect();
+    cats.sort_by(|a, b| a.as_str().cmp(b.as_str()));
+    for cat in cats {
+        let variants = catalog
+            .categories
+            .get(&cat)
+            .map(|v| v.as_slice())
+            .unwrap_or(&[]);
+        if variants.is_empty() {
+            continue;
+        }
+        ui.separator();
+        if cat.is_exclusive() {
+            exclusive_category_row(ui, cat, variants, &mut selection, catalog);
+        } else {
+            additive_category_row(ui, cat, variants, &mut selection);
+        }
+    }
+}
+
+/// Exclusive categories: compact row with prev/next, current variant, reset, none.
+fn exclusive_category_row(
+    ui: &mut egui::Ui,
+    cat: GeosetType,
+    variants: &[u16],
+    selection: &mut GeosetSelection,
+    catalog: &GeosetCatalog,
+) {
+    let current_opt = selection.selected_exclusive(cat);
+    let current = current_opt.unwrap_or_else(|| variants[0]);
+    ui.horizontal(|ui| {
+        let label = if cat.all_variants_always_visible() {
+            format!("{} (all visible)", cat)
+        } else {
+            cat.as_str().to_string()
+        };
+        ui.label(label);
+        if ui.button("◀").on_hover_text("Previous variant").clicked() && current_opt.is_some() {
+            // only cycle if something selected
+            if let Some(idx) = variants.iter().position(|v| *v == current) {
+                let prev_idx = if idx == 0 {
+                    variants.len() - 1
+                } else {
+                    idx - 1
+                };
+                selection.set_exclusive(cat, variants[prev_idx]);
+            }
+        }
+        // Display current variant id
+        if current_opt.is_some() {
+            ui.monospace(format!("{:02}", current));
+        } else {
+            ui.monospace("--");
+        }
+        if ui.button("▶").on_hover_text("Next variant").clicked() && current_opt.is_some() {
+            selection.cycle(cat, catalog);
+        }
+        if ui
+            .small_button("Reset")
+            .on_hover_text("Reset to first variant")
+            .clicked()
+        {
+            selection.set_exclusive(cat, variants[0]);
+        }
+        // Provide a way to clear selection (notably for Tabard / optional gear)
+        if ui
+            .small_button("None")
+            .on_hover_text("Clear / hide this category")
+            .clicked()
+        {
+            selection.clear_exclusive(cat);
+        }
+    });
+}
+
+/// Additive categories: collapsing header containing toggle chips.
+fn additive_category_row(
+    ui: &mut egui::Ui,
+    cat: GeosetType,
+    variants: &[u16],
+    selection: &mut GeosetSelection,
+) {
+    egui::CollapsingHeader::new(format!("{} (additive)", cat))
+        .default_open(false)
+        .show(ui, |ui| {
+            ui.horizontal_wrapped(|ui| {
+                for &v in variants {
+                    let enabled = selection.is_additive_enabled(cat, v);
+                    let text = format!("{:02}", v);
+                    let resp = ui.selectable_label(enabled, text);
+                    if resp.clicked() {
+                        selection.toggle_additive(cat, v);
+                    }
+                }
+            });
+        });
 }
