@@ -132,6 +132,15 @@ fn archive_ui(archive: &ArchiveInfo, world: &mut World, ui: &mut egui::Ui) {
             ) {
                 message.replace(msg);
             }
+            if let Some(msg) = archive_files_ui(
+                "Data Bases",
+                &archive.data_base_paths,
+                file_info_map,
+                ui,
+                asset_server,
+            ) {
+                message.replace(msg);
+            }
 
             if let Some(message) = message {
                 world.write_message(message);
@@ -146,22 +155,24 @@ fn archive_files_ui<S: AsRef<str>>(
     ui: &mut egui::Ui,
     asset_server: &AssetServer,
 ) -> Option<FileSelected> {
-    let response = egui::CollapsingHeader::new(label.as_ref()).show(ui, |ui| {
-        let mut ret = None;
-        for path in paths {
-            if let Ok(file_info) = file_info_map.get_file(path) {
-                if let Some(message) = archive_file_ui(file_info, ui, asset_server) {
-                    ret.replace(message);
+    let response = egui::CollapsingHeader::new(label.as_ref())
+        .enabled(!paths.is_empty())
+        .show(ui, |ui| {
+            let mut ret = None;
+            for path in paths {
+                if let Ok(file_info) = file_info_map.get_file(path) {
+                    if let Some(message) = archive_file_ui(file_info, ui, asset_server) {
+                        ret.replace(message);
+                    }
+                } else {
+                    ui.colored_label(
+                        egui::Color32::RED,
+                        format!("Failed to get info for {}", path),
+                    );
                 }
-            } else {
-                ui.colored_label(
-                    egui::Color32::RED,
-                    format!("Failed to get info for {}", path),
-                );
             }
-        }
-        ret
-    });
+            ret
+        });
     response.body_returned.flatten()
 }
 

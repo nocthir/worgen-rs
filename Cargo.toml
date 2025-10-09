@@ -34,12 +34,14 @@ wow-m2 = { git = "https://github.com/nocthir/warcraft-rs", rev = "df77300c5b3b6f
 wow-mpq = { git = "https://github.com/nocthir/warcraft-rs", rev = "df77300c5b3b6f536eef5b542e35e559ffcfdba3" }
 wow-wmo = { git = "https://github.com/nocthir/warcraft-rs", rev = "df77300c5b3b6f536eef5b542e35e559ffcfdba3" }
 wow-blp = { git = "https://github.com/nocthir/warcraft-rs", rev = "df77300c5b3b6f536eef5b542e35e559ffcfdba3" }
+wow-cdbc = { git = "https://github.com/nocthir/warcraft-rs", rev = "df77300c5b3b6f536eef5b542e35e559ffcfdba3" }
 
 #wow-adt = { path = "../warcraft-rs/file-formats/world-data/wow-adt" }
 #wow-m2 = { path = "../warcraft-rs/file-formats/graphics/wow-m2" }
 #wow-mpq = { path = "../warcraft-rs/file-formats/archives/wow-mpq" }
 #wow-wmo = { path = "../warcraft-rs/file-formats/graphics/wow-wmo" }
 #wow-blp = { path = "../warcraft-rs/file-formats/graphics/wow-blp" }
+#wow-cdbc = { path = "../warcraft-rs/file-formats/graphics/wow-cdbc" }
 
 [dev-dependencies]
 env_logger = "*"

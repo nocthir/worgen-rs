@@ -7,7 +7,7 @@ pub mod file;
 
 use bevy::prelude::*;
 
-use crate::{assets::*, data::archive::*, ui};
+use crate::{data::archive::*, ui};
 
 pub struct DataPlugin;
 
@@ -65,9 +65,13 @@ fn load_selected_file(
         file_map
             .get_file_mut(&event.file_path)?
             .load(&mut asset_server);
-        let model =
-            asset_server.load(model::ModelAssetLabel::Root.from_asset(event.get_asset_path()));
-        commands.spawn((CurrentFile::new(event.file_path.clone()), SceneRoot(model)));
+        if event.has_scene_root() {
+            let handle = asset_server.load(event.get_asset_path());
+            commands.spawn((CurrentFile::new(event.file_path.clone()), SceneRoot(handle)));
+        } else {
+            let _ = asset_server.load_untyped(event.get_asset_path());
+            commands.spawn(CurrentFile::new(event.file_path.clone()));
+        }
     }
     Ok(())
 }

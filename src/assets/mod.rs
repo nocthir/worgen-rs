@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: MIT or Apache-2.0
 
 pub mod archive;
+pub mod data_base;
 pub mod geoset;
 pub mod image;
 pub mod material;
@@ -12,6 +13,7 @@ pub mod root_aabb;
 pub mod world_map;
 pub mod world_model;
 
+use data_base::*;
 use geoset::*;
 use image::*;
 use material::*;
@@ -34,10 +36,12 @@ impl Plugin for WorgenAssetPlugin {
             .init_asset::<ModelAsset>()
             .init_asset::<WorldModelAsset>()
             .init_asset::<WorldMapAsset>()
+            .init_asset::<DataBaseAsset>()
             .init_asset_loader::<ImageLoader>()
             .init_asset_loader::<ModelAssetLoader>()
             .init_asset_loader::<WorldModelAssetLoader>()
             .init_asset_loader::<WorldMapAssetLoader>()
+            .init_asset_loader::<DataBaseAssetLoader>()
             .add_plugins(MaterialPlugin::<ExtTerrainMaterial>::default())
             .add_plugins(GeosetRuntimePlugin)
             .add_systems(PreStartup, archive::FileArchiveMap::init);

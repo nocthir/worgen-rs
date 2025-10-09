@@ -52,6 +52,7 @@ pub enum DataType {
     Model(Handle<model::ModelAsset>),
     WorldModel(Handle<world_model::WorldModelAsset>),
     WorldMap(Handle<world_map::WorldMapAsset>),
+    DataBase(Handle<data_base::DataBaseAsset>),
     Unknown,
 }
 
@@ -63,6 +64,7 @@ impl DataType {
             DataType::Model(h) => *h = handle.typed(),
             DataType::WorldModel(h) => *h = handle.typed(),
             DataType::WorldMap(h) => *h = handle.typed(),
+            DataType::DataBase(h) => *h = handle.typed(),
             DataType::Unknown => {}
         }
     }
@@ -74,6 +76,7 @@ impl DataType {
             DataType::Model(handle) => *handle = asset_server.load(path),
             DataType::WorldModel(handle) => *handle = asset_server.load(path),
             DataType::WorldMap(handle) => *handle = asset_server.load(path),
+            DataType::DataBase(handle) => *handle = asset_server.load(path),
             DataType::Unknown => (),
         };
     }
@@ -84,6 +87,7 @@ impl DataType {
             DataType::Model(handle) => *handle = Handle::default(),
             DataType::WorldModel(handle) => *handle = Handle::default(),
             DataType::WorldMap(handle) => *handle = Handle::default(),
+            DataType::DataBase(handle) => *handle = Handle::default(),
             DataType::Unknown => (),
         };
     }
@@ -96,6 +100,7 @@ impl DataType {
                 asset_server.get_recursive_dependency_load_state(handle)
             }
             DataType::WorldMap(handle) => asset_server.get_recursive_dependency_load_state(handle),
+            DataType::DataBase(handle) => asset_server.get_recursive_dependency_load_state(handle),
             DataType::Unknown => None,
         };
         ret.unwrap_or(RecursiveDependencyLoadState::NotLoaded)
@@ -113,7 +118,10 @@ impl<S: Into<String>> From<S> for DataType {
             DataType::WorldModel(Handle::default())
         } else if lowercase.ends_with(".adt") {
             DataType::WorldMap(Handle::default())
+        } else if lowercase.ends_with(".dbc") {
+            DataType::DataBase(Handle::default())
         } else {
+            warn!("Unknown file extension: {}", lowercase);
             DataType::Unknown
         }
     }

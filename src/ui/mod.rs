@@ -14,7 +14,12 @@ use bevy_egui::*;
 use bevy_inspector_egui::inspector_egui_impls::InspectorEguiImpl;
 
 use crate::{
-    assets::{material::TerrainMaterial, model::Model, world_model::WorldModel},
+    assets::{
+        material::TerrainMaterial,
+        model::{self, Model},
+        world_map,
+        world_model::{self, WorldModel},
+    },
     data::{archive::ArchiveInfoMap, file},
     settings::{self, FileSettings},
 };
@@ -72,8 +77,18 @@ impl FileSelected {
         Self { file_path }
     }
 
+    pub fn has_scene_root(&self) -> bool {
+        model::is_model_extension(&self.file_path)
+            || world_model::is_world_model_extension(&self.file_path)
+            || world_map::is_world_map_extension(&self.file_path)
+    }
+
     pub fn get_asset_path(&self) -> String {
-        format!("archive://{}", self.file_path)
+        if self.has_scene_root() {
+            format!("archive://{}#Root", self.file_path)
+        } else {
+            format!("archive://{}", self.file_path)
+        }
     }
 }
 
@@ -196,6 +211,7 @@ fn get_file_icon(data_type: &file::DataType) -> &'static str {
         file::DataType::Model(_) => "📦",
         file::DataType::WorldModel(_) => "🏰",
         file::DataType::WorldMap(_) => "🗺",
+        file::DataType::DataBase(_) => "📚",
         file::DataType::Unknown => "❓",
     }
 }

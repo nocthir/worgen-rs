@@ -244,6 +244,7 @@ impl ModelAssetLoader {
     fn get_image_path(texture: &m2::chunks::texture::M2Texture) -> String {
         if texture.texture_type != m2::chunks::M2TextureType::Hardcoded {
             // Ignore non-hardcoded textures for now.
+            warn!("Non-hardcoded texture found, using test image instead.");
             return Settings::get().test_image_path.clone();
         }
         let filename = texture.filename.string.to_string_lossy();

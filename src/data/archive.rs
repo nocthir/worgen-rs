@@ -24,6 +24,7 @@ pub struct ArchiveInfo {
     pub model_paths: Vec<String>,
     pub world_model_paths: Vec<String>,
     pub world_map_paths: Vec<String>,
+    pub data_base_paths: Vec<String>,
 }
 
 impl ArchiveInfo {
@@ -33,12 +34,14 @@ impl ArchiveInfo {
         let model_paths = Self::get_model_paths(&mut archive)?;
         let world_model_paths = Self::get_world_model_paths(&mut archive)?;
         let world_map_paths = Self::get_world_map_paths(&mut archive)?;
+        let data_base_paths = Self::get_data_base_paths(&mut archive)?;
         Ok(Self {
             path: path.as_ref().into(),
             texture_paths,
             model_paths,
             world_model_paths,
             world_map_paths,
+            data_base_paths,
         })
     }
 
@@ -93,6 +96,19 @@ impl ArchiveInfo {
             }
         });
         Ok(world_maps)
+    }
+
+    fn get_data_base_paths(archive: &mut mpq::Archive) -> Result<Vec<String>> {
+        let mut data_bases = Vec::new();
+        archive.list()?.retain(|file| {
+            if data_base::is_data_base_extension(&file.name) {
+                data_bases.push(file.name.clone());
+                false
+            } else {
+                true
+            }
+        });
+        Ok(data_bases)
     }
 }
 
