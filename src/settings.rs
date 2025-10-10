@@ -38,7 +38,6 @@ static SETTINGS_ONCE: Once = Once::new();
 #[derive(Resource, Default, Serialize, Deserialize)]
 pub struct Settings {
     pub game_path: String,
-    pub test_image_path: String,
     pub test_model_path: Option<String>,
 }
 
@@ -46,7 +45,6 @@ impl Settings {
     pub const fn new() -> Self {
         Self {
             game_path: String::new(),
-            test_image_path: String::new(),
             test_model_path: None,
         }
     }

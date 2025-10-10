@@ -31,7 +31,6 @@ use thiserror::Error;
 use wow_m2 as m2;
 
 use crate::assets::*;
-use crate::settings::Settings;
 
 #[derive(Component, Debug, Clone, Default, Reflect)]
 #[reflect(Component)]
@@ -242,14 +241,15 @@ impl ModelAssetLoader {
     }
 
     fn get_image_path(texture: &m2::chunks::texture::M2Texture) -> String {
+        const DEFAULT_TEST_IMAGE_PATH: &str = "World\\ArtTest\\Boxtest\\xyz.blp";
         if texture.texture_type != m2::chunks::M2TextureType::Hardcoded {
             // Ignore non-hardcoded textures for now.
             warn!("Non-hardcoded texture found, using test image instead.");
-            return Settings::get().test_image_path.clone();
+            return DEFAULT_TEST_IMAGE_PATH.to_string();
         }
         let filename = texture.filename.string.to_string_lossy();
         if filename.is_empty() {
-            return Settings::get().test_image_path.clone();
+            return DEFAULT_TEST_IMAGE_PATH.to_string();
         }
         filename.to_string()
     }
