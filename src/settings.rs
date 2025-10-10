@@ -2,20 +2,39 @@
 // Author: Nocthir <nocthir@proton.me>
 // SPDX-License-Identifier: MIT or Apache-2.0
 
-use std::{fs, io, ptr::addr_of, sync::Once};
+use std::{fs, io};
 
 use anyhow::Result;
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
-use crate::assets::material::ExtTerrainMaterial;
+use crate::{assets::material::ExtTerrainMaterial, state::WorgenState};
 
 pub struct SettingsPlugin;
 
 impl Plugin for SettingsPlugin {
     fn build(&self, app: &mut App) {
-        app.insert_resource(TerrainSettings::default())
-            .add_systems(Update, apply_terrain_settings);
+        app.add_plugins(bevy_common_assets::json::JsonAssetPlugin::<Settings>::new(
+            &["settings.json"],
+        ))
+        .insert_resource(TerrainSettings::default())
+        .add_systems(Startup, load_settings_asset)
+        .add_systems(
+            Update,
+            check_settings_loaded.run_if(in_state(WorgenState::Loading)),
+        )
+        .add_systems(Update, apply_terrain_settings);
+    }
+}
+
+fn check_settings_loaded(
+    settings_handle: Res<SettingsHandle>,
+    settings_assets: Res<Assets<Settings>>,
+    mut state: ResMut<NextState<WorgenState>>,
+) {
+    if settings_assets.get(&settings_handle.0).is_some() {
+        info!("Settings loaded");
+        state.set(WorgenState::Ready);
     }
 }
 
@@ -32,41 +51,30 @@ fn apply_terrain_settings(
     }
 }
 
-pub static mut SETTINGS: Settings = Settings::new();
-static SETTINGS_ONCE: Once = Once::new();
-
-#[derive(Resource, Default, Serialize, Deserialize)]
+#[derive(Asset, TypePath, Debug, Clone, Serialize, Deserialize)]
 pub struct Settings {
     pub game_path: String,
     pub test_model_path: Option<String>,
 }
 
 impl Settings {
-    pub const fn new() -> Self {
-        Self {
-            game_path: String::new(),
-            test_model_path: None,
-        }
-    }
-
-    pub fn get() -> &'static Self {
-        debug_assert!(SETTINGS_ONCE.is_completed());
-        // SAFETY: no mut references exist at this point
-        unsafe { &*addr_of!(SETTINGS) }
-    }
-
-    pub fn load(&mut self) -> Result<()> {
+    // Keep helper for tests/tools to parse settings directly from file if needed
+    #[allow(dead_code)]
+    pub fn load_direct() -> Result<Self> {
         let file = fs::read("assets/settings.json")?;
         let reader = io::Cursor::new(file);
-        *self = serde_json::from_reader(reader)?;
-        Ok(())
+        let settings: Settings = serde_json::from_reader(reader)?;
+        Ok(settings)
     }
+}
 
-    pub fn init() {
-        // SAFETY: no concurrent static mut access due to std::Once
-        #[allow(static_mut_refs)]
-        SETTINGS_ONCE.call_once(|| unsafe { SETTINGS.load().expect("Failed to load settings") });
-    }
+// Resource holding the handle to the loaded Settings asset
+#[derive(Resource, Deref, DerefMut)]
+pub struct SettingsHandle(pub Handle<Settings>);
+
+fn load_settings_asset(mut commands: Commands, asset_server: Res<AssetServer>) {
+    let handle: Handle<Settings> = asset_server.load("settings.json");
+    commands.insert_resource(SettingsHandle(handle));
 }
 
 #[derive(Serialize, Deserialize, Default)]

@@ -7,20 +7,33 @@ pub mod file;
 
 use bevy::prelude::*;
 
-use crate::{data::archive::*, ui};
+use crate::{
+    settings::{Settings, SettingsHandle},
+    state::WorgenState,
+    ui,
+};
 
 pub struct DataPlugin;
 
 impl Plugin for DataPlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(archive::ArchiveInfoMap::default())
-            .insert_resource(file::FileInfoMap::new().expect("Failed to create FileInfoMap"))
-            .add_systems(Startup, (archive::start_loading, ui::select_default_model))
+            .add_systems(
+                OnEnter(WorgenState::Ready),
+                (
+                    archive::start_loading,
+                    init_file_info_map,
+                    select_default_model,
+                ),
+            )
             .add_systems(
                 Update,
-                archive::check_archive_loading.run_if(resource_exists::<LoadArchiveTasks>),
+                archive::check_archive_loading.run_if(resource_exists::<archive::LoadArchiveTasks>),
             )
-            .add_systems(Update, load_selected_file);
+            .add_systems(
+                Update,
+                load_selected_file.run_if(resource_exists::<file::FileInfoMap>),
+            );
     }
 }
 
@@ -73,5 +86,32 @@ fn load_selected_file(
             commands.spawn(CurrentFile::new(event.file_path.clone()));
         }
     }
+    Ok(())
+}
+
+fn select_default_model(
+    mut event_writer: MessageWriter<ui::FileSelected>,
+    settings_handle: Res<SettingsHandle>,
+    settings_assets: Res<Assets<Settings>>,
+) -> Result {
+    let settings = settings_assets
+        .get(&settings_handle.0)
+        .ok_or("Settings not found")?;
+    if let Some(default_model_path) = settings.test_model_path.clone() {
+        event_writer.write(ui::FileSelected::new(default_model_path));
+    }
+    Ok(())
+}
+
+fn init_file_info_map(
+    mut commands: Commands,
+    settings_handle: Res<SettingsHandle>,
+    settings_assets: Res<Assets<Settings>>,
+) -> Result {
+    let settings = settings_assets
+        .get(&settings_handle.0)
+        .ok_or("Settings not found")?;
+    let map = file::FileInfoMap::new_with_game_path(&settings.game_path)?;
+    commands.insert_resource(map);
     Ok(())
 }

@@ -21,7 +21,7 @@ use crate::{
         world_model::{self, WorldModel},
     },
     data::{archive::ArchiveInfoMap, file},
-    settings::{self, FileSettings},
+    settings::FileSettings,
 };
 
 mod left_panel;
@@ -97,12 +97,6 @@ impl From<&FileSettings> for FileSelected {
         Self {
             file_path: settings.file_path.clone(),
         }
-    }
-}
-
-pub fn select_default_model(mut event_writer: MessageWriter<FileSelected>) {
-    if let Some(default_model_path) = settings::Settings::get().test_model_path.clone() {
-        event_writer.write(FileSelected::new(default_model_path));
     }
 }
 

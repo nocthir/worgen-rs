@@ -15,13 +15,11 @@ use bevy::asset::io::{
 use bevy::prelude::*;
 use wow_mpq as mpq;
 
-use crate::settings;
-
 pub static mut FILE_ARCHIVE_MAP: FileArchiveMap = FileArchiveMap::new();
 static FILE_ARCHIVE_MAP_ONCE: Once = Once::new();
 
-pub fn get_archive_paths() -> Result<Vec<PathBuf>> {
-    let game_path = PathBuf::from(&settings::Settings::get().game_path);
+pub fn get_archive_paths(game_path: &str) -> Result<Vec<PathBuf>> {
+    let game_path = PathBuf::from(game_path);
     let data_path = game_path.join("Data");
 
     let mut ret = Vec::new();
@@ -68,9 +66,9 @@ impl FileArchiveMap {
             .ok_or(format!("File `{}` not found in file archive map", file_path).into())
     }
 
-    fn fill(&mut self) -> Result<()> {
+    fn fill_from(&mut self, game_path: &str) -> Result<()> {
         let mut map = HashMap::new();
-        for archive_path in get_archive_paths()? {
+        for archive_path in get_archive_paths(game_path)? {
             let mut archive = mpq::Archive::open(&archive_path)?;
             for file_path in archive.list()? {
                 map.insert(file_path.name.to_lowercase(), archive_path.clone());
@@ -80,12 +78,12 @@ impl FileArchiveMap {
         Ok(())
     }
 
-    pub fn init() {
+    pub fn init_with_game_path(game_path: &str) {
         // SAFETY: no concurrent static mut access due to std::Once
         #[allow(static_mut_refs)]
         FILE_ARCHIVE_MAP_ONCE.call_once(|| unsafe {
             FILE_ARCHIVE_MAP
-                .fill()
+                .fill_from(game_path)
                 .expect("Failed to fill file archive map");
         });
     }

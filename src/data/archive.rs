@@ -11,6 +11,7 @@ use bevy::tasks;
 use wow_mpq as mpq;
 
 use crate::assets::*;
+use crate::settings::*;
 
 #[derive(Default, Resource, Reflect)]
 pub struct ArchiveInfoMap {
@@ -117,9 +118,20 @@ pub struct LoadArchiveTasks {
     tasks: Vec<tasks::Task<Result<ArchiveInfo>>>,
 }
 
-pub fn start_loading(mut commands: Commands) -> Result<()> {
+pub fn start_loading(
+    mut commands: Commands,
+    settings_handle: Res<SettingsHandle>,
+    settings_assets: Res<Assets<Settings>>,
+) -> Result<()> {
+    let settings = settings_assets
+        .get(&settings_handle.0)
+        .ok_or("Settings not loaded")?;
+
+    // Initialize archive file map once with the game path
+    archive::FileArchiveMap::init_with_game_path(&settings.game_path);
+
     let mut tasks = LoadArchiveTasks::default();
-    for archive_path in archive::get_archive_paths()? {
+    for archive_path in archive::get_archive_paths(&settings.game_path)? {
         let task = tasks::IoTaskPool::get().spawn(load_archive(archive_path.clone()));
         tasks.tasks.push(task);
     }

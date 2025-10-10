@@ -24,6 +24,7 @@ anyhow = "1.0.*"
 bevy = { version = "0.17.*", features = [ "bevy_gltf", "bevy_state" ] }
 bevy-inspector-egui = { git = "https://github.com/jakobhellermann/bevy-inspector-egui", rev = "2e9f7ebe804cd4f78b74c74b4570fedd53948e13" }
 bevy_egui = "0.37.*"
+bevy_common_assets = { version = "0.14", default-features = false, features = [ "json" ] }
 serde = "1.0.*"
 serde_json = "1.0.*"
 thiserror = "2.0.*"

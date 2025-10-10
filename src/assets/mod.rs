@@ -43,8 +43,7 @@ impl Plugin for WorgenAssetPlugin {
             .init_asset_loader::<WorldMapAssetLoader>()
             .init_asset_loader::<DataBaseAssetLoader>()
             .add_plugins(MaterialPlugin::<ExtTerrainMaterial>::default())
-            .add_plugins(GeosetRuntimePlugin)
-            .add_systems(PreStartup, archive::FileArchiveMap::init);
+            .add_plugins(GeosetRuntimePlugin);
     }
 }
 
@@ -52,15 +51,11 @@ impl Plugin for WorgenAssetPlugin {
 pub mod test {
     use std::time::Duration;
 
-    use crate::settings::Settings;
     use bevy::*;
 
     use super::*;
 
     pub fn test_app() -> App {
-        Settings::init();
-        archive::FileArchiveMap::init();
-
         let mut app = App::new();
 
         app.add_plugins((

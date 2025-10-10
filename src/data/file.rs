@@ -133,9 +133,9 @@ pub struct FileInfoMap {
 }
 
 impl FileInfoMap {
-    pub fn new() -> Result<Self> {
+    pub fn new_with_game_path(game_path: &str) -> Result<Self> {
         let mut map = HashMap::new();
-        for archive_path in archive::get_archive_paths()? {
+        for archive_path in archive::get_archive_paths(game_path)? {
             let mut archive = mpq::Archive::open(&archive_path)?;
             for file_path in archive.list()? {
                 let info = FileInfo::new(file_path.name.clone(), &archive_path);

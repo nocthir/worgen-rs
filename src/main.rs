@@ -7,8 +7,6 @@ use bevy::{asset::AssetMetaCheck, diagnostic, prelude::*};
 use worgen_rs::*;
 
 fn main() {
-    settings::Settings::init();
-
     App::new()
         .add_plugins((
             assets::archive::ArchiveAssetReaderPlugin,
@@ -17,6 +15,7 @@ fn main() {
                 ..default()
             }),
         ))
+        .add_plugins(state::WorgenStatePlugin)
         .add_plugins(settings::SettingsPlugin)
         .add_plugins(assets::WorgenAssetPlugin)
         .add_plugins(diagnostic::FrameTimeDiagnosticsPlugin::default())
