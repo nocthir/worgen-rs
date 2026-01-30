@@ -3545,6 +3545,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc0fef456e4baa96da950455cd02c081ca953b141298e41db3fc7e36b1da849c"
 
 [[package]]
+name = "hex"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
+
+[[package]]
 name = "hexasphere"
 version = "16.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7547,17 +7553,18 @@ dependencies = [
 
 [[package]]
 name = "wow-adt"
-version = "0.5.0"
-source = "git+https://github.com/nocthir/warcraft-rs?rev=df77300c5b3b6f536eef5b542e35e559ffcfdba3#df77300c5b3b6f536eef5b542e35e559ffcfdba3"
+version = "0.6.1"
+source = "git+https://github.com/nocthir/warcraft-rs?rev=7d5864270cf1f9b8a57503e1be2773d2d22bbf37#7d5864270cf1f9b8a57503e1be2773d2d22bbf37"
 dependencies = [
+ "binrw 0.14.1",
  "log",
  "thiserror 2.0.18",
 ]
 
 [[package]]
 name = "wow-blp"
-version = "0.5.0"
-source = "git+https://github.com/nocthir/warcraft-rs?rev=df77300c5b3b6f536eef5b542e35e559ffcfdba3#df77300c5b3b6f536eef5b542e35e559ffcfdba3"
+version = "0.6.1"
+source = "git+https://github.com/nocthir/warcraft-rs?rev=7d5864270cf1f9b8a57503e1be2773d2d22bbf37#7d5864270cf1f9b8a57503e1be2773d2d22bbf37"
 dependencies = [
  "bytes",
  "color_quant",
@@ -7569,8 +7576,8 @@ dependencies = [
 
 [[package]]
 name = "wow-cdbc"
-version = "0.5.0"
-source = "git+https://github.com/nocthir/warcraft-rs?rev=df77300c5b3b6f536eef5b542e35e559ffcfdba3#df77300c5b3b6f536eef5b542e35e559ffcfdba3"
+version = "0.6.1"
+source = "git+https://github.com/nocthir/warcraft-rs?rev=7d5864270cf1f9b8a57503e1be2773d2d22bbf37#7d5864270cf1f9b8a57503e1be2773d2d22bbf37"
 dependencies = [
  "binrw 0.15.0",
  "log",
@@ -7579,8 +7586,8 @@ dependencies = [
 
 [[package]]
 name = "wow-m2"
-version = "0.5.0"
-source = "git+https://github.com/nocthir/warcraft-rs?rev=df77300c5b3b6f536eef5b542e35e559ffcfdba3#df77300c5b3b6f536eef5b542e35e559ffcfdba3"
+version = "0.6.1"
+source = "git+https://github.com/nocthir/warcraft-rs?rev=7d5864270cf1f9b8a57503e1be2773d2d22bbf37#7d5864270cf1f9b8a57503e1be2773d2d22bbf37"
 dependencies = [
  "anyhow",
  "bitflags 2.10.0",
@@ -7594,8 +7601,8 @@ dependencies = [
 
 [[package]]
 name = "wow-mpq"
-version = "0.5.0"
-source = "git+https://github.com/nocthir/warcraft-rs?rev=df77300c5b3b6f536eef5b542e35e559ffcfdba3#df77300c5b3b6f536eef5b542e35e559ffcfdba3"
+version = "0.6.1"
+source = "git+https://github.com/nocthir/warcraft-rs?rev=7d5864270cf1f9b8a57503e1be2773d2d22bbf37#7d5864270cf1f9b8a57503e1be2773d2d22bbf37"
 dependencies = [
  "adler2",
  "byteorder",
@@ -7606,6 +7613,7 @@ dependencies = [
  "directories",
  "flate2",
  "glob",
+ "hex",
  "implode",
  "log",
  "lru",
@@ -7626,8 +7634,8 @@ dependencies = [
 
 [[package]]
 name = "wow-wmo"
-version = "0.5.0"
-source = "git+https://github.com/nocthir/warcraft-rs?rev=df77300c5b3b6f536eef5b542e35e559ffcfdba3#df77300c5b3b6f536eef5b542e35e559ffcfdba3"
+version = "0.6.1"
+source = "git+https://github.com/nocthir/warcraft-rs?rev=7d5864270cf1f9b8a57503e1be2773d2d22bbf37#7d5864270cf1f9b8a57503e1be2773d2d22bbf37"
 dependencies = [
  "binrw 0.14.1",
  "bitflags 2.10.0",

@@ -139,7 +139,11 @@ impl WorldMapAssetLoader {
         load_context: &mut LoadContext<'_>,
     ) -> Result<WorldMapAsset, WorldMapAssetLoaderError> {
         let mut cursor = io::Cursor::new(&bytes);
-        let mut world_map = adt::Adt::from_reader(&mut cursor)?;
+        let parsed_map = adt::parse_adt(&mut cursor)?;
+        let mut world_map = match parsed_map {
+            adt::ParsedAdt::Root(root) => root,
+            _ => panic!("Expected root ADT"),
+        };
 
         Self::fix_model_extensions(&mut world_map);
         let images = Self::load_images(&world_map, load_context).await?;
@@ -182,18 +186,16 @@ impl WorldMapAssetLoader {
         })
     }
 
-    fn fix_model_extensions(world_map: &mut adt::Adt) {
-        if let Some(mmdx) = &mut world_map.mmdx {
-            for filename in &mut mmdx.filenames {
-                if filename.ends_with(".mdx") {
-                    filename.replace_range(filename.len() - 4..filename.len(), ".m2");
-                }
+    fn fix_model_extensions(world_map: &mut adt::RootAdt) {
+        for filename in world_map.models_mut() {
+            if filename.ends_with(".mdx") {
+                filename.replace_range(filename.len() - 4..filename.len(), ".m2");
             }
         }
     }
 
     async fn load_images(
-        world_map: &adt::Adt,
+        world_map: &adt::RootAdt,
         load_context: &mut LoadContext<'_>,
     ) -> Result<Vec<Handle<Image>>> {
         let mut images = Vec::new();
@@ -204,24 +206,15 @@ impl WorldMapAssetLoader {
         Ok(images)
     }
 
-    fn get_image_paths(world_map: &adt::Adt) -> Vec<&String> {
-        let mut paths = Vec::new();
-        if let Some(mtex) = &world_map.mtex {
-            for filename in &mtex.filenames {
-                paths.push(filename);
-            }
-        }
-        paths
-    }
-
-    fn get_image_asset_paths(world_map: &adt::Adt) -> Vec<String> {
-        Self::get_image_paths(world_map)
+    fn get_image_asset_paths(world_map: &adt::RootAdt) -> Vec<String> {
+        world_map
+            .textures
             .iter()
             .map(|p| format!("archive://{}", p))
             .collect()
     }
 
-    async fn load_terrains(world_map: &adt::Adt) -> Vec<TransformMesh> {
+    async fn load_terrains(world_map: &adt::RootAdt) -> Vec<TransformMesh> {
         let mut meshes = Vec::new();
         for chunk in &world_map.mcnk_chunks {
             let mesh = Self::create_mesh_from_world_map_chunk(chunk);
@@ -231,14 +224,14 @@ impl WorldMapAssetLoader {
     }
 
     fn process_terrains(
-        world_map: &adt::Adt,
+        world_map: &adt::RootAdt,
         meshes: Vec<TransformMesh>,
         images: &[Handle<Image>],
         load_context: &mut LoadContext<'_>,
     ) -> Result<Vec<WorldMapTerrain>> {
         let mut terrains = Vec::new();
 
-        let header = world_map.mhdr.as_ref().unwrap();
+        let header = &world_map.mhdr;
         let has_big_alpha = header.flags & 0x4 != 0;
 
         for (index, mesh) in meshes.into_iter().enumerate() {
@@ -249,13 +242,22 @@ impl WorldMapAssetLoader {
             let chunk = &world_map.mcnk_chunks[index];
 
             let mut layer_textures = [None, None, None, None];
-            for (i, layer) in chunk.texture_layers.iter().enumerate() {
-                let image_index = layer.texture_id as usize;
-                layer_textures[i] = images.get(image_index).cloned();
+            let mut layer_count = 0;
+            //for (i, layer) in chunk.texture_layers.iter().enumerate() {
+            if let Some(layers) = &chunk.layers {
+                if let Some(base_layer) = layers.base_layer() {
+                    let image_index = base_layer.texture_id as usize;
+                    layer_textures[0] = images.get(image_index).cloned();
+                    layer_count += 1;
+                }
+                for (i, layer) in layers.blend_layers().iter().enumerate() {
+                    let image_index = layer.texture_id as usize;
+                    layer_textures[i + 1] = images.get(image_index).cloned();
+                    layer_count += 1;
+                }
             }
 
-            let bit_16th = 1 << 15;
-            let fix_alpha = chunk.flags & bit_16th == 0;
+            let fix_alpha = !chunk.header.flags.do_not_fix_alpha_map();
             let alpha_texture = Self::create_alpha_texture_from_world_map_chunk(
                 chunk,
                 index,
@@ -274,7 +276,7 @@ impl WorldMapAssetLoader {
 
             let terrain_material = TerrainMaterial {
                 level_mask: 0,
-                level_count: chunk.texture_layers.len() as u32,
+                level_count: layer_count,
                 alpha_texture: alpha_texture.clone(),
                 level1_texture: layer_textures[1].clone(),
                 level2_texture: layer_textures[2].clone(),
@@ -352,14 +354,12 @@ impl WorldMapAssetLoader {
 
             static UV_SCALE: f32 = 8.0;
             tex_coords[i] = [x / UV_SCALE, z / UV_SCALE];
-            positions[i] = [-x, chunk.height_map[i], -z];
 
-            let normal: [u8; 3] = [
-                chunk.normals[i][1],
-                chunk.normals[i][2],
-                chunk.normals[i][0],
-            ];
-            normals[i] = from_normalized_vec3_u8(normal);
+            let chunk_heightmap = chunk.heights.as_ref().unwrap();
+            positions[i] = [-x, chunk_heightmap.heights[i], -z];
+
+            let chunk_normals = chunk.normals.as_ref().unwrap();
+            normals[i] = chunk_normals.normals[i].to_normalized();
         }
 
         let mesh = Mesh::new(
@@ -384,9 +384,10 @@ impl WorldMapAssetLoader {
 
         // 1600 feet -> 533.33 yards
 
-        let x = chunk.position[0];
-        let y = chunk.position[1];
-        let z = chunk.position[2];
+        let world_position = chunk.header.world_position();
+        let x = world_position[0];
+        let y = world_position[1];
+        let z = world_position[2];
         let transform = Transform::default()
             .with_translation(vec3(x, y, z))
             .with_scale(vec3(CHUNK_SCALE, 1.0, CHUNK_SCALE));
@@ -470,7 +471,7 @@ impl WorldMapAssetLoader {
     }
 
     fn load_models(
-        world_map: &adt::Adt,
+        world_map: &adt::RootAdt,
         load_context: &mut LoadContext<'_>,
     ) -> Vec<Handle<ModelAsset>> {
         let mut models = Vec::new();
@@ -480,52 +481,49 @@ impl WorldMapAssetLoader {
         models
     }
 
-    fn get_model_asset_paths(world_map: &adt::Adt) -> Vec<String> {
+    fn get_model_asset_paths(world_map: &adt::RootAdt) -> Vec<String> {
         let mut models = Vec::new();
-        if let Some(mmdx) = &world_map.mmdx {
-            models.extend(
-                mmdx.filenames
-                    .iter()
-                    .filter(|f| f.ends_with(".m2"))
-                    .map(|f| format!("archive://{}", f)),
-            );
-        }
+        models.extend(
+            world_map
+                .models
+                .iter()
+                .filter(|f| f.ends_with(".m2"))
+                .map(|f| format!("archive://{}", f)),
+        );
         models
     }
 
     fn place_models(
         root: &mut EntityWorldMut<'_>,
-        world_map: &adt::Adt,
+        world_map: &adt::RootAdt,
         load_context: &mut LoadContext<'_>,
     ) {
         let model_asset_paths = Self::get_model_asset_paths(world_map);
 
-        if let Some(mddf) = &world_map.mddf {
-            for placement in &mddf.doodads {
-                let model_path = model_asset_paths[placement.name_id as usize].clone();
+        for placement in &world_map.doodad_placements {
+            let model_path = model_asset_paths[placement.name_id as usize].clone();
 
-                let scene = load_context.load(ModelAssetLabel::Root.from_asset(model_path));
+            let scene = load_context.load(ModelAssetLabel::Root.from_asset(model_path));
 
-                let transform = Transform::default()
-                    .with_translation(vec3(
-                        MAP_SIZE - placement.position[0],
-                        placement.position[1],
-                        MAP_SIZE - placement.position[2],
-                    ))
-                    .with_rotation(
-                        Quat::from_axis_angle(Vec3::X, placement.rotation[0].to_radians())
-                            * Quat::from_axis_angle(Vec3::Y, placement.rotation[1].to_radians())
-                            * Quat::from_axis_angle(Vec3::Z, placement.rotation[2].to_radians()),
-                    )
-                    .with_scale(Vec3::splat(placement.scale));
+            let transform = Transform::default()
+                .with_translation(vec3(
+                    MAP_SIZE - placement.position[0],
+                    placement.position[1],
+                    MAP_SIZE - placement.position[2],
+                ))
+                .with_rotation(
+                    Quat::from_axis_angle(Vec3::X, placement.rotation[0].to_radians())
+                        * Quat::from_axis_angle(Vec3::Y, placement.rotation[1].to_radians())
+                        * Quat::from_axis_angle(Vec3::Z, placement.rotation[2].to_radians()),
+                )
+                .with_scale(Vec3::splat(placement.get_scale()));
 
-                root.with_child((SceneRoot(scene), transform));
-            }
+            root.with_child((SceneRoot(scene), transform));
         }
     }
 
     fn load_world_models(
-        world_map: &adt::Adt,
+        world_map: &adt::RootAdt,
         load_context: &mut LoadContext<'_>,
     ) -> Vec<Handle<WorldModelAsset>> {
         let mut world_models = Vec::new();
@@ -535,56 +533,47 @@ impl WorldMapAssetLoader {
         world_models
     }
 
-    fn get_world_model_asset_paths(world_map: &adt::Adt) -> Vec<String> {
+    fn get_world_model_asset_paths(world_map: &adt::RootAdt) -> Vec<String> {
         let mut paths = Vec::new();
-        if let Some(mwmo) = &world_map.mwmo {
-            for filename in &mwmo.filenames {
-                paths.push(format!("archive://{}", filename));
-            }
+        for filename in &world_map.wmos {
+            paths.push(format!("archive://{}", filename));
         }
         paths
     }
 
     fn place_world_models(
         root: &mut EntityWorldMut<'_>,
-        world_map: &adt::Adt,
+        world_map: &adt::RootAdt,
         load_context: &mut LoadContext<'_>,
     ) {
         let paths = Self::get_world_model_asset_paths(world_map);
 
-        if let Some(modf) = &world_map.modf
-            && let Some(mwid) = &world_map.mwid
-            && let Some(mwmo) = &world_map.mwmo
-        {
-            let indices = mwid.get_indices(mwmo);
+        for model_placement in &world_map.wmo_placements {
+            let index = model_placement.name_id as usize;
+            let model_path = &paths[index];
+            let scene =
+                load_context.load(WorldModelAssetLabel::Root.from_asset(model_path.clone()));
 
-            for model in &modf.models {
-                let index = indices[model.name_id as usize];
-                let model_path = &paths[index];
-                let scene =
-                    load_context.load(WorldModelAssetLabel::Root.from_asset(model_path.clone()));
+            let translation = vec3(
+                MAP_SIZE - model_placement.position[0],
+                model_placement.position[1],
+                MAP_SIZE - model_placement.position[2],
+            );
 
-                let translation = vec3(
-                    MAP_SIZE - model.position[0],
-                    model.position[1],
-                    MAP_SIZE - model.position[2],
-                );
+            let rotation_vector = vec3(
+                (model_placement.rotation[0]).to_radians(),
+                (180.0 + model_placement.rotation[1]).to_radians(),
+                (model_placement.rotation[2]).to_radians(),
+            );
+            let rotation = Quat::from_axis_angle(Vec3::X, rotation_vector[0])
+                * Quat::from_axis_angle(Vec3::Y, rotation_vector[1])
+                * Quat::from_axis_angle(Vec3::Z, rotation_vector[2]);
 
-                let rotation_vector = vec3(
-                    (model.rotation[0]).to_radians(),
-                    (180.0 + model.rotation[1]).to_radians(),
-                    (model.rotation[2]).to_radians(),
-                );
-                let rotation = Quat::from_axis_angle(Vec3::X, rotation_vector[0])
-                    * Quat::from_axis_angle(Vec3::Y, rotation_vector[1])
-                    * Quat::from_axis_angle(Vec3::Z, rotation_vector[2]);
+            let transform = Transform::default()
+                .with_translation(translation)
+                .with_rotation(rotation);
 
-                let transform = Transform::default()
-                    .with_translation(translation)
-                    .with_rotation(rotation);
-
-                root.with_child((SceneRoot(scene), transform));
-            }
+            root.with_child((SceneRoot(scene), transform));
         }
     }
 }
