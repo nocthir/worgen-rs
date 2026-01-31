@@ -54,7 +54,7 @@ impl CurrentFile {
 }
 
 fn load_selected_file(
-    mut event_reader: MessageReader<ui::FileSelected>,
+    mut event_reader: If<MessageReader<ui::FileSelected>>,
     current_query: Query<&CurrentFile>,
     entity_query: Query<Entity, With<CurrentFile>>,
     mut commands: Commands,
@@ -90,7 +90,7 @@ fn load_selected_file(
 }
 
 fn select_default_model(
-    mut event_writer: MessageWriter<ui::FileSelected>,
+    mut event_writer: If<MessageWriter<ui::FileSelected>>,
     settings_handle: Res<SettingsHandle>,
     settings_assets: Res<Assets<Settings>>,
 ) -> Result {

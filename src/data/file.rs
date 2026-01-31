@@ -121,7 +121,7 @@ impl<S: Into<String>> From<S> for DataType {
         } else if lowercase.ends_with(".dbc") {
             DataType::DataBase(Handle::default())
         } else {
-            warn!("Unknown file extension: {}", lowercase);
+            debug!("Unknown file extension: {}", lowercase);
             DataType::Unknown
         }
     }

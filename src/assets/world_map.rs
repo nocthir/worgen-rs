@@ -622,15 +622,15 @@ impl RoiAabb {
 
 #[cfg(test)]
 mod test {
-    use crate::{assets::test::*, settings::TestSettings};
+    use crate::{assets::test::*, settings};
 
     use super::*;
 
     #[test]
     fn test_terrain() -> Result<()> {
         let mut app = test_app();
-        app.update();
-        let settings = TestSettings::load()?;
+
+        let settings = settings::TestSettings::load()?;
         let asset_server = app.world().resource::<AssetServer>().clone();
         let handle: Handle<WorldMapAsset> =
             asset_server.load(format!("archive://{}", settings.test_terrain_path));

@@ -53,6 +53,8 @@ pub mod test {
 
     use bevy::*;
 
+    use crate::{assets, data, settings, state};
+
     use super::*;
 
     pub fn test_app() -> App {
@@ -61,6 +63,7 @@ pub mod test {
         app.add_plugins((
             archive::ArchiveAssetReaderPlugin,
             DefaultPlugins
+                .build()
                 .set(WindowPlugin {
                     primary_window: None,
                     // Don't automatically exit due to having no windows.
@@ -89,16 +92,25 @@ pub mod test {
                 // Run 60 times per second.
                 Duration::from_secs_f64(1.0 / 60.0),
             ),
-            WorgenAssetPlugin,
+            state::WorgenStatePlugin,
+            settings::SettingsPlugin,
+            assets::WorgenAssetPlugin,
+            data::DataPlugin,
         ));
 
         app.finish();
         app.cleanup();
 
+        app.update();
+        run_app_until(&mut app, |world| {
+            world.get_resource::<data::archive::LoadArchiveTasks>()?;
+            Some(())
+        });
+
         app
     }
 
-    const LARGE_ITERATION_COUNT: usize = 10000;
+    const LARGE_ITERATION_COUNT: usize = 100000;
 
     pub fn run_app_until(app: &mut App, mut predicate: impl FnMut(&mut World) -> Option<()>) {
         for _ in 0..LARGE_ITERATION_COUNT {

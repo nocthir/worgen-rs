@@ -392,7 +392,7 @@ pub fn apply_geoset_selection_system(
 
 /// Debug convenience: press `C` to cycle cape variants (temporary until input mapping exists).
 pub fn debug_cycle_cape_system(
-    keys: Res<ButtonInput<KeyCode>>,
+    keys: If<Res<ButtonInput<KeyCode>>>,
     mut roots: Query<(&mut GeosetSelection, &GeosetCatalog)>,
 ) {
     if !keys.just_pressed(KeyCode::KeyC) {

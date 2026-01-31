@@ -316,7 +316,7 @@ impl ModelAssetLoader {
         let texture_transparency_index =
             model.raw_data.transparency_lookup_table[batch.texture_weight_combo_index as usize];
         let texture_weight = &model.transparency_animations[texture_transparency_index as usize];
-        let weight = texture_weight.alpha.track.values.data[0] as f32 / u16::MAX as f32;
+        let weight = texture_weight.alpha.track.values.data[0];
 
         let alpha_mode = alpha_mode_from_model_blend_mode(model_material.blend_mode, weight);
         let base_color = color_from_batch_model_color(model, batch);
@@ -419,4 +419,35 @@ pub fn is_model_extension(filename: &str) -> bool {
     lower_filename.ends_with(".m2")
         || lower_filename.ends_with(".mdx")
         || lower_filename.ends_with(".mdl")
+}
+
+#[cfg(test)]
+mod test {
+
+    use crate::{assets::test::*, settings};
+
+    use super::*;
+
+    #[test]
+    fn test_model() -> Result<()> {
+        let mut app = test_app();
+
+        let settings = settings::TestSettings::load()?;
+        let asset_server = app.world().resource::<AssetServer>().clone();
+        let handle: Handle<ModelAsset> =
+            asset_server.load(format!("archive://{}", settings.test_model_path));
+        let handle_id = handle.id();
+        app.update();
+        run_app_until(&mut app, |_world| {
+            let load_state = asset_server.get_load_state(handle_id).unwrap();
+            if load_state.is_loading() {
+                None
+            } else {
+                Some(())
+            }
+        });
+        let load_state = asset_server.get_load_state(handle_id).unwrap();
+        assert!(load_state.is_loaded());
+        Ok(())
+    }
 }
