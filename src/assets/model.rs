@@ -316,7 +316,7 @@ impl ModelAssetLoader {
         let texture_transparency_index =
             model.raw_data.transparency_lookup_table[batch.texture_weight_combo_index as usize];
         let texture_weight = &model.transparency_animations[texture_transparency_index as usize];
-        let weight = texture_weight.alpha.track.values.data[0];
+        let weight = texture_weight.alpha.track.values.data[0] as f32 / 0x7fff as f32;
 
         let alpha_mode = alpha_mode_from_model_blend_mode(model_material.blend_mode, weight);
         let base_color = color_from_batch_model_color(model, batch);
